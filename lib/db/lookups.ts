@@ -23,10 +23,12 @@ import {
   DbError,
   normalizeSearch,
   resolvePage,
+  toFullRead,
   toPaged,
   unwrapMaybe,
   unwrapRows,
   type DbClient,
+  type FullRead,
   type PageParams,
   type Paged,
   type SortDirection,
@@ -54,7 +56,13 @@ export type LookupListParams = PageParams & {
 const SELECT_ALL =
   "id, tipe, kode, label, urutan, status, merged_into_id, created_at, updated_at";
 
-/** Guard rail for the unpaginated reads that feed pickers. */
+/**
+ * Ceiling this module asks PostgREST for on an unpaginated read.
+ *
+ * A sanity ceiling, **not** a guard rail: `db-max-rows` is applied server-side
+ * first and reports success, so only the exact count can prove a read was cut
+ * short. See `FullRead` in `lib/db/shared.ts`.
+ */
 export const MAX_PICKER_ROWS = 5000;
 
 /** One page of Lookup rows, for one tab of `/master-data`. */
@@ -93,19 +101,25 @@ export async function listLookups(
   return toPaged(rows, result.count, page, perPage);
 }
 
-/** Every matching Lookup, unpaginated — for pickers and merge candidates. */
+/**
+ * Every matching Lookup, unpaginated — for pickers and merge candidates.
+ *
+ * Returns a `FullRead`: a dropdown silently missing its last options is how an
+ * admin ends up unable to pick the value that is actually right, so `truncated`
+ * has to reach the caller rather than being swallowed here.
+ */
 export async function listAllLookups(
   client: DbClient,
   params?: Omit<LookupListParams, "page" | "perPage">,
-): Promise<Lookup[]> {
+): Promise<FullRead<Lookup>> {
   const ascending = (params?.direction ?? "asc") === "asc";
 
   let query = client
     .from("lookups")
-    .select(SELECT_ALL)
+    .select(SELECT_ALL, { count: "exact" })
     .order(params?.orderBy ?? "urutan", { ascending, nullsFirst: false })
     .order("label", { ascending: true })
-    .limit(MAX_PICKER_ROWS + 1);
+    .limit(MAX_PICKER_ROWS);
 
   const tipe = params?.tipe
     ? Array.isArray(params.tipe)
@@ -123,13 +137,9 @@ export async function listAllLookups(
     query = query.or(`label.ilike.${pattern},kode.ilike.${pattern}`);
   }
 
-  const rows = unwrapRows("Gagal memuat Lookup", await query);
-  if (rows.length > MAX_PICKER_ROWS) {
-    throw new Error(
-      `Jumlah Lookup melebihi ${MAX_PICKER_ROWS}; daftar tidak dimuat utuh. Tambahkan pagination sebelum melanjutkan.`,
-    );
-  }
-  return rows;
+  const result = await query;
+  const rows = unwrapRows("Gagal memuat Lookup", result);
+  return toFullRead(rows, result.count);
 }
 
 /** Shorthand for "give me the options for this one dropdown". */
@@ -137,33 +147,47 @@ export async function listLookupsByType(
   client: DbClient,
   tipe: LookupType,
   params?: Omit<LookupListParams, "page" | "perPage" | "tipe">,
-): Promise<Lookup[]> {
+): Promise<FullRead<Lookup>> {
   return listAllLookups(client, { ...params, tipe });
 }
 
 /**
+ * All 11 tipe in one read, plus the same rows already bucketed by tipe.
+ *
+ * `rows`/`total`/`truncated` come straight from `listAllLookups`, so a form
+ * with 11 dropdowns can still tell whether it is showing every option;
+ * `byType` is the convenience the callers actually render.
+ */
+export type GroupedLookups = FullRead<Lookup> & {
+  /** Every one of the 11 types is a key, even when it has no rows. */
+  byType: Record<LookupType, Lookup[]>;
+};
+
+/**
  * Every Lookup, grouped by `tipe` — one read for a form with 11 dropdowns.
  *
- * Every one of the 11 types is present as a key, even when it has no rows, so
- * a form can render an empty picker instead of crashing on `undefined`.
+ * Every one of the 11 types is present as a key in `byType`, even when it has
+ * no rows, so a form can render an empty picker instead of crashing on
+ * `undefined`. `truncated` is carried through unchanged: grouping a short read
+ * produces short groups, and a dropdown cannot show what was never read.
  */
 export async function getLookupsGroupedByType(
   client: DbClient,
   params?: Omit<LookupListParams, "page" | "perPage" | "tipe">,
-): Promise<Record<LookupType, Lookup[]>> {
-  const rows = await listAllLookups(client, params);
+): Promise<GroupedLookups> {
+  const read = await listAllLookups(client, params);
 
-  const grouped = Object.fromEntries(
+  const byType = Object.fromEntries(
     LOOKUP_TYPES.map((tipe) => [tipe, [] as Lookup[]]),
   ) as Record<LookupType, Lookup[]>;
 
-  for (const row of rows) {
-    const bucket = grouped[row.tipe as LookupType];
+  for (const row of read.rows) {
+    const bucket = byType[row.tipe as LookupType];
     // A tipe outside the 11 cannot exist (CHECK constraint), but a defensive
     // skip keeps a future migration from crashing every form at once.
     if (bucket) bucket.push(row);
   }
-  return grouped;
+  return { ...read, byType };
 }
 
 export async function getLookupById(

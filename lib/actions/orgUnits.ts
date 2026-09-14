@@ -43,7 +43,12 @@ import {
   getOrgUnitByKode,
   listAllOrgUnits,
 } from "@/lib/db/orgUnits";
-import { DbError, type DbClient } from "@/lib/db/shared";
+import {
+  DbError,
+  IncompleteReadError,
+  requireComplete,
+  type DbClient,
+} from "@/lib/db/shared";
 import { UI } from "@/lib/i18n/terms";
 import type { OrgUnit, TablesUpdate } from "@/lib/types/db";
 import { uuidField } from "@/lib/validation/common";
@@ -153,6 +158,19 @@ function toActionData(unit: OrgUnit): OrgUnitActionData {
  * shows the generic message.
  */
 function readableError(error: unknown, context: { kode?: string }): unknown {
+  if (error instanceof IncompleteReadError) {
+    // Nothing failed — the read came back short and the guard below it would
+    // have been decided on half the hierarchy. Refusing is the only honest
+    // answer, and it must not read as "coba lagi".
+    // Deliberately does NOT name db-max-rows as the fix: the read is capped by
+    // whichever ceiling is lower, and past MAX_TREE_ROWS the client's own limit
+    // is the one biting — raising db-max-rows would change nothing. Naming the
+    // wrong remedy is worse than naming none.
+    return new ActionError(
+      "GAGAL",
+      `${error.message} Hubungi admin HC Core — batas baca Unit Organisasi perlu dinaikkan atau dibuat berhalaman sebelum hierarki bisa diubah.`,
+    );
+  }
   if (!(error instanceof DbError)) return error;
 
   switch (error.code) {
@@ -254,8 +272,15 @@ async function guardParent(
   // Read every unit — including nonaktif ones, which are still real parents in
   // the hierarchy — and check the subtree with the cycle-safe helper from the
   // read layer rather than walking parents by hand.
-  const rows = await listAllOrgUnits(client, { status: "semua" });
-  const descendants = collectDescendantIds(rows, unit.id);
+  // `requireComplete`, not `.rows`: deciding "this induk is not below that
+  // unit" from a half-read hierarchy can wave through exactly the cycle this
+  // guard exists to refuse. The database trigger still refuses it, but the
+  // admin would get a constraint message instead of a sentence.
+  const read = await listAllOrgUnits(client, { status: "semua" });
+  const descendants = collectDescendantIds(
+    requireComplete(read, "Unit Organisasi"),
+    unit.id,
+  );
   if (descendants.includes(parentId)) {
     throw new ActionError(
       "KONFLIK",
@@ -462,10 +487,13 @@ export async function deactivateOrgUnit(
 
     if (current.status === "nonaktif") return actionOk(toActionData(current));
 
-    const activeChildren = await listAllOrgUnits(client, {
-      status: "aktif",
-      parentId: id,
-    });
+    // A short read here would under-count the aktif turunan and let a Divisi
+    // be deactivated out from under its Bagian, so an incomplete answer is
+    // refused rather than acted on.
+    const activeChildren = requireComplete(
+      await listAllOrgUnits(client, { status: "aktif", parentId: id }),
+      "Unit Organisasi turunan",
+    );
     if (activeChildren.length > 0) {
       const contoh = activeChildren
         .slice(0, 3)

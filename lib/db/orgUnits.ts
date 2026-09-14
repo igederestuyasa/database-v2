@@ -18,11 +18,14 @@ import {
   containsPattern,
   DbError,
   normalizeSearch,
+  requireComplete,
   resolvePage,
+  toFullRead,
   toPaged,
   unwrapMaybe,
   unwrapRows,
   type DbClient,
+  type FullRead,
   type PageParams,
   type Paged,
   type SortDirection,
@@ -61,9 +64,13 @@ const SELECT_ALL =
   "id, kode, nama, tipe, parent_id, status, merged_into_id, created_at, updated_at";
 
 /**
- * Cap on an unpaginated read. The tree is a few hundred nodes
- * (ARCHITECTURE.md §7); blowing past this means something is wrong, and a
- * silently truncated tree draws a wrong hierarchy.
+ * Ceiling this module asks PostgREST for on an unpaginated read. The tree is a
+ * few hundred nodes (ARCHITECTURE.md §7); blowing past this means something is
+ * wrong, and a silently truncated tree draws a wrong hierarchy.
+ *
+ * It is a sanity ceiling, **not** a truncation detector. PostgREST applies its
+ * own `db-max-rows` first and reports the capped response as success, so the
+ * number that matters is the exact count — see `FullRead` in `lib/db/shared.ts`.
  */
 export const MAX_TREE_ROWS = 5000;
 
@@ -108,18 +115,25 @@ export async function listOrgUnits(
   return toPaged(rows, result.count, page, perPage);
 }
 
-/** Every matching Unit Organisasi, unpaginated — for the tree and pickers. */
+/**
+ * Every matching Unit Organisasi, unpaginated — for the tree and pickers.
+ *
+ * Returns a `FullRead`, because a hierarchy is the worst thing to truncate
+ * quietly: a unit whose induk was not read is promoted to a root by
+ * `buildOrgUnitTree()`, so the page would draw a structure that does not
+ * exist rather than simply a shorter one.
+ */
 export async function listAllOrgUnits(
   client: DbClient,
   params?: Omit<OrgUnitListParams, "page" | "perPage">,
-): Promise<OrgUnit[]> {
+): Promise<FullRead<OrgUnit>> {
   let query = client
     .from("org_units")
-    .select(SELECT_ALL)
+    .select(SELECT_ALL, { count: "exact" })
     .order(params?.orderBy ?? "nama", {
       ascending: (params?.direction ?? "asc") === "asc",
     })
-    .limit(MAX_TREE_ROWS + 1);
+    .limit(MAX_TREE_ROWS);
 
   const status = params?.status ?? "aktif";
   if (status !== "semua") query = query.eq("status", status);
@@ -142,13 +156,9 @@ export async function listAllOrgUnits(
     query = query.or(`nama.ilike.${pattern},kode.ilike.${pattern}`);
   }
 
-  const rows = unwrapRows("Gagal memuat Unit Organisasi", await query);
-  if (rows.length > MAX_TREE_ROWS) {
-    throw new Error(
-      `Jumlah Unit Organisasi melebihi ${MAX_TREE_ROWS}; pohon struktur tidak dimuat utuh. Tambahkan pagination sebelum melanjutkan.`,
-    );
-  }
-  return rows;
+  const result = await query;
+  const rows = unwrapRows("Gagal memuat Unit Organisasi", result);
+  return toFullRead(rows, result.count);
 }
 
 export async function getOrgUnitById(
@@ -244,12 +254,27 @@ export function flattenOrgUnitTree(nodes: readonly OrgUnitNode[]): OrgUnitNode[]
   return out;
 }
 
-/** The whole hierarchy in one read, ready for `/struktur`. */
+/**
+ * The whole hierarchy in one read, plus the flat rows it was built from.
+ *
+ * `rows`/`total`/`truncated` describe the READ — so `rows.length < total` keeps
+ * meaning what `FullRead` says it means — and `tree` is the forest assembled
+ * from those same rows. Deliberately not `FullRead<OrgUnitNode>`: a forest has
+ * as many roots as it has, which is nothing like the row count, and a caller
+ * re-deriving truncation from `rows.length < total` would then warn "pohon
+ * belum lengkap" on perfectly healthy data. Same shape as `GroupedLookups`.
+ */
+export type OrgUnitTreeRead = FullRead<OrgUnit> & {
+  /** Roots of the forest; every row is reachable from one of them. */
+  tree: OrgUnitNode[];
+};
+
 export async function getOrgUnitTree(
   client: DbClient,
   params?: Omit<OrgUnitListParams, "page" | "perPage" | "parentId">,
-): Promise<OrgUnitNode[]> {
-  return buildOrgUnitTree(await listAllOrgUnits(client, params));
+): Promise<OrgUnitTreeRead> {
+  const read = await listAllOrgUnits(client, params);
+  return { ...read, tree: buildOrgUnitTree(read.rows) };
 }
 
 /**
@@ -294,19 +319,23 @@ export async function getOrgUnitDescendantIds(
   client: DbClient,
   rootId: string,
 ): Promise<string[]> {
-  const rows = unwrapRows(
-    "Gagal memuat hierarki Unit Organisasi",
-    await client.from("org_units").select("id, parent_id").limit(MAX_TREE_ROWS + 1),
+  // `count: "exact"` is the whole point: without it a response capped by
+  // `db-max-rows` is indistinguishable from a complete one, and the subtree
+  // would be quietly under-counted. Silently truncating here would under-count
+  // the number this feeds ("… Karyawan akan dipindahkan"), which is read right
+  // before someone presses Merge — so this one throws rather than reporting a
+  // partial answer nobody can see is partial.
+  const result = await client
+    .from("org_units")
+    .select("id, parent_id", { count: "exact" })
+    .limit(MAX_TREE_ROWS);
+
+  const rows = unwrapRows("Gagal memuat hierarki Unit Organisasi", result);
+  const complete = requireComplete(
+    toFullRead(rows, result.count),
+    "Unit Organisasi",
   );
-  if (rows.length > MAX_TREE_ROWS) {
-    // Silently truncating here would under-count the subtree, and the number
-    // this feeds ("… Karyawan akan dipindahkan") is read right before someone
-    // presses Merge. Fail loudly instead.
-    throw new Error(
-      `Jumlah Unit Organisasi melebihi ${MAX_TREE_ROWS}; daftar unit turunan tidak lengkap. Tambahkan pagination sebelum melanjutkan.`,
-    );
-  }
-  return collectDescendantIds(rows, rootId);
+  return collectDescendantIds(complete, rootId);
 }
 
 /**
@@ -328,13 +357,19 @@ export function buildAncestorPath(rows: readonly OrgUnit[], id: string): OrgUnit
   return path;
 }
 
-/** Breadcrumb for one unit: "Direktorat X › Divisi Y › Bagian Z". */
+/**
+ * Breadcrumb for one unit: "Direktorat X › Divisi Y › Bagian Z".
+ *
+ * Throws on a truncated read rather than returning a shorter path: a
+ * breadcrumb that silently drops the Direktorat it hangs under does not look
+ * incomplete, it looks like a different place in the company.
+ */
 export async function getOrgUnitAncestors(
   client: DbClient,
   id: string,
 ): Promise<OrgUnit[]> {
-  const rows = await listAllOrgUnits(client, { status: "semua" });
-  return buildAncestorPath(rows, id);
+  const read = await listAllOrgUnits(client, { status: "semua" });
+  return buildAncestorPath(requireComplete(read, "Unit Organisasi"), id);
 }
 
 /**

@@ -64,10 +64,10 @@ export default async function Page({
   const grouped = await getLookupsGroupedByType(client, { status: "semua" });
 
   const counts = Object.fromEntries(
-    LOOKUP_TYPES.map((t) => [t, grouped[t].length]),
+    LOOKUP_TYPES.map((t) => [t, grouped.byType[t].length]),
   ) as Record<LookupType, number>;
 
-  const rows = toRows(grouped[tipe]);
+  const rows = toRows(grouped.byType[tipe]);
 
   return (
     <div className="space-y-6">
@@ -82,6 +82,21 @@ export default async function Page({
           ada data {TERMS.karyawan} yang ikut diubah.
         </p>
       </header>
+
+      {grouped.truncated ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+        >
+          <p className="font-medium">Daftar ini belum lengkap.</p>
+          <p className="mt-1 text-muted-foreground">
+            Baru {grouped.rows.length} dari {grouped.total} {TERMS.lookup} yang
+            berhasil dimuat, karena database membatasi jumlah baris per permintaan.
+            Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan
+            memakainya untuk memutuskan {TERMS.merge}.
+          </p>
+        </div>
+      ) : null}
 
       <LookupTypeTabs active={tipe} counts={counts} />
 

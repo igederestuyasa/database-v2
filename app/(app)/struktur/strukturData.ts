@@ -42,6 +42,31 @@ type PlacementCounts = {
   semua: Map<string, number>;
 };
 
+/**
+ * What `/struktur` needs to render, plus whether the hierarchy itself is whole.
+ *
+ * Two different truncation checks meet on this page and they are NOT the same
+ * check, so both stay:
+ *
+ *   * `unitTerpotong` — the `org_units` read, now reported by
+ *     `listAllOrgUnits()` from the exact count of that same query;
+ *   * the Karyawan placement read below, which is paged and compared against
+ *     its own count, and answers with `null` counts ("—" in the tree) when it
+ *     falls short.
+ *
+ * One says the tree may be missing branches; the other says the numbers on the
+ * branches cannot be trusted. Either can happen without the other.
+ */
+export type StrukturData = {
+  nodes: StrukturNode[];
+  /** Unit Organisasi actually read. */
+  jumlahUnit: number;
+  /** Unit Organisasi the database says exist. */
+  totalUnit: number;
+  /** `true` when the hierarchy below is missing rows — draw a warning. */
+  unitTerpotong: boolean;
+};
+
 /** Karyawan per Unit Organisasi, or `null` when the numbers cannot be trusted. */
 async function countKaryawanPerUnit(
   client: DbClient,
@@ -93,11 +118,20 @@ async function countKaryawanPerUnit(
 }
 
 /** The whole hierarchy, pre-order, every status, ready for `StrukturClient`. */
-export async function loadStrukturNodes(client: DbClient): Promise<StrukturNode[]> {
+export async function loadStrukturNodes(client: DbClient): Promise<StrukturData> {
   // `status: "semua"` on purpose: a nonaktif unit is still a real parent, and
   // leaving it out would promote its children to roots and draw a hierarchy
   // that does not exist.
-  const rows = await listAllOrgUnits(client, { status: "semua", orderBy: "nama" });
+  //
+  // Which is also why the truncation signal is passed up rather than shrugged
+  // off: a unit whose induk was cut from the read is promoted to a root by
+  // `buildOrgUnitTree()`, so a capped response does not draw a smaller company
+  // — it draws a different one.
+  const unitRead = await listAllOrgUnits(client, {
+    status: "semua",
+    orderBy: "nama",
+  });
+  const rows = unitRead.rows;
   const flat = flattenOrgUnitTree(buildOrgUnitTree(rows));
 
   const namaById = new Map(rows.map((row) => [row.id, row.nama]));
@@ -117,7 +151,7 @@ export async function loadStrukturNodes(client: DbClient): Promise<StrukturNode[
     }
   }
 
-  return flat.map((node) => ({
+  const nodes = flat.map((node) => ({
     id: node.id,
     kode: node.kode,
     tipe: node.tipe,
@@ -133,4 +167,11 @@ export async function loadStrukturNodes(client: DbClient): Promise<StrukturNode[
     karyawanAktifTotal: counts ? (total.get(node.id) ?? 0) : null,
     karyawanPindahSaatMerge: counts ? (counts.semua.get(node.id) ?? 0) : null,
   }));
+
+  return {
+    nodes,
+    jumlahUnit: rows.length,
+    totalUnit: unitRead.total,
+    unitTerpotong: unitRead.truncated,
+  };
 }

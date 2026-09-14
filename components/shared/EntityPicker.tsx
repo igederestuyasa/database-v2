@@ -32,19 +32,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { UI } from "@/lib/i18n/terms";
 import { cn } from "@/lib/utils";
 
-/** One choosable row. `id` is what gets stored; everything else is display. */
-export type EntityOption = {
-  id: string;
-  /** What the user reads and searches: a nama, a label, a kode + nama. */
-  label: string;
-  /** Second line: the kode, the induk, the tipe — whatever disambiguates. */
-  keterangan?: string;
-  /** Nonaktif options are shown greyed and sorted last, never hidden. */
-  status?: "aktif" | "nonaktif";
-  /** Indent level, for a Unit Organisasi tree flattened into a list. */
-  depth?: number;
-  disabled?: boolean;
-};
+import type { EntityOption } from "./entityOptions";
+
+/**
+ * The frozen surface, unchanged: `EntityOption` and the three mappers are still
+ * importable from this module, because other units already import them here.
+ *
+ * They are DEFINED in `./entityOptions.ts`, which carries no `"use client"`, so
+ * that a Server Component can actually call them — importing a client module's
+ * export from the server yields a reference that throws when called, which is
+ * what used to break `/bereskan` the moment it found a Temuan. Server code must
+ * import from `./entityOptions` directly: re-exported here, they are client
+ * references again.
+ */
+export type { EntityOption };
+export {
+  toJabatanOptions,
+  toLookupOptions,
+  toOrgUnitOptions,
+} from "./entityOptions";
 
 export type EntityPickerProps = {
   options: readonly EntityOption[];
@@ -211,58 +217,6 @@ export function EntityPicker({
       </Popover>
     </>
   );
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
- * Row → option mappers.
- *
- * Pure functions, so a Server Component can map rows before handing them to the
- * picker. Every one of them puts the kode in `keterangan`: two Unit Organisasi
- * really can share a nama, and the kode is the half that never changes.
- * ──────────────────────────────────────────────────────────────────────────── */
-
-type OrgUnitLike = {
-  id: string;
-  kode: string;
-  nama: string;
-  tipe: string;
-  status: string;
-  depth?: number;
-};
-
-export function toOrgUnitOptions(
-  rows: readonly OrgUnitLike[],
-  labels?: Record<string, string>,
-): EntityOption[] {
-  return rows.map((row) => ({
-    id: row.id,
-    label: row.nama,
-    keterangan: `${row.kode} · ${labels?.[row.tipe] ?? row.tipe}`,
-    status: row.status === "nonaktif" ? "nonaktif" : "aktif",
-    depth: row.depth,
-  }));
-}
-
-type JabatanLike = { id: string; kode: string; nama: string; status: string };
-
-export function toJabatanOptions(rows: readonly JabatanLike[]): EntityOption[] {
-  return rows.map((row) => ({
-    id: row.id,
-    label: row.nama,
-    keterangan: row.kode,
-    status: row.status === "nonaktif" ? "nonaktif" : "aktif",
-  }));
-}
-
-type LookupLike = { id: string; kode: string; label: string; status: string };
-
-export function toLookupOptions(rows: readonly LookupLike[]): EntityOption[] {
-  return rows.map((row) => ({
-    id: row.id,
-    label: row.label,
-    keterangan: row.kode,
-    status: row.status === "nonaktif" ? "nonaktif" : "aktif",
-  }));
 }
 
 export default EntityPicker;

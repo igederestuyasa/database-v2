@@ -15,6 +15,7 @@
  *   * RLS              — the wall all three stand in front of (CLAUDE.md:
  *                        "Cek role di Server Action **dan** RLS").
  */
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import {
@@ -45,7 +46,18 @@ export type SessionState =
   | { status: "tanpa-profil" }
   | { status: "masuk"; client: PageSession["client"]; user: SessionUser };
 
-export async function readSession(): Promise<SessionState> {
+/**
+ * Wrapped in `React.cache` so one request asks once.
+ *
+ * `requireUser()` makes a verified `auth.getUser()` round trip to the Auth
+ * server plus a `profiles` select, and since the sidebar in
+ * `app/(app)/layout.tsx` now needs to know who is signed in, the layout and the
+ * page it wraps would otherwise do that pair twice per navigation. `cache()`
+ * memoises for the lifetime of a single request and nothing longer — it is not
+ * a session cache, and it cannot leak one user's session into another's
+ * request.
+ */
+export const readSession = cache(async function readSession(): Promise<SessionState> {
   try {
     const { client, user } = await requireUser();
     return { status: "masuk", client, user };
@@ -55,7 +67,7 @@ export async function readSession(): Promise<SessionState> {
     // A database failure is not "please sign in" — let `error.tsx` show it.
     throw error;
   }
-}
+});
 
 /**
  * The session, or a redirect to `/login` that says WHICH problem it is.

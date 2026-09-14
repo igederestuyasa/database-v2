@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { isAdmin } from "@/lib/actions/_guard";
-import { listAllJabatan, listJabatan } from "@/lib/db/jabatan";
+import { listAllJabatan } from "@/lib/db/jabatan";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,14 +23,11 @@ export default async function Page({ searchParams }: PageProps) {
   const status = bacaStatusFilter((await searchParams).status);
 
   const client = await createClient();
-  const [rows, halamanPertama, admin] = await Promise.all([
+  const [daftar, admin] = await Promise.all([
     // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya
     // ratusan, dan daftar utuh itu juga yang menjadi calon tujuan Merge —
     // filter di layar tidak boleh membuat sebuah Jabatan hilang dari pilihan.
     listAllJabatan(client, { status: "semua" }),
-    // Satu baris saja, diambil hanya untuk `total`-nya: `count: "exact"` dari
-    // PostgREST dihitung di database dan tidak ikut dipotong batas baris.
-    listJabatan(client, { status: "semua", perPage: 1 }),
     isAdmin(),
   ]);
 
@@ -39,17 +36,16 @@ export default async function Page({ searchParams }: PageProps) {
    *
    * PostgREST punya batas `db-max-rows` sendiri (bawaan 1000) yang berlaku
    * SEBELUM `.limit()` milik pemanggil, dan pemotongannya **dilaporkan sebagai
-   * sukses**. `listAllJabatan` meminta 5001 baris dan baru mengeluh kalau
-   * menerima lebih dari 5000, jadi potongan di angka 1000 lolos tanpa suara:
-   * daftarnya pendek, filternya pendek, dan — yang paling berbahaya — daftar
-   * calon tujuan Merge ikut pendek tanpa ada yang tahu.
+   * sukses** — daftarnya pendek, filternya pendek, dan yang paling berbahaya,
+   * daftar calon tujuan Merge ikut pendek tanpa ada yang tahu.
    *
-   * Karena itu jumlah baris yang benar-benar diterima dibandingkan dengan
-   * hitungan pasti dari database. Kalau kurang, halaman mengatakannya alih-alih
-   * memajang daftar yang diam-diam tidak lengkap.
+   * Dulu halaman ini membandingkannya sendiri lewat satu query `count` kedua.
+   * Sekarang `listAllJabatan()` sudah meminta `count: "exact"` pada query yang
+   * sama dan mengembalikan `truncated` — satu permintaan, satu sumber angka,
+   * dan pemeriksaan yang sama berlaku untuk setiap pemanggil, bukan hanya
+   * halaman ini (lihat `FullRead` di `lib/db/shared.ts`).
    */
-  const totalJabatan = halamanPertama.total;
-  const terpotong = rows.length < totalJabatan;
+  const { rows, total: totalJabatan, truncated: terpotong } = daftar;
 
   return (
     <div className="space-y-6">
