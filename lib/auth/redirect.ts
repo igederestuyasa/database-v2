@@ -1,0 +1,63 @@
+/**
+ * Where a visitor goes before and after signing in.
+ *
+ * `?next=` is attacker-controllable: it arrives in the URL of a page that
+ * anyone can open. `safeNextPath()` therefore accepts only a same-origin path
+ * — never `https://…`, never `//evil.test` (protocol-relative), never a
+ * `\`-separated variant that some browsers normalise into one.
+ *
+ * PURE: imported by `middleware.ts` (Edge runtime), by the login page, and by
+ * the callback Route Handler. No `next/headers`, no `process.env`.
+ */
+
+/** The sign-in page. `/login/**` is the only route group open to a stranger. */
+export const LOGIN_PATH = "/login";
+
+/** Where the Supabase email link lands (see `app/(auth)/login/callback`). */
+export const LOGIN_CALLBACK_PATH = "/login/callback";
+
+/** HC Core has no dashboard; Karyawan is the home screen (`app/page.tsx`). */
+export const DEFAULT_AFTER_LOGIN = "/karyawan";
+
+/** True for `/login`, `/login/callback`, … — the pages a stranger may open. */
+export function isPublicPath(pathname: string): boolean {
+  return pathname === LOGIN_PATH || pathname.startsWith(`${LOGIN_PATH}/`);
+}
+
+/**
+ * Reduce `?next=` to a safe in-app destination, or fall back to Karyawan.
+ *
+ * Bouncing back to `/login` would loop, so that is a fallback case too.
+ */
+export function safeNextPath(
+  raw: string | null | undefined,
+  fallback: string = DEFAULT_AFTER_LOGIN,
+): string {
+  if (typeof raw !== "string") return fallback;
+
+  const candidate = raw.trim();
+  if (candidate.length === 0) return fallback;
+  // Control characters (including the `\n` of a header-splitting attempt).
+  if (/[\x00-\x1f\x7f]/.test(candidate)) return fallback;
+  // Must be a path, not an absolute URL and not protocol-relative.
+  if (!candidate.startsWith("/")) return fallback;
+  if (candidate.startsWith("//") || candidate.startsWith("/\\")) return fallback;
+  if (isPublicPath(candidate.split("?")[0] ?? candidate)) return fallback;
+
+  return candidate;
+}
+
+/** `/login?next=/pengguna&pesan=login` — built the same way everywhere. */
+export function loginHref(options?: {
+  next?: string | null;
+  pesan?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  // Sanitise BEFORE comparing: a hostile `next` collapses to the default and
+  // must then be dropped, not echoed back into the URL.
+  const next = safeNextPath(options?.next);
+  if (next !== DEFAULT_AFTER_LOGIN) params.set("next", next);
+  if (options?.pesan) params.set("pesan", options.pesan);
+  const query = params.toString();
+  return query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH;
+}
