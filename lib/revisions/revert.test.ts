@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { PostgrestError } from "@supabase/supabase-js";
+
+import { DbError, type DbClient } from "@/lib/db/shared";
 
 import {
   REVISI_EDIT_KARYAWAN,
@@ -10,9 +13,15 @@ import {
   REVISI_UPDATE_PRIVATE,
   REVISI_UPDATE_PROFIL,
 } from "@/fixtures/revisions";
-import { EMPLOYEE_ID, JABATAN_ID, ORG_UNIT_ID, PROFILE_ID } from "@/fixtures/ids";
+import {
+  BATCH_ID,
+  EMPLOYEE_ID,
+  JABATAN_ID,
+  ORG_UNIT_ID,
+  PROFILE_ID,
+} from "@/fixtures/ids";
 
-import { applyRevert, planRevert } from "./revert";
+import { applyRevert, planRevert, revertBatch } from "./revert";
 
 describe("planRevert — revert satu update", () => {
   const plan = planRevert([REVISI_EDIT_KARYAWAN]);
@@ -179,12 +188,143 @@ describe("planRevert — kemurnian", () => {
   });
 });
 
+/**
+ * `applyRevert()` / `revertBatch()` — the RPC wrappers.
+ *
+ * The writing itself is proven against a real PostgreSQL in
+ * `scripts/verify-schema.sql` §18 (ADR-006). What is worth testing without a
+ * database is the wiring: the right RPC, the plan passed through untouched,
+ * `skipped` carried over, and a database error surfacing as `DbError` rather
+ * than a silent success.
+ */
+type RpcCall = { fn: string; args: Record<string, unknown> };
+
+function fakeClient(
+  response: { data: unknown; error: PostgrestError | null },
+  calls: RpcCall[] = [],
+) {
+  return {
+    calls,
+    client: {
+      rpc(fn: string, args: Record<string, unknown>) {
+        calls.push({ fn, args });
+        return Promise.resolve(response);
+      },
+    } as unknown as DbClient,
+  };
+}
+
+const RPC_ERROR = {
+  name: "PostgrestError",
+  message: "Batch ini sudah pernah dikembalikan.",
+  details: "",
+  hint: "",
+  code: "55000",
+  toJSON: () => ({}),
+} as unknown as PostgrestError;
+
 describe("applyRevert", () => {
-  it("masih berupa stub yang menolak dijalankan", async () => {
+  it("mengirim seluruh rencana ke RPC apply_revert", async () => {
     const plan = planRevert([REVISI_EDIT_KARYAWAN]);
-    await expect(
-      // Stub: tidak pernah menyentuh client-nya.
-      applyRevert(plan, null as never),
-    ).rejects.toThrow(/not implemented/i);
+    const { client, calls } = fakeClient({
+      data: { batch_id: BATCH_ID.revert, applied: 1 },
+      error: null,
+    });
+
+    const hasil = await applyRevert(plan, client);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].fn).toBe("apply_revert");
+    expect(calls[0].args.p_plan).toEqual(plan);
+    expect(hasil.batchId).toBe(BATCH_ID.revert);
+    expect(hasil.applied).toBe(1);
+  });
+
+  it("meneruskan `skipped` dari rencana apa adanya", async () => {
+    const plan = planRevert([REVISI_EDIT_KARYAWAN, REVISI_TABEL_ASING]);
+    const { client } = fakeClient({
+      data: { batch_id: BATCH_ID.revert, applied: 1 },
+      error: null,
+    });
+
+    const hasil = await applyRevert(plan, client);
+
+    expect(plan.skipped).toHaveLength(1);
+    expect(hasil.skipped).toEqual(plan.skipped);
+  });
+
+  it("melempar DbError kalau database menolak", async () => {
+    const plan = planRevert([REVISI_EDIT_KARYAWAN]);
+    const { client } = fakeClient({ data: null, error: RPC_ERROR });
+
+    await expect(applyRevert(plan, client)).rejects.toBeInstanceOf(DbError);
+  });
+
+  it("melempar kalau database tidak mengembalikan id Batch", async () => {
+    const plan = planRevert([REVISI_EDIT_KARYAWAN]);
+    const { client } = fakeClient({ data: { applied: 1 }, error: null });
+
+    await expect(applyRevert(plan, client)).rejects.toThrow(/id Batch/i);
+  });
+});
+
+describe("revertBatch", () => {
+  it("memanggil RPC revert_batch dan mengembalikan Batch yang dibalikkan", async () => {
+    const { client, calls } = fakeClient({
+      data: {
+        batch_id: BATCH_ID.revert,
+        reverted_batch_id: BATCH_ID.merge,
+        applied: 4,
+        skipped: [],
+      },
+      error: null,
+    });
+
+    const hasil = await revertBatch(BATCH_ID.merge, client, {
+      keterangan: "Kembalikan Merge",
+    });
+
+    expect(calls[0].fn).toBe("revert_batch");
+    expect(calls[0].args).toEqual({
+      p_batch_id: BATCH_ID.merge,
+      p_keterangan: "Kembalikan Merge",
+    });
+    expect(hasil.batchId).toBe(BATCH_ID.revert);
+    expect(hasil.revertedBatchId).toBe(BATCH_ID.merge);
+    expect(hasil.applied).toBe(4);
+  });
+
+  it("membaca `skipped` dari database dan membuang entri yang tidak berbentuk", async () => {
+    const { client } = fakeClient({
+      data: {
+        batch_id: BATCH_ID.revert,
+        applied: 1,
+        skipped: [
+          {
+            revisionId: 7,
+            tableName: "employee_private",
+            rowId: EMPLOYEE_ID.lengkap,
+            reason: "tanpa_kolom_status",
+            keterangan: "Tidak bisa dinonaktifkan.",
+          },
+          { revisionId: 8, reason: "entah" },
+          "bukan objek",
+        ],
+      },
+      error: null,
+    });
+
+    const hasil = await revertBatch(BATCH_ID.merge, client);
+
+    expect(hasil.skipped).toHaveLength(1);
+    expect(hasil.skipped[0].reason).toBe("tanpa_kolom_status");
+  });
+
+  it("melempar DbError kalau Batch sudah pernah dikembalikan", async () => {
+    const { client } = fakeClient({ data: null, error: RPC_ERROR });
+
+    await expect(revertBatch(BATCH_ID.merge, client)).rejects.toBeInstanceOf(
+      DbError,
+    );
   });
 });

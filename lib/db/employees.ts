@@ -2,7 +2,8 @@
  * Read layer for Karyawan.
  *
  * FROZEN CONTRACT (Wave 1) — reads only. Writes live in
- * `lib/actions/employees.ts` (another unit) and always go through `withBatch()`.
+ * `lib/actions/employees.ts` (another unit): one statement per Server Action,
+ * or an RPC when several rows move (ADR-006).
  *
  * **Which relation to read.** Everything here reads `v_employees`: the Karyawan
  * row with its Unit Organisasi chain, every Lookup label, the Jabatan name and
