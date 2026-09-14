@@ -18,7 +18,7 @@ Next.js 15 App Router + TypeScript · Supabase (Postgres, Auth, RLS) · Vercel �
 - `npm run dev` — dev server
 - `npm run lint` · `npm run typecheck` — wajib hijau sebelum commit
 - `npm test` — cek nama kolom (`check:columns`) + unit test (`lib/cleaning`, `lib/revisions/revert`, `lib/api/fields`)
-- `npm run db:local` — start Postgres lokal, pasang `db/local/00-shim.sql` + `supabase/migrations/0001_init.sql`, jalankan `scripts/verify-schema.sql`
+- `npm run db:local` — start Postgres lokal, pasang `db/local/00-shim.sql` + semua `supabase/migrations/*.sql`, jalankan `scripts/verify-schema.sql`
 - `npm run gen:types` — regenerate `lib/types/db.ts` & `lib/schema/columns.generated.ts` dari database lokal (menggantikan `supabase gen types`, yang tidak bisa jalan di sini — lihat ADR-005)
 - `npx tsx scripts/seed-from-excel.ts <file.xlsx>` — seed awal, sekali saja
 
@@ -38,11 +38,14 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Log revisi ditulis oleh **trigger**, bukan kode. Tabel data baru wajib dipasangi trigger `log_revision` di migration yang sama. **Tujuh** tabel ter-log: enam tabel data di atas **plus `profiles`** (perubahan role wajib teraudit). `profiles` sengaja tidak ikut larangan DELETE karena cascade dari `auth.users` — jangan samakan kedua daftar itu.
 - Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya: revisi `employee_private`/`api_keys` admin saja, revisi `profiles` admin atau pemiliknya, sisanya semua yang login.
 - Revert selalu membuat revisi baru. Jangan pernah `UPDATE`/`DELETE` tabel `revisions` atau `batches` selain mengisi `reverted_by_batch_id`.
+- Seed jalan lewat koneksi `pg` langsung + transaksi sungguhan (`lib/revisions/seedBatch.ts`), bukan supabase-js — supaya ±1.475 Karyawan jadi **satu** Batch `seed` (ADR-006). `lib/revisions/seedBatch.ts` hanya boleh di-import `scripts/**`.
 - `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`.
 - Route `api/v1` hanya membaca `v_employees_api`, `org_units`, `jabatan`, `lookups`. Tidak pernah `employee_private` / `v_employees_private`.
 - Kolom referensi di `employees` selalu FK (uuid) ke `org_units` / `jabatan` / `lookups`. Jangan tambah kolom teks bebas untuk hal yang punya daftar.
 - Kolom turunan (usia, masa kerja) dihitung di view atau `lib/derived/`; jangan disimpan.
-- Skema hanya berubah lewat file di `supabase/migrations/` — jangan ubah dari dashboard Supabase. **`0001_init.sql` adalah satu-satunya file migration**; ubah di dalamnya, jangan tambah `0002_*.sql` (ADR-005).
+- Skema hanya berubah lewat file di `supabase/migrations/` — jangan ubah dari dashboard Supabase. **Ada tepat DUA file migration** — `0001_init.sql` dan `0002_batch_operations.sql` — dan direktorinya **beku lagi**: ubah di dalam keduanya, jangan tambah `0003_*.sql`. Pembekuan satu-file ADR-005 dibuka satu kali untuk ADR-006 dan sudah ditutup; `tests/migrationInvariants.test.ts` gagal kalau ada file ketiga.
+- Tindakan yang menulis **lebih dari satu baris atau lebih dari satu tabel** ditulis sebagai fungsi Postgres di `0002_batch_operations.sql`, bukan sebagai urutan panggilan supabase-js (ADR-006). Satu panggilan RPC = satu transaksi = satu Batch; lewat PostgREST, satu statement = satu Batch. `withBatch()` tetap benar untuk tindakan satu statement. Jangan bungkus RPC merge/revert dengan `withBatch()` — fungsinya membuka Batch-nya sendiri.
+- Fungsi di `0002_batch_operations.sql` **`SECURITY INVOKER`** (RLS tetap berlaku) **plus** `assert_admin()` sebagai statement pertama. Jangan ubah jadi `SECURITY DEFINER`.
 - `lib/types/db.ts` dan `lib/schema/columns.generated.ts` **auto-generated** — jangan diedit tangan; ubah migration lalu `npm run db:local && npm run gen:types`.
 - `components/ui/*` beku — pakai, jangan ubah.
 - Jangan menambah dependency. Semua yang dibutuhkan sudah ada di `package.json` (ADR-005).

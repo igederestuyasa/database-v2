@@ -988,6 +988,618 @@ begin
 end
 $$;
 
+-- ===========================================================================
+-- 18. 0002_batch_operations.sql — satu tindakan = satu Batch (ADR-006)
+--
+-- Ini adalah exit criteria ROADMAP Fase 3 yang dijadikan bisa dicek mesin:
+-- "merge dari halaman itu → semua karyawan pindah, unit lama nonaktif, SATU
+-- batch `merge` muncul di log → revert batch → keadaan kembali PERSIS,
+-- termasuk status unit lama."
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- 18.1 Kesembilan fungsi ada, SECURITY INVOKER, dan tidak bisa dipanggil anon
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_expected text[] := array[
+    'assert_admin','merge_org_unit','merge_jabatan','merge_lookup',
+    'apply_revert_operation','revert_skip_entry','revert_plan_for_batch',
+    'apply_revert','revert_batch'
+  ];
+  v_missing  text[];
+  v_definer  text[];
+  v_anon     text[];
+begin
+  select array_agg(f order by f) into v_missing
+  from unnest(v_expected) f
+  where not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = f
+  );
+  if v_missing is not null then
+    raise exception 'GAGAL: fungsi 0002 hilang: %', array_to_string(v_missing, ', ');
+  end if;
+
+  -- SECURITY INVOKER dipilih sengaja (ADR-006): fungsi berjalan sebagai
+  -- pemanggil, jadi RLS tetap menggigit di setiap statement. SECURITY DEFINER
+  -- tanpa pemeriksaan role di dalamnya akan menyerahkan hak admin ke viewer.
+  select array_agg(p.proname order by p.proname) into v_definer
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname = any(v_expected) and p.prosecdef;
+  if v_definer is not null then
+    raise exception
+      'GAGAL: fungsi berikut SECURITY DEFINER padahal harus INVOKER (ADR-006): %',
+      array_to_string(v_definer, ', ');
+  end if;
+
+  -- anon tidak pernah boleh mengeksekusi apa pun dari file ini.
+  select array_agg(p.proname order by p.proname) into v_anon
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname = any(v_expected)
+    and has_function_privilege('anon', p.oid, 'EXECUTE');
+  if v_anon is not null then
+    raise exception 'GAGAL: anon bisa mengeksekusi: %', array_to_string(v_anon, ', ');
+  end if;
+
+  raise notice 'OK   9 fungsi 0002 ada, semuanya SECURITY INVOKER, anon ditolak';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 18.2 Merge Unit Organisasi = TEPAT SATU Batch 'merge' berisi semua Revisi
+-- ---------------------------------------------------------------------------
+
+-- fixture: satu direktorat, dua divisi kembar, satu bagian anak, dua Karyawan
+do $$
+declare
+  v_dir uuid; v_src uuid; v_tgt uuid; v_child uuid;
+begin
+  insert into public.org_units (kode, nama, tipe)
+    values ('UJI-M-DIR', 'Direktorat Uji Merge', 'direktorat') returning id into v_dir;
+  insert into public.org_units (kode, nama, tipe, parent_id)
+    values ('UJI-M-SRC', 'Divisi QHSSE', 'divisi', v_dir) returning id into v_src;
+  insert into public.org_units (kode, nama, tipe, parent_id)
+    values ('UJI-M-TGT', 'DIVISI QHSSE', 'divisi', v_dir) returning id into v_tgt;
+  insert into public.org_units (kode, nama, tipe, parent_id)
+    values ('UJI-M-CHILD', 'Bagian K3 Uji', 'bagian', v_src) returning id into v_child;
+
+  insert into public.employees (personnel_number, full_name, org_unit_id)
+  values ('UJI-M-0001', 'Karyawan Uji Merge Satu', v_src),
+         ('UJI-M-0002', 'Karyawan Uji Merge Dua',  v_src);
+end
+$$;
+
+do $$
+declare
+  v_src      uuid;
+  v_tgt      uuid;
+  v_child    uuid;
+  v_res      jsonb;
+  v_batch    uuid;
+  v_n        integer;
+  v_jenis    text;
+  v_batches  integer;
+begin
+  select id into v_src   from public.org_units where kode = 'UJI-M-SRC';
+  select id into v_tgt   from public.org_units where kode = 'UJI-M-TGT';
+  select id into v_child from public.org_units where kode = 'UJI-M-CHILD';
+
+  select count(*) into v_batches from public.batches where jenis = 'merge';
+
+  v_res := public.merge_org_unit(v_src, v_tgt, 'Uji merge Unit Organisasi');
+  v_batch := (v_res ->> 'batch_id')::uuid;
+
+  if (v_res ->> 'moved_employees')::int <> 2 then
+    raise exception 'GAGAL: merge memindahkan % Karyawan (harus 2)', v_res ->> 'moved_employees';
+  end if;
+  if (v_res ->> 'moved_children')::int <> 1 then
+    raise exception 'GAGAL: merge me-reparent % unit anak (harus 1)', v_res ->> 'moved_children';
+  end if;
+
+  -- TEPAT SATU batch 'merge' baru (inti ADR-006: bukan tiga, bukan 1+3)
+  select count(*) into v_n from public.batches where jenis = 'merge';
+  if v_n <> v_batches + 1 then
+    raise exception
+      'GAGAL: satu Merge menghasilkan % Batch jenis "merge" (harus tepat 1)', v_n - v_batches;
+  end if;
+
+  select jenis into v_jenis from public.batches where id = v_batch;
+  if v_jenis <> 'merge' then
+    raise exception 'GAGAL: jenis Batch merge = "%" (harus "merge")', v_jenis;
+  end if;
+
+  -- setiap Karyawan yang pindah, setiap anak yang di-reparent, dan asal yang
+  -- dinonaktifkan: SEMUA di batch_id yang sama
+  select count(*) into v_n from public.revisions where batch_id = v_batch;
+  if v_n <> 4 then
+    raise exception
+      'GAGAL: Batch merge memuat % Revisi (harus 4: 2 Karyawan + 1 unit anak + 1 unit asal)', v_n;
+  end if;
+
+  select count(*) into v_n
+  from public.revisions
+  where batch_id = v_batch and table_name = 'employees' and action = 'update';
+  if v_n <> 2 then
+    raise exception 'GAGAL: % Revisi employees di Batch merge (harus 2)', v_n;
+  end if;
+
+  select count(*) into v_n
+  from public.revisions
+  where batch_id = v_batch and table_name = 'org_units' and row_id = v_child;
+  if v_n <> 1 then
+    raise exception 'GAGAL: Revisi unit anak tidak ada di Batch merge';
+  end if;
+
+  select count(*) into v_n
+  from public.revisions
+  where batch_id = v_batch and table_name = 'org_units' and row_id = v_src;
+  if v_n <> 1 then
+    raise exception 'GAGAL: Revisi penonaktifan unit asal tidak ada di Batch merge';
+  end if;
+
+  -- tidak ada Revisi dari Merge ini yang nyasar ke batch otomatis 'edit'
+  select count(distinct r.batch_id) into v_n
+  from public.revisions r
+  where r.action = 'update'
+    and (
+      (r.table_name = 'org_units' and r.row_id in (v_src, v_child))
+      or (r.table_name = 'employees' and r.row_id in (
+            select e.id from public.employees e
+             where e.personnel_number in ('UJI-M-0001','UJI-M-0002')))
+    );
+  if v_n <> 1 then
+    raise exception
+      'GAGAL: Revisi Merge tersebar di % Batch (harus 1) — app.batch_id tidak bertahan', v_n;
+  end if;
+
+  -- keadaan setelah merge
+  if (select org_unit_id from public.employees where personnel_number = 'UJI-M-0001') <> v_tgt then
+    raise exception 'GAGAL: Karyawan tidak pindah ke Unit Organisasi tujuan';
+  end if;
+  if (select parent_id from public.org_units where id = v_child) <> v_tgt then
+    raise exception 'GAGAL: unit anak tidak di-reparent ke tujuan';
+  end if;
+  if (select status from public.org_units where id = v_src) <> 'nonaktif' then
+    raise exception 'GAGAL: Unit Organisasi asal tidak dinonaktifkan';
+  end if;
+  if (select merged_into_id from public.org_units where id = v_src) <> v_tgt then
+    raise exception 'GAGAL: merged_into_id unit asal tidak menunjuk tujuan';
+  end if;
+
+  raise notice 'OK   merge_org_unit: 1 Batch "merge", 4 Revisi, semuanya satu batch_id';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 18.3 revert_batch mengembalikan keadaan PERSIS + tepat satu Batch 'revert'
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_src        uuid;
+  v_tgt        uuid;
+  v_child      uuid;
+  v_merge      uuid;
+  v_res        jsonb;
+  v_revert     uuid;
+  v_n          integer;
+  v_reverts    integer;
+begin
+  select id into v_src   from public.org_units where kode = 'UJI-M-SRC';
+  select id into v_tgt   from public.org_units where kode = 'UJI-M-TGT';
+  select id into v_child from public.org_units where kode = 'UJI-M-CHILD';
+
+  select id into v_merge from public.batches
+   where jenis = 'merge' and keterangan = 'Uji merge Unit Organisasi';
+
+  select count(*) into v_reverts from public.batches where jenis = 'revert';
+
+  v_res := public.revert_batch(v_merge, null);
+  v_revert := (v_res ->> 'batch_id')::uuid;
+
+  if (v_res ->> 'applied')::int <> 4 then
+    raise exception 'GAGAL: revert menerapkan % langkah (harus 4)', v_res ->> 'applied';
+  end if;
+
+  select count(*) into v_n from public.batches where jenis = 'revert';
+  if v_n <> v_reverts + 1 then
+    raise exception
+      'GAGAL: satu revert batch menghasilkan % Batch "revert" (harus tepat 1)', v_n - v_reverts;
+  end if;
+
+  -- keadaan kembali PERSIS, termasuk status unit lama (ROADMAP Fase 3)
+  if (select status from public.org_units where id = v_src) <> 'aktif' then
+    raise exception 'GAGAL: status Unit Organisasi asal tidak kembali "aktif"';
+  end if;
+  if (select merged_into_id from public.org_units where id = v_src) is not null then
+    raise exception 'GAGAL: merged_into_id unit asal tidak dikosongkan lagi';
+  end if;
+  if (select parent_id from public.org_units where id = v_child) <> v_src then
+    raise exception 'GAGAL: unit anak tidak kembali ke induk asalnya';
+  end if;
+  select count(*) into v_n from public.employees
+   where personnel_number in ('UJI-M-0001','UJI-M-0002') and org_unit_id = v_src;
+  if v_n <> 2 then
+    raise exception 'GAGAL: % dari 2 Karyawan kembali ke Unit Organisasi asal', v_n;
+  end if;
+
+  -- revert menulis Revisi baru, tidak menghapus log
+  select count(*) into v_n from public.revisions where batch_id = v_revert;
+  if v_n <> 4 then
+    raise exception 'GAGAL: Batch revert memuat % Revisi (harus 4)', v_n;
+  end if;
+  select count(*) into v_n from public.revisions where batch_id = v_merge;
+  if v_n <> 4 then
+    raise exception 'GAGAL: revert mengubah isi Batch merge (sekarang % Revisi)', v_n;
+  end if;
+
+  -- batches.reverted_by_batch_id terisi
+  if (select reverted_by_batch_id from public.batches where id = v_merge) <> v_revert then
+    raise exception 'GAGAL: reverted_by_batch_id tidak menunjuk Batch revert';
+  end if;
+
+  raise notice 'OK   revert_batch: keadaan kembali persis (termasuk status & merged_into_id), 1 Batch "revert"';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 18.4 Batch yang sudah di-revert tidak bisa di-revert dua kali
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_merge uuid;
+  v_n     integer;
+begin
+  select id into v_merge from public.batches
+   where jenis = 'merge' and keterangan = 'Uji merge Unit Organisasi';
+
+  select count(*) into v_n from public.batches where jenis = 'revert';
+
+  begin
+    perform public.revert_batch(v_merge, null);
+    raise exception 'GAGAL: Batch yang sudah di-revert bisa di-revert lagi';
+  exception
+    when object_not_in_prerequisite_state then null;  -- diharapkan (55000)
+  end;
+
+  if (select count(*) from public.batches where jenis = 'revert') <> v_n then
+    raise exception 'GAGAL: revert kedua tetap membuat Batch baru';
+  end if;
+
+  raise notice 'OK   revert_batch menolak Batch yang sudah pernah dikembalikan';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 18.5 apply_revert atas Revisi insert -> status nonaktif, TIDAK PERNAH DELETE
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_batch   uuid;
+  v_id      uuid;
+  v_plan    jsonb;
+  v_res     jsonb;
+  v_jenis   text;
+  v_n       integer;
+begin
+  v_batch := public.begin_batch('create', 'Uji insert lalu revert', true);
+  insert into public.jabatan (kode, nama)
+  values ('UJI-REV-INS', 'Jabatan Uji Revert Insert')
+  returning id into v_id;
+  perform set_config('app.batch_id', '', true);
+
+  v_plan := public.revert_plan_for_batch(v_batch);
+
+  if v_plan ->> 'jenis' <> 'revert' then
+    raise exception 'GAGAL: revert_plan_for_batch tidak berjenis "revert"';
+  end if;
+  if jsonb_array_length(v_plan -> 'operations') <> 1 then
+    raise exception 'GAGAL: rencana memuat % langkah (harus 1)',
+      jsonb_array_length(v_plan -> 'operations');
+  end if;
+  if v_plan -> 'operations' -> 0 ->> 'kind' <> 'deactivate' then
+    raise exception 'GAGAL: Revisi insert direncanakan sebagai "%" (harus "deactivate")',
+      v_plan -> 'operations' -> 0 ->> 'kind';
+  end if;
+  if v_plan -> 'operations' -> 0 -> 'values' <> jsonb_build_object('status','nonaktif') then
+    raise exception 'GAGAL: langkah deactivate menulis % (harus {"status":"nonaktif"})',
+      v_plan -> 'operations' -> 0 -> 'values';
+  end if;
+
+  v_res := public.apply_revert(v_plan);
+
+  if (select status from public.jabatan where id = v_id) <> 'nonaktif' then
+    raise exception 'GAGAL: revert Revisi insert tidak menonaktifkan barisnya';
+  end if;
+  select count(*) into v_n from public.jabatan where id = v_id;
+  if v_n <> 1 then
+    raise exception 'GAGAL: revert Revisi insert MENGHAPUS barisnya (ADR-003 dilanggar)';
+  end if;
+
+  select b.jenis into v_jenis from public.batches b where b.id = (v_res ->> 'batch_id')::uuid;
+  if v_jenis <> 'revert' then
+    raise exception 'GAGAL: apply_revert membuat Batch jenis "%" (harus "revert")', v_jenis;
+  end if;
+
+  raise notice 'OK   apply_revert: Revisi insert -> status nonaktif, baris tetap ada';
+end
+$$;
+
+-- apply_revert menolak langkah "deactivate" yang mencoba menulis apa pun selain
+-- status = 'nonaktif' (mis. rencana yang dipalsukan dari client).
+do $$
+declare
+  v_id uuid;
+begin
+  select id into v_id from public.jabatan where kode = 'UJI-REV-INS';
+
+  begin
+    perform public.apply_revert(jsonb_build_object(
+      'jenis', 'revert',
+      'keterangan', 'Rencana palsu',
+      'operations', jsonb_build_array(jsonb_build_object(
+        'revisionId', 1,
+        'table', 'jabatan',
+        'pkColumn', 'id',
+        'rowId', v_id,
+        'kind', 'deactivate',
+        'values', jsonb_build_object('nama', 'DIRETAS')
+      )),
+      'skipped', '[]'::jsonb
+    ));
+    raise exception 'GAGAL: langkah deactivate bisa menulis kolom selain status';
+  exception
+    when invalid_parameter_value then null;  -- diharapkan (22023)
+  end;
+
+  -- tabel di luar tujuh tabel ter-log juga ditolak
+  begin
+    perform public.apply_revert(jsonb_build_object(
+      'jenis', 'revert',
+      'keterangan', 'Rencana palsu',
+      'operations', jsonb_build_array(jsonb_build_object(
+        'revisionId', 1,
+        'table', 'batches',
+        'pkColumn', 'id',
+        'rowId', gen_random_uuid(),
+        'kind', 'restore',
+        'values', jsonb_build_object('jenis', 'edit')
+      )),
+      'skipped', '[]'::jsonb
+    ));
+    raise exception 'GAGAL: apply_revert menerima tabel di luar tujuh tabel ter-log';
+  exception
+    when invalid_parameter_value then null;  -- diharapkan (22023)
+  end;
+
+  if (select nama from public.jabatan where kode = 'UJI-REV-INS') = 'DIRETAS' then
+    raise exception 'GAGAL: rencana palsu berhasil menulis';
+  end if;
+
+  raise notice 'OK   apply_revert menolak langkah palsu (kolom di luar status, tabel tak ter-log)';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 18.6 Merge Jabatan & Lookup: satu Batch, kolom yang benar yang pindah
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_j1 uuid; v_j2 uuid; v_l1 uuid; v_l2 uuid; v_e uuid;
+  v_res jsonb;
+  v_n integer;
+begin
+  insert into public.jabatan (kode, nama) values ('UJI-MJ-A', 'Site Manager') returning id into v_j1;
+  insert into public.jabatan (kode, nama) values ('UJI-MJ-B', 'Site Ops Manager') returning id into v_j2;
+  insert into public.lookups (tipe, kode, label)
+    values ('job_grade', 'UJI-JG-A', 'Pratama III - 13') returning id into v_l1;
+  insert into public.lookups (tipe, kode, label)
+    values ('job_grade', 'UJI-JG-B', 'PRATAMA III-13') returning id into v_l2;
+  insert into public.lookups (tipe, kode, label)
+    values ('band_jabatan', 'UJI-BJ-A', 'Band Uji');
+
+  insert into public.employees (personnel_number, full_name, jabatan_id, job_grade_id)
+  values ('UJI-M-0003', 'Karyawan Uji Merge Tiga', v_j1, v_l1)
+  returning id into v_e;
+
+  v_res := public.merge_jabatan(v_j1, v_j2, 'Uji merge Jabatan');
+  if (v_res ->> 'moved_employees')::int <> 1 then
+    raise exception 'GAGAL: merge_jabatan memindahkan % Karyawan (harus 1)', v_res ->> 'moved_employees';
+  end if;
+  select count(*) into v_n from public.revisions where batch_id = (v_res ->> 'batch_id')::uuid;
+  if v_n <> 2 then
+    raise exception 'GAGAL: Batch merge Jabatan memuat % Revisi (harus 2)', v_n;
+  end if;
+  if (select jabatan_id from public.employees where id = v_e) <> v_j2 then
+    raise exception 'GAGAL: Karyawan tidak pindah ke Jabatan tujuan';
+  end if;
+  if (select status from public.jabatan where id = v_j1) <> 'nonaktif' then
+    raise exception 'GAGAL: Jabatan asal tidak dinonaktifkan';
+  end if;
+
+  v_res := public.merge_lookup(v_l1, v_l2, 'Uji merge Lookup');
+  if (v_res ->> 'moved_employees')::int <> 1 then
+    raise exception
+      'GAGAL: merge_lookup memindahkan % Karyawan (harus 1) — CASE per tipe salah kolom?',
+      v_res ->> 'moved_employees';
+  end if;
+  if (select job_grade_id from public.employees where id = v_e) <> v_l2 then
+    raise exception 'GAGAL: kolom job_grade_id Karyawan tidak pindah ke Lookup tujuan';
+  end if;
+  select count(*) into v_n from public.revisions where batch_id = (v_res ->> 'batch_id')::uuid;
+  if v_n <> 2 then
+    raise exception 'GAGAL: Batch merge Lookup memuat % Revisi (harus 2)', v_n;
+  end if;
+
+  raise notice 'OK   merge_jabatan & merge_lookup: satu Batch, kolom yang benar yang pindah';
+end
+$$;
+
+-- merge lintas tipe Lookup ditolak (kalau tidak, Karyawan jadi menunjuk tipe salah)
+do $$
+declare v_l2 uuid; v_bj uuid;
+begin
+  select id into v_l2 from public.lookups where kode = 'UJI-JG-B';
+  select id into v_bj from public.lookups where kode = 'UJI-BJ-A';
+  begin
+    perform public.merge_lookup(v_l2, v_bj, null);
+    raise exception 'GAGAL: merge Lookup lintas tipe diterima';
+  exception
+    when invalid_parameter_value then null;  -- diharapkan (22023)
+  end;
+
+  -- merge asal yang sudah pernah di-merge juga ditolak
+  begin
+    perform public.merge_lookup(
+      (select id from public.lookups where kode = 'UJI-JG-A'), v_l2, null);
+    raise exception 'GAGAL: Lookup yang sudah di-merge bisa di-merge lagi';
+  exception
+    when object_not_in_prerequisite_state then null;  -- diharapkan (55000)
+  end;
+
+  raise notice 'OK   merge_lookup menolak lintas tipe dan asal yang sudah di-merge';
+end
+$$;
+
+-- merge Unit Organisasi ke turunannya sendiri ditolak (akan membuat siklus)
+do $$
+declare v_src uuid; v_child uuid;
+begin
+  select id into v_src   from public.org_units where kode = 'UJI-M-SRC';
+  select id into v_child from public.org_units where kode = 'UJI-M-CHILD';
+  begin
+    perform public.merge_org_unit(v_src, v_child, null);
+    raise exception 'GAGAL: merge ke turunan sendiri diterima (akan membuat siklus)';
+  exception
+    when check_violation then null;  -- diharapkan (23514)
+  end;
+  raise notice 'OK   merge_org_unit menolak tujuan yang berada di bawah asal';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 18.7 VIEWER tidak bisa memanggil satu pun fungsi ini
+-- ---------------------------------------------------------------------------
+set request.jwt.claims = '{"sub":"b0000000-0000-4000-8000-000000000002","role":"authenticated"}';
+set role authenticated;
+
+do $$
+declare
+  v_src   uuid;
+  v_tgt   uuid;
+  v_j1    uuid;
+  v_j2    uuid;
+  v_l1    uuid;
+  v_l2    uuid;
+  v_batch uuid;
+  v_ok    boolean;
+begin
+  if public.is_admin() then
+    raise exception 'GAGAL: fixture salah — pemanggil dianggap admin';
+  end if;
+
+  select id into v_src   from public.org_units where kode = 'UJI-M-SRC';
+  select id into v_tgt   from public.org_units where kode = 'UJI-M-TGT';
+  select id into v_j1    from public.jabatan   where kode = 'UJI-MJ-A';
+  select id into v_j2    from public.jabatan   where kode = 'UJI-MJ-B';
+  select id into v_l1    from public.lookups   where kode = 'UJI-JG-A';
+  select id into v_l2    from public.lookups   where kode = 'UJI-JG-B';
+  select id into v_batch from public.batches   where jenis = 'merge' and keterangan = 'Uji merge Jabatan';
+
+  v_ok := false;
+  begin
+    perform public.merge_org_unit(v_src, v_tgt, null);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'GAGAL: viewer bisa memanggil merge_org_unit()'; end if;
+
+  v_ok := false;
+  begin
+    perform public.merge_jabatan(v_j1, v_j2, null);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'GAGAL: viewer bisa memanggil merge_jabatan()'; end if;
+
+  v_ok := false;
+  begin
+    perform public.merge_lookup(v_l1, v_l2, null);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'GAGAL: viewer bisa memanggil merge_lookup()'; end if;
+
+  v_ok := false;
+  begin
+    perform public.revert_batch(v_batch, null);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'GAGAL: viewer bisa memanggil revert_batch()'; end if;
+
+  v_ok := false;
+  begin
+    perform public.apply_revert(jsonb_build_object(
+      'jenis', 'revert',
+      'keterangan', 'oleh viewer',
+      'operations', jsonb_build_array(jsonb_build_object(
+        'revisionId', 1, 'table', 'jabatan', 'pkColumn', 'id',
+        'rowId', v_j2, 'kind', 'deactivate',
+        'values', jsonb_build_object('status', 'nonaktif')
+      )),
+      'skipped', '[]'::jsonb
+    ));
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'GAGAL: viewer bisa memanggil apply_revert()'; end if;
+
+  v_ok := false;
+  begin
+    perform public.assert_admin('menguji');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'GAGAL: assert_admin() meloloskan viewer'; end if;
+
+  raise notice 'OK   viewer ditolak (42501) di merge_org_unit, merge_jabatan, merge_lookup, revert_batch, apply_revert';
+end
+$$;
+
+-- viewer juga tidak berhasil mengubah data lewat apply_revert_operation langsung
+do $$
+declare
+  v_j2  uuid;
+  v_ok  boolean := false;
+begin
+  select id into v_j2 from public.jabatan where kode = 'UJI-MJ-B';
+  begin
+    perform public.apply_revert_operation(jsonb_build_object(
+      'revisionId', 1, 'table', 'jabatan', 'pkColumn', 'id',
+      'rowId', v_j2, 'kind', 'deactivate',
+      'values', jsonb_build_object('status', 'nonaktif')
+    ));
+  exception
+    -- RLS memotong UPDATE-nya jadi 0 baris, dan fungsi menolak berisik (P0002).
+    when no_data_found or insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'GAGAL: viewer bisa menulis lewat apply_revert_operation()';
+  end if;
+  raise notice 'OK   RLS tetap menggigit di dalam apply_revert_operation() (SECURITY INVOKER)';
+end
+$$;
+
+reset role;
+reset request.jwt.claims;
+
+do $$
+begin
+  if (select status from public.jabatan where kode = 'UJI-MJ-B') <> 'aktif' then
+    raise exception 'GAGAL: viewer berhasil mengubah data lewat salah satu fungsi 0002';
+  end if;
+  raise notice 'OK   tidak satu pun data berubah oleh percobaan viewer';
+end
+$$;
+
 \echo ''
 \echo '================ SEMUA ASSERTION LULUS ================'
 \echo ''

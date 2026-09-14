@@ -42,7 +42,7 @@ hc-core/
 │   ├── supabase/                    # client.ts (browser), server.ts (server, cookie session), admin.ts (service role — HANYA untuk api/v1 & seed)
 │   ├── db/                          # satu file per entitas: employees.ts, orgUnits.ts, jabatan.ts, lookups.ts, revisions.ts, apiKeys.ts
 │   ├── actions/                     # Server Actions per entitas; SATU-SATUNYA jalur tulis dari UI
-│   ├── revisions/                   # batch.ts (mulai/akhiri batch), revert.ts (revert revisi & batch)
+│   ├── revisions/                   # batch.ts (mulai/akhiri batch), revert.ts (revert revisi & batch), seedBatch.ts (transaksi seed via pg — script saja)
 │   ├── cleaning/                    # normalize.ts, findSimilar.ts, findOrphans.ts
 │   ├── api/                         # auth.ts (validasi key), fields.ts (whitelist), response.ts (envelope)
 │   ├── derived/                     # perhitungan usia, masa kerja (dipakai view & UI)
@@ -173,18 +173,60 @@ Semua view dibuat dengan `security_invoker = true` agar RLS tabel dasar tetap be
 ### A. Admin mengedit satu karyawan
 1. Form di `app/(app)/karyawan/[id]` submit → Server Action `lib/actions/employees.ts:updateEmployee`.
 2. Server Action memvalidasi input dengan zod (`lib/validation/employee.ts`), lalu memanggil `lib/revisions/batch.ts:withBatch({ jenis:'edit', keterangan })`.
-3. `withBatch` membuka transaksi (RPC `begin_batch` → insert `batches`, `set_config('app.batch_id', ...)`), menjalankan `UPDATE employees` via session user (RLS admin).
+3. `withBatch` memanggil RPC `begin_batch` (insert `batches` + `set_config('app.batch_id', …, p_local => true)`), lalu menjalankan `UPDATE employees` via session user (RLS admin).
 4. Trigger `log_revision` menulis baris `revisions` dengan `before`/`after`.
 5. Revalidate path; halaman detail menampilkan revisi baru di daftar riwayat.
 
+Catatan yang harus diketahui pembaca: `begin_batch` dan `UPDATE` adalah **dua
+request PostgREST**, jadi dua transaksi. `app.batch_id` ber-scope transaksi
+(ADR-005 §9), sehingga trigger tidak melihat Batch yang dibuka di langkah 3 dan
+membuat Batch `edit` otomatis untuk Revisi-nya. `/log` menampilkan **dua** baris
+untuk satu edit: Batch bernama yang memuat `jenis`/`keterangan`, dan Batch
+otomatis yang memuat Revisi. Perubahannya tetap tercatat penuh dan tetap bisa
+dikembalikan **per Revisi** (PRD #15). Itulah sebatas yang bisa dilakukan satu
+statement lewat PostgREST; tindakan yang menulis banyak baris tidak boleh
+dibangun seperti ini — lihat §4B, §4C dan ADR-006.
+
 ### B. Merge dua unit organisasi
-1. Dialog merge di `app/(app)/struktur` (atau dari `bereskan`) → `lib/actions/orgUnits.ts:mergeOrgUnit(sourceId, targetId)`.
-2. Dalam satu batch `merge`: `UPDATE employees SET org_unit_id = target WHERE org_unit_id = source`; `UPDATE org_units SET parent_id = target WHERE parent_id = source`; `UPDATE org_units SET status='nonaktif', merged_into_id=target WHERE id=source`.
-3. Setiap baris yang berubah jadi satu revisi di batch yang sama — revert batch mengembalikan semuanya.
+
+Merge adalah tiga `UPDATE` di dua tabel, dan lewat PostgREST tiga statement =
+tiga request = tiga transaksi = tiga Batch. Karena itu seluruh Merge dikerjakan
+**satu fungsi Postgres**, bukan urutan panggilan dari TypeScript (ADR-006):
+satu panggilan RPC = satu transaksi = satu `app.batch_id` = satu Batch.
+
+1. Dialog merge di `app/(app)/struktur` (atau dari `bereskan`) → `lib/actions/merge.ts:mergeOrgUnit({ sourceId, targetId, keterangan })`.
+2. Server Action memvalidasi input (zod), `requireAdmin()`, lalu memanggil RPC `merge_org_unit(p_source, p_target, p_keterangan)`.
+3. Fungsi itu, dalam satu batch `merge`: menolak asal = tujuan, asal/tujuan yang sudah pernah di-merge, dan tujuan yang berada **di bawah** asal (akan membuat siklus); lalu `UPDATE employees SET org_unit_id = target WHERE org_unit_id = source`; `UPDATE org_units SET parent_id = target WHERE parent_id = source`; `UPDATE org_units SET status='nonaktif', merged_into_id=target WHERE id=source`.
+4. Setiap baris yang berubah jadi satu revisi di batch yang sama — revert batch mengembalikan semuanya.
+
+`merge_jabatan` dan `merge_lookup` berbentuk sama. Merge Lookup juga memindahkan
+kolom `employees.<tipe>_id` yang cocok dengan `lookups.tipe`, lewat `CASE` atas
+sebelas `UPDATE` **statis** (bukan SQL dinamis), dan menolak merge lintas tipe.
+
+Ketiganya `SECURITY INVOKER` — berjalan sebagai pemanggil, jadi RLS tetap
+berlaku — dengan `assert_admin()` sebagai statement pertama. Keduanya, bukan
+salah satu.
 
 ### C. Revert
-- **Satu revisi:** `lib/revisions/revert.ts:revertRevision(id)` → batch baru `revert` → `UPDATE <table_name> SET (kolom...) = before WHERE id = row_id`. Kalau `before` NULL (insert), baris di-set `status='nonaktif'`, bukan dihapus.
-- **Satu batch:** `revertBatch(batchId)` → ambil semua revisi batch itu **urut id menurun**, terapkan `before` satu per satu dalam satu batch `revert`, lalu set `batches.reverted_by_batch_id`. Batch yang sudah di-revert tidak bisa di-revert lagi (tombolnya hilang; server juga menolak).
+
+Alasannya sama seperti §4B: revert satu Batch bisa menyentuh ratusan baris, dan
+lewat PostgREST setiap `UPDATE` akan berakhir di Batch otomatisnya sendiri. Jadi
+penulisannya juga dikerjakan di dalam satu fungsi Postgres (ADR-006).
+Keputusan **apa** yang ditulis tetap di TypeScript, murni dan teruji:
+`lib/revisions/revert.ts:planRevert()` (ARCHITECTURE §1 — logika yang salah
+diam-diam paling mahal).
+
+- **Satu revisi (PRD #15):** `planRevert([revisi])` → `applyRevert(plan, client)` → RPC `apply_revert(p_plan)` → batch baru `revert` → `UPDATE <table_name> SET (kolom...) = before WHERE <pk> = row_id`. Kalau `before` NULL (insert), baris di-set `status='nonaktif'`, bukan dihapus — dan database menolak langkah `deactivate` yang mencoba menulis kolom lain.
+- **Satu batch (PRD #16):** `revertBatch(batchId, client)` → RPC `revert_batch(p_batch_id, p_keterangan)` → mengunci batch itu, menolak yang sudah punya `reverted_by_batch_id`, menyusun rencananya di SQL (`revert_plan_for_batch`, aturan identik dengan `planRevert()`) **urut `revisions.id` menurun**, menerapkannya dalam satu batch `revert`, lalu mengisi `batches.reverted_by_batch_id`. Batch yang sudah di-revert tidak bisa di-revert lagi (tombolnya hilang; server juga menolak).
+
+Urutan menurun itulah yang membuat revert sebuah Merge rapi: unit asal kembali
+`aktif` **sebelum** anak-anaknya dikembalikan kepadanya, dan baris yang
+tersentuh dua kali berakhir di `before` yang paling tua.
+
+`apply_revert` memeriksa ulang setiap keputusan perencana — tabelnya salah satu
+dari tujuh tabel ter-log, kolom kuncinya benar untuk tabel itu, langkah
+`deactivate` hanya menulis `status = 'nonaktif'` — karena rencana datang sebagai
+data, dan data tidak dipercaya.
 
 ### D. Konsumen menarik data
 1. `GET /api/v1/employees?fields=personnel_number,full_name,divisi_nama&status=aktif` dengan header `Authorization: Bearer <key>`.
@@ -198,6 +240,15 @@ Semua view dibuat dengan `security_invoker = true` agar RLS tabel dasar tetap be
 2. Membuat `lookups`, `jabatan`, `org_units` dari nilai unik **apa adanya** (trim saja), hierarki: Business Unit → Divisi → Bagian → Sub Bagian; kalau Sub Bagian == Bagian, tidak dibuat node anak; Bagian yang diawali "Proyek" bertipe `proyek`.
 3. Insert `employees` + `employee_private` (DOB/tempat lahir/agama/status nikah masuk ke private).
 4. Semua dalam satu batch `seed` → bisa di-revert utuh kalau seed salah.
+
+Seed **tidak** memakai supabase-js. Script sekali jalan ini memegang koneksinya
+sendiri, jadi ia menyambung langsung ke Postgres lewat `pg` (sudah jadi
+devDependency) dan membuka satu transaksi sungguhan:
+`lib/revisions/seedBatch.ts:runSeedBatch()` → `BEGIN` → `begin_batch('seed', …,
+p_local => true)` → semua insert → `COMMIT`. ~1.475 Karyawan jadi **satu** Batch
+`seed`, `app.batch_id` tetap ber-scope transaksi (tidak ada yang bisa bocor ke
+koneksi lain), dan satu baris gagal me-rollback seluruh Seed alih-alih
+meninggalkan separuh perusahaan di database (ADR-006).
 
 ## 5. Auth & Permission
 
@@ -221,6 +272,7 @@ Implementasi: RLS di setiap tabel (`select` untuk authenticated; `insert/update`
 
 - Semua tulisan ke database dari UI lewat Server Action di `lib/actions/`; tidak ada `supabase.from(...).insert/update` di Client Component.
 - Semua Server Action yang mengubah data dibungkus `withBatch()`; tidak ada UPDATE/INSERT di luar batch.
+- **Tindakan yang menyentuh lebih dari satu baris atau lebih dari satu tabel ditulis sebagai fungsi Postgres, bukan sebagai urutan panggilan supabase-js** (ADR-006). Satu panggilan RPC = satu transaksi = satu Batch; urutan panggilan lewat PostgREST = satu Batch per statement. `withBatch()` tetap benar untuk tindakan satu statement.
 - Tidak ada `DELETE` ke tabel `employees`, `employee_private`, `org_units`, `jabatan`, `lookups`, `api_keys` — di kode maupun migration. Nonaktifkan dengan `status`.
 - Service-role client (`lib/supabase/admin.ts`) hanya di-import oleh `app/api/v1/**` dan `scripts/**`.
 - Semua perubahan skema lewat file di `supabase/migrations/`; tidak ada perubahan skema dari dashboard Supabase.

@@ -1,11 +1,22 @@
 /**
  * Revert — split into a pure planner and an impure applier.
  *
- * `planRevert()` is IMPLEMENTED and unit-tested (`revert.test.ts`).
- * `applyRevert()` is a STUB: its signature is frozen, its body throws until the
- * revert unit fills it in.
+ * `planRevert()` is pure and unit-tested (`revert.test.ts`). `applyRevert()`
+ * hands the plan it produces to the `apply_revert` RPC; `revertBatch()` undoes
+ * a whole Batch through the `revert_batch` RPC. Both signatures are frozen.
  *
- * Why the split: revert is the feature that is most expensive to get wrong —
+ * WHY THE WRITES LIVE IN SQL
+ * ---------------------------------------------------------------------------
+ * `begin_batch()` sets `app.batch_id` transaction-locally, and over PostgREST
+ * every statement is its own transaction — so a revert driven from TypeScript,
+ * one UPDATE per round trip, would scatter its Revisi across one automatic
+ * `edit` Batch per statement instead of collecting them in the `revert` Batch
+ * it opened. `supabase/migrations/0002_batch_operations.sql` therefore performs
+ * the whole revert inside one function call: one transaction, one Batch
+ * (ADR-006). These wrappers validate the answer and carry `skipped` through.
+ *
+ * Why the planner/applier split: revert is the feature that is most expensive
+ * to get wrong —
  * it writes to real Karyawan rows, on the strength of a jsonb snapshot, at the
  * moment an admin has already made one mistake. Deciding *what* to write is
  * pure data-in/data-out and therefore testable without a database; only the
@@ -27,7 +38,7 @@
  *     `insert` Revisi cannot be reverted — that is reported, not invented.
  */
 import type { Json, Revision } from "@/lib/types/db";
-import type { DbClient } from "@/lib/db/shared";
+import { DbError, type DbClient } from "@/lib/db/shared";
 
 import {
   columnsOf,
@@ -262,29 +273,142 @@ export function planRevert(
   };
 }
 
+/** What `revertBatch()` returns: a `RevertResult` plus what it undid. */
+export type RevertBatchResult = RevertResult & {
+  /** The Batch that was undone; its `reverted_by_batch_id` now points at `batchId`. */
+  revertedBatchId: string;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function readBatchId(data: unknown, context: string): string {
+  const row = asRecord(data);
+  const batchId = row?.batch_id;
+  if (typeof batchId !== "string") {
+    throw new Error(`${context}: database tidak mengembalikan id Batch.`);
+  }
+  return batchId;
+}
+
+function readApplied(data: unknown): number {
+  const applied = asRecord(data)?.applied;
+  return typeof applied === "number" && Number.isFinite(applied) ? applied : 0;
+}
+
+const SKIP_REASONS = Object.keys(SKIP_MESSAGES) as RevertSkipReason[];
+
+/**
+ * Decode the `skipped` array `revert_batch` returns.
+ *
+ * The SQL side builds the same shape `planRevert()` does (ADR-006); anything
+ * that does not fit is dropped rather than shown as a malformed row, because
+ * `skipped` is explanatory text next to a successful revert, not the result.
+ */
+function readSkipped(data: unknown): RevertSkipped[] {
+  const raw = asRecord(data)?.skipped;
+  if (!Array.isArray(raw)) return [];
+  const out: RevertSkipped[] = [];
+  for (const entry of raw) {
+    const row = asRecord(entry);
+    if (!row) continue;
+    const revisionId = row.revisionId;
+    const tableName = row.tableName;
+    const rowId = row.rowId;
+    const reason = row.reason;
+    if (
+      typeof revisionId !== "number" ||
+      typeof tableName !== "string" ||
+      typeof rowId !== "string" ||
+      typeof reason !== "string" ||
+      !(SKIP_REASONS as readonly string[]).includes(reason)
+    ) {
+      continue;
+    }
+    const typedReason = reason as RevertSkipReason;
+    out.push({
+      revisionId,
+      tableName,
+      rowId,
+      reason: typedReason,
+      keterangan:
+        typeof row.keterangan === "string" && row.keterangan.length > 0
+          ? row.keterangan
+          : SKIP_MESSAGES[typedReason],
+    });
+  }
+  return out;
+}
+
 /**
  * Perform a plan: open a Batch of jenis `revert`, apply every operation in
- * order, and return what happened.
+ * order, and return what happened (PRD #15).
  *
- * NOT IMPLEMENTED — owned by the revert unit (PRD #15, #16). The signature is
- * frozen; callers may import and type against it today.
+ * The whole plan goes to the `apply_revert` RPC as one jsonb argument, so the
+ * Batch and every write it groups share one transaction. The database re-checks
+ * everything the planner decided — the table is one of the seven logged ones,
+ * the pk column is the right one for it, a `deactivate` writes
+ * `status = 'nonaktif'` and nothing else — because a plan arrives as data and
+ * data is not to be trusted.
  *
- * What the implementation owes the rest of the system:
- *   * wrap everything in `withBatch({ jenis: "revert", keterangan })`;
- *   * apply `plan.operations` **in the given order** (already descending id);
- *   * update by `pkColumn`, never delete;
- *   * set `batches.reverted_by_batch_id` on the Batch being reverted — the only
- *     column of `batches` that may ever be written (ADR-003);
- *   * refuse a Batch that already has `reverted_by_batch_id` set;
- *   * return `plan.skipped` untouched so the UI can explain what was left out.
+ * `plan.skipped` is carried through untouched so the UI can explain what was
+ * left out. A plan with no operations is refused rather than opening an empty
+ * Batch that would clutter the Log Perubahan.
+ *
+ * Reverting a whole Batch is `revertBatch()`, not this: a `RevertPlan`
+ * deliberately does not carry a Batch id, and `batches.reverted_by_batch_id`
+ * has to be set by whoever knows it.
  */
 export async function applyRevert(
   plan: RevertPlan,
   client: DbClient,
 ): Promise<RevertResult> {
-  void plan;
-  void client;
-  throw new Error(
-    "not implemented — owned by unit Revert (lib/revisions/revert.ts:applyRevert)",
-  );
+  const { data, error } = await client.rpc("apply_revert", {
+    // `RevertPlan` is plain JSON by construction (`values` is Record<string, Json>).
+    p_plan: plan as unknown as Json,
+  });
+
+  if (error) throw new DbError("Gagal mengembalikan Revisi", error);
+
+  return {
+    batchId: readBatchId(data, "Gagal mengembalikan Revisi"),
+    applied: readApplied(data),
+    skipped: plan.skipped,
+  };
+}
+
+/**
+ * Kembalikan satu Batch utuh (PRD #16, ARCHITECTURE.md §4C).
+ *
+ * The `revert_batch` RPC does the whole thing in one transaction: it locks the
+ * Batch, refuses one that already carries `reverted_by_batch_id`, plans its
+ * Revisi **in descending `revisions.id` order** with the same rules as
+ * `planRevert()`, applies them inside one new Batch of jenis `revert`, and
+ * finally fills in `reverted_by_batch_id` — the only column of `batches` that
+ * may ever be written (ADR-003).
+ *
+ * Descending order is what makes a Merge revert cleanly: the source Unit
+ * Organisasi comes back to `aktif` before its children are re-parented onto
+ * it, and a row touched twice ends at its oldest `before`.
+ */
+export async function revertBatch(
+  batchId: string,
+  client: DbClient,
+  options?: { keterangan?: string },
+): Promise<RevertBatchResult> {
+  const { data, error } = await client.rpc("revert_batch", {
+    p_batch_id: batchId,
+    p_keterangan: options?.keterangan,
+  });
+
+  if (error) throw new DbError("Gagal mengembalikan Batch", error);
+
+  return {
+    batchId: readBatchId(data, "Gagal mengembalikan Batch"),
+    applied: readApplied(data),
+    skipped: readSkipped(data),
+    revertedBatchId: batchId,
+  };
 }

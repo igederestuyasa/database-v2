@@ -24,8 +24,9 @@
  *   4. Read the current row, so the Batch keterangan can say what changed and
  *      a missing row is a clean "tidak ditemukan" instead of a silent no-op.
  *   5. Write inside `withBatch()` — never an `update()` outside one
- *      (ARCHITECTURE.md §6). Read the note at step 5 below before you expect
- *      one line in the Log Perubahan: over PostgREST you get two.
+ *      (ARCHITECTURE.md §6). That holds for a ONE-STATEMENT action like this
+ *      one; an action that writes several rows belongs in SQL instead, see the
+ *      note at step 5 below.
  *   6. `revalidatePath()` every page that shows the row.
  *   7. Return `ActionResult`, never throw: a thrown error reaches the browser
  *      as an opaque digest.
@@ -79,7 +80,8 @@ export async function renameJabatanReference(
       return actionOk({ id: current.id, nama: current.nama });
     }
 
-    // 5. One Batch around one statement.
+    // 5. One Batch around ONE statement — and "one statement" is the whole
+    //    condition for using `withBatch()` at all.
     //
     //    What actually lands in the Log Perubahan, and why: `begin_batch` runs
     //    with `p_local = true` (the safe default, ADR-005 §9), so
@@ -88,13 +90,21 @@ export async function renameJabatanReference(
     //    The trigger therefore does not see the Batch opened here and creates
     //    its own `edit` Batch for the Revisi. Expect TWO rows on `/log`: the
     //    `rename` Batch below, which carries the human-readable keterangan, and
-    //    an automatic `edit` Batch that holds the Revisi itself.
+    //    an automatic `edit` Batch that holds the Revisi itself. The change is
+    //    still fully logged and still revertable one Revisi at a time (PRD #15).
     //
-    //    That is a property of the frozen schema plus PostgREST, not of this
-    //    file; `lib/revisions/batch.ts` explains the whole thing and the two
-    //    ways out (one statement per action, or a caller that owns its
-    //    connection). Do not "fix" it by passing `sessionScoped: true` from a
-    //    Server Action — that is the pooled-connection leak the ADR refuses.
+    //    An action that writes SEVERAL rows must NOT be built by putting more
+    //    statements inside this callback: there, per-statement grouping is not
+    //    untidy but wrong, because "kembalikan Batch ini" would undo a fraction
+    //    of the action (PRD #16). Those belong in a Postgres function, where
+    //    one RPC call is one transaction and one real Batch — Merge, Revert and
+    //    Seed already moved there (`supabase/migrations/0002_batch_operations.sql`,
+    //    ADR-006). `lib/actions/merge.ts` shows what calling one looks like;
+    //    note that it does not use `withBatch()` at all, because the function
+    //    opens its own Batch.
+    //
+    //    Either way, do not pass `sessionScoped: true` from a Server Action —
+    //    that is the pooled-connection leak ADR-005 §9 refuses.
     const { result } = await withBatch(
       client,
       {

@@ -2,7 +2,7 @@
  * scripts/gen-types-from-pg.ts
  *
  * Generates `lib/types/db.ts` and `lib/schema/columns.generated.ts` by reading
- * the live catalog of a database that has `supabase/migrations/0001_init.sql`
+ * the live catalog of a database that has every `supabase/migrations/*.sql`
  * applied.
  *
  * This replaces `supabase gen types typescript`, which cannot run here:
@@ -331,7 +331,7 @@ async function main() {
   const dbTs = `// AUTO-GENERATED — DO NOT EDIT BY HAND.
 //
 // Produced by \`npm run gen:types\` (scripts/gen-types-from-pg.ts) from the live
-// catalog of a database with supabase/migrations/0001_init.sql applied.
+// catalog of a database with every supabase/migrations/*.sql applied.
 // The Supabase CLI's \`gen types\` cannot run in this environment, so this is
 // the project's source of database types.
 //

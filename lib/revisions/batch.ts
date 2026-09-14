@@ -7,7 +7,7 @@
  * in the Log Perubahan as one line that can be reverted as a unit.
  *
  * ────────────────────────────────────────────────────────────────────────────
- * READ THIS BEFORE USING IT — what `p_local` means over PostgREST
+ * WHEN TO USE THIS, AND WHEN TO USE AN RPC INSTEAD
  * ────────────────────────────────────────────────────────────────────────────
  * `begin_batch(p_jenis, p_keterangan, p_local default true)` sets
  * `app.batch_id` with `set_config(..., p_local)`:
@@ -21,27 +21,51 @@
  *     "kembalikan Batch ini" undoes their work too. ADR-005 §9 made `true` the
  *     default for exactly that reason.
  *
- * Supabase-js speaks HTTP: `begin_batch`, each write and `end_batch` are
+ * supabase-js speaks HTTP: `begin_batch`, each write and `end_batch` are
  * separate requests and therefore separate transactions. So with the safe
  * default, a write in `fn` does **not** see `app.batch_id`, and the trigger
- * opens an automatic Batch for it (which is why no change can ever escape the
- * log). Practical consequences, which every calling unit must know:
+ * opens an automatic `edit` Batch for it (which is why no change can ever
+ * escape the log). Two consequences, and both still hold:
  *
  *   * Grouping is guaranteed **per statement**: everything one UPDATE touches
- *     shares one Batch. A merge that runs three UPDATEs produces three Batch
- *     entries unless it is done in a single statement.
- *   * The Batch this helper opens still carries `jenis` and `keterangan`, and
- *     is what the Log Perubahan shows for the action — but the Revisi may hang
- *     off the trigger's automatic Batch instead. Use `keterangan` generously so
- *     a human can still read the log.
- *   * `sessionScoped: true` (→ `p_local = false`) makes the grouping real
- *     across round trips, and is **only** safe when the caller owns the
- *     connection for the whole batch: `scripts/seed-from-excel.ts` over a
- *     direct connection, never a Server Action on a pooled one.
+ *     shares one Batch — the trigger's automatic one.
+ *   * The Batch this helper opens carries `jenis` and `keterangan` and is what
+ *     the Log Perubahan shows for the action, but the Revisi hang off that
+ *     automatic Batch instead. Expect TWO rows on `/log`. Use `keterangan`
+ *     generously so a human can still read the log.
  *
- * None of this can be fixed from TypeScript — it would take a server-side
- * function that performs the whole batch in one call, and the schema is frozen
- * (ADR-005). Do not "improve" it by flipping the default.
+ * WHAT CHANGED, AND THE RULE THAT FOLLOWS (ADR-006)
+ * ────────────────────────────────────────────────────────────────────────────
+ * The old version of this comment said none of it could be fixed without a
+ * server-side function and a schema change. That is what ADR-006 did, for the
+ * operations where per-statement grouping was not merely untidy but wrong:
+ *
+ *   * **More than one statement → a Postgres function, never this helper.** A
+ *     Merge is three UPDATEs across two tables; a Seed is ~1.475 inserts; a
+ *     Batch revert is one UPDATE per Revisi. Driving those from here scatters
+ *     them across one Batch per statement and breaks "satu Batch bisa
+ *     dibalikkan utuh" (CONTEXT.md, PRD #16). They now live in
+ *     `supabase/migrations/0002_batch_operations.sql` — `merge_org_unit`,
+ *     `merge_jabatan`, `merge_lookup`, `apply_revert`, `revert_batch` — where
+ *     one RPC call is one transaction and one real Batch. **Those functions
+ *     open their own Batch: never wrap an RPC in `withBatch()`.**
+ *   * **A script that owns its connection → a real transaction.**
+ *     `lib/revisions/seedBatch.ts` connects with `pg`, opens `BEGIN`, calls
+ *     `begin_batch(..., p_local => true)` and commits. Same safe scope,
+ *     covering as many statements as the script likes.
+ *   * **One statement per action → still this helper.** Renaming a Jabatan,
+ *     editing one Karyawan, deactivating one row. You get the named Batch plus
+ *     the trigger's automatic one, exactly as described above; the change
+ *     itself is still fully logged and still revertable one Revisi at a time
+ *     (`planRevert()` + `applyRevert()`), which is what PRD #15 asks for.
+ *     Reverting *the named Batch* of such an action would find it empty — if a
+ *     future action needs whole-Batch revert, it belongs in SQL like the ones
+ *     above. `lib/actions/_reference.ts` is the worked example.
+ *
+ * `sessionScoped: true` (→ `p_local = false`) remains available for a caller
+ * that owns its connection end to end, but nothing in HC Core needs it any
+ * more: `seedBatch.ts` gets real grouping from a real transaction without the
+ * leak. Never pass it from a Server Action on a pooled connection.
  */
 import type { DbClient } from "@/lib/db/shared";
 
@@ -57,8 +81,10 @@ export type BatchOptions = {
   /**
    * Opt into a SESSION-scoped `app.batch_id` (`p_local = false`).
    *
-   * Only for a caller that owns its connection end to end — a seed or
-   * maintenance script. Never from a Server Action: see the header.
+   * Only for a caller that owns its connection end to end — a maintenance
+   * script. Never from a Server Action: see the header. The Seed does **not**
+   * need it; `lib/revisions/seedBatch.ts` gets real grouping from a real
+   * transaction instead (ADR-006).
    */
   sessionScoped?: boolean;
 };
