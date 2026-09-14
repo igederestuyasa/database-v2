@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { listProfiles } from "@/lib/auth/profiles";
+import { countAdmins, listProfiles } from "@/lib/auth/profiles";
 import { requirePageSession } from "@/lib/auth/session";
 import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
@@ -47,7 +47,10 @@ export default async function Page() {
     );
   }
 
-  const profiles = await listProfiles(client);
+  const [{ rows: profiles, total }, jumlahAdmin] = await Promise.all([
+    listProfiles(client),
+    countAdmins(client),
+  ]);
 
   const rows: PenggunaRow[] = profiles.map((profile) => ({
     id: profile.id,
@@ -56,7 +59,10 @@ export default async function Page() {
     dibuat: formatTanggal(profile.created_at),
   }));
 
-  const jumlahAdmin = rows.filter((row) => row.role === "admin").length;
+  // PostgREST caps a read at `db-max-rows` (1000 by default) without saying so,
+  // so the table can hold fewer rows than the count. Say it rather than let the
+  // two numbers disagree silently.
+  const terpotong = rows.length < total;
 
   return (
     <div className="space-y-6">
@@ -75,8 +81,11 @@ export default async function Page() {
       <PenggunaTable rows={rows} currentUserId={user.id} />
 
       <p className="text-xs text-muted-foreground">
-        {rows.length} pengguna, {jumlahAdmin} di antaranya {TERMS.admin}. Akun
-        baru selalu mulai sebagai {TERMS.viewer}; naikkan di sini kalau perlu.
+        {total} pengguna, {jumlahAdmin} di antaranya {TERMS.admin}. Akun baru
+        selalu mulai sebagai {TERMS.viewer}; naikkan di sini kalau perlu.
+        {terpotong
+          ? ` Tabel di atas menampilkan ${rows.length} yang pertama.`
+          : ""}
       </p>
     </div>
   );

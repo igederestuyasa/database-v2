@@ -36,8 +36,41 @@ describe("safeNextPath", () => {
     }
   });
 
+  /**
+   * Pinned with characters built at runtime, never typed into this file.
+   *
+   * The check in `redirect.ts` is a range `[\x00-\x1f\x7f]`, and the whole
+   * point is that those bytes must never appear literally in source — a file
+   * containing them is binary to git, unreviewable on GitHub, and one
+   * formatter pass away from silently matching nothing. Constructing them here
+   * means the behaviour stays pinned however the source spells the range.
+   */
   it("refuses control characters", () => {
+    const NUL = String.fromCharCode(0);
+    const US = String.fromCharCode(0x1f);
+    const DEL = String.fromCharCode(0x7f);
+
     expect(safeNextPath("/karyawan\nSet-Cookie: x=1")).toBe(DEFAULT_AFTER_LOGIN);
+    expect(safeNextPath("/karyawan\rSet-Cookie: x=1")).toBe(DEFAULT_AFTER_LOGIN);
+    expect(safeNextPath(`/karyawan${NUL}`)).toBe(DEFAULT_AFTER_LOGIN);
+    expect(safeNextPath(`/karyawan${US}`)).toBe(DEFAULT_AFTER_LOGIN);
+    expect(safeNextPath(`/karyawan${DEL}`)).toBe(DEFAULT_AFTER_LOGIN);
+    expect(safeNextPath(`${NUL}/karyawan`)).toBe(DEFAULT_AFTER_LOGIN);
+
+    // Every byte in the range, so a narrowed class cannot pass unnoticed.
+    for (let code = 0; code <= 0x1f; code++) {
+      const candidate = `/karyawan${String.fromCharCode(code)}`;
+      expect(safeNextPath(candidate), `charCode ${code}`).toBe(
+        DEFAULT_AFTER_LOGIN,
+      );
+    }
+  });
+
+  it("still accepts an ordinary path next to that range", () => {
+    // Guards the other direction: the class must not have widened into
+    // printable ASCII (0x20 is a space, which `.trim()` removes at the edges).
+    expect(safeNextPath("/karyawan?q=a b")).toBe("/karyawan?q=a b");
+    expect(safeNextPath("  /karyawan  ")).toBe("/karyawan");
   });
 
   it("never bounces back to the login page, which would loop", () => {

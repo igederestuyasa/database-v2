@@ -27,23 +27,53 @@ function toRole(value: string): AppRole {
   return value === "admin" ? "admin" : "viewer";
 }
 
-/** Every Pengguna the caller may see, admins first, then by email. */
-export async function listProfiles(client: DbClient): Promise<ProfileRow[]> {
-  const { data, error } = await client
+/**
+ * Every Pengguna the caller may see, admins first, then by email.
+ *
+ * `total` comes from PostgREST's exact count, NOT from `rows.length`. PostgREST
+ * applies its own `db-max-rows` ceiling (1000 by default) before any `.limit()`
+ * and reports success, so a list longer than that would come back quietly
+ * truncated — and a "X pengguna" line counted from the array would be wrong
+ * with nothing to show for it. Unlikely for app users rather than ~1.500
+ * Karyawan, but the honest number costs one header.
+ */
+export async function listProfiles(client: DbClient): Promise<{
+  rows: ProfileRow[];
+  total: number;
+}> {
+  const { data, error, count } = await client
     .from("profiles")
-    .select("id, email, role, created_at, updated_at")
+    .select("id, email, role, created_at, updated_at", { count: "exact" })
     .order("role", { ascending: true })
     .order("email", { ascending: true });
 
   if (error) throw new DbError("Gagal memuat daftar Pengguna", error);
 
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []).map((row) => ({
     id: row.id,
     email: row.email,
     role: toRole(row.role),
     created_at: row.created_at,
     updated_at: row.updated_at,
   }));
+
+  return { rows, total: count ?? rows.length };
+}
+
+/**
+ * How many admins exist — counted by the database, not by the rows on screen.
+ *
+ * Same reason as above, and it matters more here: "berapa admin yang tersisa"
+ * is the number someone checks before demoting one.
+ */
+export async function countAdmins(client: DbClient): Promise<number> {
+  const { error, count } = await client
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "admin");
+
+  if (error) throw new DbError("Gagal menghitung Admin", error);
+  return count ?? 0;
 }
 
 /** One Pengguna, or `null` when the row does not exist or RLS hides it. */
