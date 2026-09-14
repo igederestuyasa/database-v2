@@ -31,9 +31,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ActionResult } from "@/lib/actions/_guard";
+import { renameJabatan } from "@/lib/actions/jabatan";
+import { renameOrgUnit } from "@/lib/actions/orgUnits";
 import { TERMS, UI } from "@/lib/i18n/terms";
 
-import { renameJabatan, renameLookup, renameOrgUnit } from "./actions";
+import { renameLookup } from "./actions";
 
 /** Which Data Referensi is being renamed. */
 export type RenameKind = "org_unit" | "jabatan" | "lookup";
@@ -97,6 +99,16 @@ const formSchema = z.object({
 });
 type FormValues = z.infer<typeof formSchema>;
 
+/**
+ * One dialog, three entities, three owners.
+ *
+ * Unit Organisasi and Jabatan go straight to the entity actions — the same
+ * ones `/struktur` and `/jabatan` call, so a rename made here and a rename made
+ * there cannot behave differently. Lookup goes through the local adapter, which
+ * only exists to call the column `nama` on the way out (see `./actions.ts`).
+ * All three return more fields than this dialog reads; it needs `id` and the
+ * new name, and structural typing takes care of the rest.
+ */
 async function submit(
   target: RenameTarget,
   nama: string,

@@ -163,3 +163,87 @@ export function normalizeSearch(search: string | null | undefined): string | nul
   const trimmed = (search ?? "").trim();
   return trimmed.length > 0 ? trimmed : null;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Unpaginated reads, and how a truncated one is detected
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The result of a read that is supposed to return *everything* matching.
+ *
+ * WHY THIS TYPE EXISTS — read this before "simplifying" it back to `T[]`.
+ *
+ * PostgREST enforces its own `db-max-rows` ceiling (1000 on a stock Supabase
+ * project) **before** any `.limit()` or `.range()` the client asks for, and a
+ * response cut short by it is reported as **success**: HTTP 200, a short array,
+ * no error. So this is unsound, and was the shape of the bug this type
+ * replaces:
+ *
+ *     const rows = await query.limit(5000 + 1);
+ *     if (rows.length > 5000) throw …;   // can never be true: rows.length ≤ 1000
+ *
+ * The only thing that can tell a short table from a short read is the exact
+ * count, which PostgREST computes in the database over the *whole* filtered
+ * set and returns in `Content-Range` — it is not subject to `db-max-rows`.
+ * Hence: every unpaginated read asks for `{ count: "exact" }` and hands back
+ * what it got **plus** what the database says exists.
+ *
+ * Callers then choose, and the choice is deliberate (see `requireComplete`):
+ *
+ *   * a list the user is looking at → render `rows` and say so when
+ *     `truncated` — a page that shows 1000 of 1200 Jabatan and admits it is
+ *     more useful than one that refuses to load at all;
+ *   * a number or a path the caller will act on → `requireComplete()`, which
+ *     throws, because "… 37 Karyawan akan dipindahkan" read off an incomplete
+ *     set is a wrong number shown immediately before a destructive write.
+ */
+export type FullRead<T> = {
+  rows: T[];
+  /** Exact count from the same query — what the database says matches. */
+  total: number;
+  /** `rows.length < total`: the read came back short. Never silently ignore. */
+  truncated: boolean;
+};
+
+/** Assemble a `FullRead<T>` from a PostgREST result that asked for a count. */
+export function toFullRead<T>(rows: T[], count: number | null): FullRead<T> {
+  // A missing count (a server that did not send Content-Range) cannot prove a
+  // truncation either way; assume what arrived is all there is, which is the
+  // behaviour every caller had before.
+  const total = count ?? rows.length;
+  return { rows, total, truncated: rows.length < total };
+}
+
+/**
+ * A read that was supposed to return everything came back short.
+ *
+ * Separate from `DbError` on purpose: nothing failed. The request succeeded and
+ * the answer is incomplete, which is the more dangerous of the two.
+ */
+export class IncompleteReadError extends Error {
+  readonly received: number;
+  readonly total: number;
+
+  constructor(what: string, received: number, total: number) {
+    super(
+      `Baru ${received} dari ${total} ${what} yang terbaca — ada batas jumlah baris per permintaan. Hasilnya tidak dipakai karena akan salah.`,
+    );
+    this.name = "IncompleteReadError";
+    this.received = received;
+    this.total = total;
+  }
+}
+
+/**
+ * The rows, or a thrown `IncompleteReadError` when the read came back short.
+ *
+ * For the callers that cannot render a partial answer honestly: counts shown
+ * before a Merge, the cycle guard on a new induk, an ancestor breadcrumb. Half
+ * a hierarchy is not a smaller hierarchy, it is a wrong one.
+ */
+export function requireComplete<T>(read: FullRead<T>, what: string): T[] {
+  if (read.truncated) {
+    throw new IncompleteReadError(what, read.rows.length, read.total);
+  }
+  return read.rows;
+}

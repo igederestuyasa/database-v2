@@ -28,10 +28,12 @@
  */
 import type { z } from "zod";
 
-import type { DbClient } from "@/lib/db/shared";
+import { DbError, type DbClient } from "@/lib/db/shared";
 import { createClient } from "@/lib/supabase/server";
 import { formatZodErrors } from "@/lib/validation/common";
 import { UI } from "@/lib/i18n/terms";
+
+import { classifyDatabaseError } from "./pgErrors";
 
 /** `profiles.role` (ARCHITECTURE.md §5). */
 export type AppRole = "admin" | "viewer";
@@ -145,6 +147,14 @@ export function actionInvalid(error: z.ZodError): ActionFailure {
  * Unexpected errors are logged server-side and reported generically: a
  * PostgREST message ("duplicate key value violates unique constraint …") is
  * not something staf HC should have to read.
+ *
+ * A `DbError` an action did not translate itself falls back to the shared
+ * defaults in `pgErrors.ts` rather than straight to the catch-all. An entity
+ * that words `23505` better than "nilai ini sudah dipakai" still should, and
+ * still does — it converts to an `ActionError` first and never reaches here.
+ * This is the floor, not the ceiling: without it, forgetting one code turns an
+ * RLS refusal into "coba lagi", which asks the user to retry a write that can
+ * never succeed.
  */
 export function toActionFailure(error: unknown): ActionFailure {
   if (error instanceof UnauthenticatedError) {
@@ -155,6 +165,14 @@ export function toActionFailure(error: unknown): ActionFailure {
   }
   if (error instanceof ActionError) {
     return actionFail(error.code, error.message, error.fieldErrors);
+  }
+  if (error instanceof DbError) {
+    const known = classifyDatabaseError(error.code);
+    // Logged either way: a database error nobody translated is worth seeing in
+    // the server log even when the user gets a decent sentence.
+    console.error("[action]", error);
+    if (known) return actionFail(known.code, known.message);
+    return actionFail("GAGAL", "Gagal menyimpan perubahan. Coba lagi.");
   }
   console.error("[action]", error);
   return actionFail("GAGAL", "Gagal menyimpan perubahan. Coba lagi.");

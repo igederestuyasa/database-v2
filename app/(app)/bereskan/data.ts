@@ -9,12 +9,15 @@
  * Reads only. Every write from this page goes through a Server Action
  * (`./actions.ts` for rename, `lib/actions/merge.ts` for Merge).
  */
+// From `entityOptions`, NOT from `EntityPicker`: this module runs on the
+// server, and every export of a `"use client"` module reaches the server as a
+// reference that throws when called. Same functions, same signatures.
 import {
   toJabatanOptions,
   toLookupOptions,
   toOrgUnitOptions,
   type EntityOption,
-} from "@/components/shared/EntityPicker";
+} from "@/components/shared/entityOptions";
 import {
   findEmployeesMissingReference,
   findOrphanOrgUnits,
@@ -94,9 +97,6 @@ const MAX_KARYAWAN = 2000;
  * short, so we ask for less than the cap and page instead.
  */
 const PER_PAGE = 500;
-
-/** The PostgREST default row cap, used to spot a truncated read. */
-const CAP_POSTGREST = 1000;
 
 /** `in(...)` chunk size — keeps the PostgREST query string well under any URL cap. */
 const CHUNK = 100;
@@ -281,28 +281,34 @@ async function listEmployeesAll(
 }
 
 /**
- * Warn when a read stopped exactly on PostgREST's default row cap.
+ * Say so when a Data Referensi read came back short.
  *
- * `lib/db/**` asks for these lists with a `limit` far above the cap, and a
- * capped response is indistinguishable from a complete one — except that it
- * lands on precisely 1000 rows. That is a heuristic, not proof, so this is a
- * note on the page rather than an exception; HK has a few hundred Unit
- * Organisasi (ARCHITECTURE.md §7), so it should never fire.
+ * This used to be a heuristic — "a read that stopped on exactly 1000 rows was
+ * probably capped" — because `lib/db/**` handed back a bare array and there was
+ * nothing else to go on. `listAll*()` now asks for `count: "exact"` on the same
+ * query and reports `truncated` from it, so this is no longer a guess: the
+ * database says how many rows match, and we say how many arrived.
  */
-function peringatanCap(jumlah: number, label: string): string | null {
-  if (jumlah !== CAP_POSTGREST) return null;
-  return `Daftar ${label} berhenti tepat di ${CAP_POSTGREST} baris — persis batas bawaan PostgREST (db-max-rows). ${TERMS.temuan} di bawah mungkin belum lengkap.`;
+function peringatanTerpotong(
+  read: { rows: readonly unknown[]; total: number; truncated: boolean },
+  label: string,
+): string | null {
+  if (!read.truncated) return null;
+  return `Baru ${read.rows.length} dari ${read.total} ${label} yang terbaca — database membatasi jumlah baris per permintaan (db-max-rows). ${TERMS.temuan} di bawah belum lengkap.`;
 }
 
 /** Read everything, run the rules, and shape the page's props. */
 export async function loadBereskan(client: DbClient): Promise<BereskanData> {
   // Status "semua": the orphan rules need every row to tell "induk tidak ada"
   // from "induk nonaktif". Which rows are *reported* is decided by the rules.
-  const [orgUnits, jabatan, lookups] = await Promise.all([
+  const [unitRead, jabatanRead, lookupRead] = await Promise.all([
     listAllOrgUnits(client, { status: "semua" }),
     listAllJabatan(client, { status: "semua" }),
     listAllLookups(client, { status: "semua", orderBy: "label" }),
   ]);
+  const orgUnits = unitRead.rows;
+  const jabatan = jabatanRead.rows;
+  const lookups = lookupRead.rows;
 
   const [tanpaUnit, tanpaJabatan] = await Promise.all([
     listEmployeesAll(client, { orgUnitId: null }),
@@ -320,12 +326,12 @@ export async function loadBereskan(client: DbClient): Promise<BereskanData> {
       `Menampilkan ${tanpaJabatan.rows.length} dari ${tanpaJabatan.total} ${TERMS.karyawan} tanpa ${TERMS.jabatan} — daftar di bawah belum lengkap.`,
     );
   }
-  for (const [jumlah, label] of [
-    [orgUnits.length, TERMS.unitOrganisasi],
-    [jabatan.length, TERMS.jabatan],
-    [lookups.length, TERMS.lookup],
+  for (const [read, label] of [
+    [unitRead, TERMS.unitOrganisasi],
+    [jabatanRead, TERMS.jabatan],
+    [lookupRead, TERMS.lookup],
   ] as const) {
-    const peringatan = peringatanCap(jumlah, label);
+    const peringatan = peringatanTerpotong(read, label);
     if (peringatan) catatan.push(peringatan);
   }
 

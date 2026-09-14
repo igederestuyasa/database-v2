@@ -3,11 +3,13 @@
 /**
  * "Keluar".
  *
- * It lives on `/login` because that route is the only one this unit owns that a
- * signed-in user can still reach — `app/(app)/layout.tsx`, where a sidebar
- * entry would naturally go, belongs to another unit. `/login` therefore doubles
- * as the account page: middleware deliberately does NOT bounce a signed-in
- * visitor away from it.
+ * It lives in this folder because it belongs to the sign-in flow and shares
+ * `./actions.ts` with it, but it is rendered in two places: `/login`, which
+ * doubles as the account page (middleware deliberately does NOT bounce a
+ * signed-in visitor away from it), and the account block at the foot of the
+ * sidebar in `app/(app)/layout.tsx` — the one a signed-in user can actually
+ * find. Keep both: /login is the only page reachable when `profiles` has no
+ * row, and the sidebar is the only one reachable while working.
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";

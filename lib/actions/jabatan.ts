@@ -88,6 +88,27 @@ export type JabatanStatusInput = z.infer<typeof jabatanStatusSchema>;
 const jabatanIdSchema = z.object({ id: uuidField("Jabatan") });
 
 /**
+ * Setiap halaman yang ikut basi ketika sebuah Jabatan berubah.
+ *
+ * `/karyawan` masuk daftar justru *karena* tidak ada baris `employees` yang
+ * disentuh: nama barunya sampai ke sana lewat `v_employees`, jadi cache-nya
+ * yang perlu dibatalkan (ADR-002).
+ *
+ * `/bereskan` dan `/log` juga, dan itu bukan hiasan: halaman "Perlu Dibereskan"
+ * memanggil `renameJabatan()` langsung dari dialognya (PRD #12) dan Temuan
+ * "nama mirip" di sana dihitung dari nama Jabatan — sebuah rename yang tidak
+ * membatalkan cache-nya akan menampilkan Temuan yang sudah dibereskan. Daftar
+ * ini sengaja sama dengan `revalidateOrgUnitPages()` di
+ * `lib/actions/orgUnits.ts`: keduanya dipanggil dari dialog yang sama.
+ */
+function revalidateJabatanPages(): void {
+  revalidatePath("/jabatan");
+  revalidatePath("/karyawan");
+  revalidatePath("/bereskan");
+  revalidatePath("/log");
+}
+
+/**
  * Tambah Jabatan baru (PRD #8).
  *
  * `kode` wajib unik. Kalau kodenya sudah dipakai, jawabannya bukan "coba kode
@@ -125,8 +146,7 @@ export async function createJabatan(
 
     if (error) throw new DbError("Gagal menambah Jabatan", error);
 
-    revalidatePath("/jabatan");
-    revalidatePath("/karyawan");
+    revalidateJabatanPages();
 
     return actionOk(ringkas(data));
   } catch (error) {
@@ -170,8 +190,7 @@ export async function renameJabatan(
 
     if (error) throw new DbError("Gagal mengganti nama Jabatan", error);
 
-    revalidatePath("/jabatan");
-    revalidatePath("/karyawan");
+    revalidateJabatanPages();
 
     return actionOk(ringkas(data));
   } catch (error) {
@@ -216,8 +235,7 @@ export async function setJabatanStatus(
 
     if (error) throw new DbError("Gagal mengubah status Jabatan", error);
 
-    revalidatePath("/jabatan");
-    revalidatePath("/karyawan");
+    revalidateJabatanPages();
 
     return actionOk(ringkas(data));
   } catch (error) {

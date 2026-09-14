@@ -20,7 +20,8 @@ export default async function Page() {
   if (!user) redirect("/login");
 
   const client = await createClient();
-  const nodes = await loadStrukturNodes(client);
+  const { nodes, jumlahUnit, totalUnit, unitTerpotong } =
+    await loadStrukturNodes(client);
 
   return (
     <div className="space-y-6">
@@ -37,6 +38,22 @@ export default async function Page() {
           tidak ada satu pun baris {TERMS.karyawan} yang ikut diubah.
         </p>
       </header>
+
+      {unitTerpotong ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+        >
+          <p className="font-medium">Pohon ini belum lengkap.</p>
+          <p className="mt-1 text-muted-foreground">
+            Baru {jumlahUnit} dari {totalUnit} {TERMS.unitOrganisasi} yang berhasil
+            dimuat, karena database membatasi jumlah baris per permintaan. Unit yang
+            induknya ikut terpotong akan tampil seolah-olah tidak punya induk, jadi
+            hierarki di bawah ini bisa keliru — jangan memakainya untuk memutuskan
+            Merge sampai batas itu dinaikkan.
+          </p>
+        </div>
+      ) : null}
 
       <StrukturClient nodes={nodes} isAdmin={user.role === "admin"} />
     </div>
