@@ -95,11 +95,16 @@ export async function setUserRole(
 
     if (error) throw new DbError("Gagal mengubah role Pengguna", error);
     if (!data) {
-      // RLS refused the UPDATE, or the row disappeared between the read and
-      // the write. Either way nothing was changed.
+      // Zero rows, not an error. `profiles_update` is written
+      // `using (public.is_admin())`, so a caller RLS refuses does not get
+      // `42501` — the UPDATE simply matches nothing and PostgREST answers with
+      // no row. Reachable here even though `requireAdmin()` ran first: the
+      // acting admin can have been demoted between the guard and the write, or
+      // the row can have gone with its `auth.users` parent. Say what is true —
+      // nothing changed — instead of a bare "coba lagi".
       throw new ActionError(
         "KONFLIK",
-        "Role Pengguna tidak jadi diubah. Muat ulang halaman, lalu coba lagi.",
+        "Role Pengguna tidak jadi diubah: barisnya sudah tidak ada, atau hak akses Anda berubah. Muat ulang halaman, lalu periksa lagi.",
       );
     }
 
