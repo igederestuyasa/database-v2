@@ -314,3 +314,12 @@ keamanan apa pun.
   project Supabase, perubahan skema dilakukan **di dalam file itu**, bukan
   dengan menambah `0002_*.sql`. Begitu skema sudah pernah di-push ke database
   yang berisi data, aturan ini harus diganti ADR baru.
+
+  > **Diperbarui oleh ADR-006.** Pembekuan ini dibuka **satu kali**, atas
+  > persetujuan eksplisit pemilik proyek, untuk menambahkan
+  > `0002_batch_operations.sql` — yang memindahkan Merge, Revert dan Seed ke
+  > fungsi Postgres supaya "satu tindakan = satu Batch" benar-benar berlaku
+  > (janji `CONTEXT.md`, PRD #16, ADR-003, ROADMAP Fase 3). Setelah itu
+  > `supabase/migrations/` beku lagi pada **dua** file; tidak ada `0003_*.sql`.
+  > §9 di bawah (default `p_local => true`) tetap berlaku utuh — ADR-006
+  > menolak `p_local => false` dengan alasan yang sama persis.

@@ -9,8 +9,8 @@
 #   1. starts the local Postgres cluster
 #   2. (re)creates the test database
 #   3. applies db/local/00-shim.sql   — Supabase stand-in, NOT production schema
-#   4. applies supabase/migrations/0001_init.sql — unmodified, exactly as it
-#      would be applied to Supabase
+#   4. applies every supabase/migrations/*.sql in filename order — unmodified,
+#      exactly as they would be applied to Supabase
 #   5. optionally applies scripts/verify-schema.sql (default: yes)
 #
 # Usage:
@@ -29,7 +29,7 @@ PG_SUPERUSER="${PG_SUPERUSER:-postgres}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHIM="$ROOT/db/local/00-shim.sql"
-MIGRATION="$ROOT/supabase/migrations/0001_init.sql"
+MIGRATIONS_DIR="$ROOT/supabase/migrations"
 VERIFY="$ROOT/scripts/verify-schema.sql"
 
 DO_VERIFY=1
@@ -93,8 +93,18 @@ say "Applying LOCAL SHIM (db/local/00-shim.sql) — not production schema"
 psdb -q -f "$SHIM"
 
 # ALTER DATABASE ... SET only takes effect on new sessions.
-say "Applying migration (supabase/migrations/0001_init.sql)"
-psdb -q -f "$MIGRATION"
+# Migrations are applied in filename order, the same order Supabase would use.
+shopt -s nullglob
+MIGRATIONS=("$MIGRATIONS_DIR"/*.sql)
+shopt -u nullglob
+if [ "${#MIGRATIONS[@]}" -eq 0 ]; then
+  echo "no migrations found in $MIGRATIONS_DIR" >&2
+  exit 1
+fi
+for migration in "${MIGRATIONS[@]}"; do
+  say "Applying migration (supabase/migrations/$(basename "$migration"))"
+  psdb -q -f "$migration"
+done
 
 if [ "$DO_VERIFY" -eq 1 ]; then
   say "Verifying schema (scripts/verify-schema.sql)"

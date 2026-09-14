@@ -1,7 +1,7 @@
 // AUTO-GENERATED — DO NOT EDIT BY HAND.
 //
 // Produced by `npm run gen:types` (scripts/gen-types-from-pg.ts) from the live
-// catalog of a database with supabase/migrations/0001_init.sql applied.
+// catalog of a database with every supabase/migrations/*.sql applied.
 // The Supabase CLI's `gen types` cannot run in this environment, so this is
 // the project's source of database types.
 //
@@ -604,6 +604,24 @@ export type Database = {
       };
     };
     Functions: {
+      apply_revert: {
+        Args: {
+          p_plan: Json;
+        };
+        Returns: Json;
+      };
+      apply_revert_operation: {
+        Args: {
+          p_op: Json;
+        };
+        Returns: number;
+      };
+      assert_admin: {
+        Args: {
+          p_aksi: string;
+        };
+        Returns: undefined;
+      };
       assert_lookup_tipe: {
         Args: {
           p_id: string;
@@ -639,6 +657,52 @@ export type Database = {
       is_admin: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
+      };
+      merge_jabatan: {
+        Args: {
+          p_source: string;
+          p_target: string;
+          p_keterangan?: string;
+        };
+        Returns: Json;
+      };
+      merge_lookup: {
+        Args: {
+          p_source: string;
+          p_target: string;
+          p_keterangan?: string;
+        };
+        Returns: Json;
+      };
+      merge_org_unit: {
+        Args: {
+          p_source: string;
+          p_target: string;
+          p_keterangan?: string;
+        };
+        Returns: Json;
+      };
+      revert_batch: {
+        Args: {
+          p_batch_id: string;
+          p_keterangan?: string;
+        };
+        Returns: Json;
+      };
+      revert_plan_for_batch: {
+        Args: {
+          p_batch_id: string;
+        };
+        Returns: Json;
+      };
+      revert_skip_entry: {
+        Args: {
+          p_revision_id: number;
+          p_table_name: string;
+          p_row_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
       };
     };
     Enums: { [_ in never]: never };

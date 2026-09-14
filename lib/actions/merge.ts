@@ -1,40 +1,54 @@
 "use server";
 
 /**
- * Merge dua Data Referensi (PRD #10) — STUB with frozen signatures.
+ * Merge dua Data Referensi (PRD #10) — thin wrappers over the merge RPCs.
  *
- * Three units need to call merge (Struktur Organisasi, Jabatan, Master Data)
- * and a fourth offers it from "Perlu Dibereskan" (PRD #12), so the signatures
- * are fixed here in Wave 1 and the bodies are filled in by the unit that owns
- * merging. Callers may import and type against these today; they throw until
- * then. **Nobody changes these signatures afterwards.**
+ * FROZEN SIGNATURES (Wave 1). Three units call merge (Struktur Organisasi,
+ * Jabatan, Master Data) and a fourth offers it from "Perlu Dibereskan"
+ * (PRD #12). `MergeInput`, `MergeResult` and `ActionResult<MergeResult>` are
+ * byte-identical to the Wave 1 stub; only the bodies changed.
  *
- * What a merge does, in ONE Batch of jenis `merge` (ARCHITECTURE.md §4B):
+ * WHERE THE WORK ACTUALLY HAPPENS
+ * ---------------------------------------------------------------------------
+ * A merge is three UPDATEs across two tables, and over PostgREST three
+ * statements are three requests, three transactions and therefore three Batch
+ * entries — which would make "kembalikan Merge ini" undo a third of it. So the
+ * whole merge lives in one Postgres function per entity
+ * (`supabase/migrations/0002_batch_operations.sql`, ADR-006): one RPC call is
+ * one transaction, one `app.batch_id`, one Batch of jenis `merge`.
  *
- *   1. move every Karyawan from source to target
- *      (`employees.<kolom>_id = target WHERE <kolom>_id = source`);
- *   2. for Unit Organisasi only, re-parent the source's children
- *      (`org_units.parent_id = target WHERE parent_id = source`);
- *   3. deactivate the source and record where it went
- *      (`status = 'nonaktif'`, `merged_into_id = target`).
+ * These wrappers therefore do exactly four things: validate, guard, call, and
+ * revalidate. Every rule below is enforced **inside the function**, in SQL,
+ * where nothing can route around it:
  *
- * Never a DELETE: the source row stays, nonaktif, pointing at its target, so a
- * Konsumen holding its id still resolves and the whole thing can be reverted
- * (ADR-003).
+ *   * source ≠ target, and neither may already be merged;
+ *   * Lookup: source and target must share the same `tipe` — the `employees`
+ *     column to move is chosen by tipe, so a cross-tipe merge would point
+ *     every Karyawan it moved at the wrong kind of Lookup;
+ *   * Unit Organisasi: the target must not sit below the source, or
+ *     re-parenting the source's children would build a cycle;
+ *   * the source is deactivated and records `merged_into_id`, never deleted —
+ *     a Konsumen holding its id still resolves, and the whole thing can be
+ *     reverted (ADR-003).
  *
- * Rules an implementation must keep:
- *   * `requireAdmin()` first, and RLS second — both (CLAUDE.md).
- *   * source ≠ target; refuse merging a row into itself.
- *   * for Lookup, source and target must share the same `tipe` — the FK column
- *     on `employees` is chosen by tipe, so a cross-tipe merge would orphan
- *     every Karyawan it moved.
- *   * for Unit Organisasi, the target must not be a descendant of the source,
- *     or step 2 builds a cycle (the trigger would refuse it mid-merge).
- *   * refuse a source that is already merged (`merged_into_id is not null`).
- *   * see `lib/revisions/batch.ts` on why the three statements may land in
- *     three Batch entries rather than one, and what to do about it.
+ * `requireAdmin()` here and `assert_admin()` + RLS in the database: all of
+ * them, not one of them (CLAUDE.md).
  */
-import type { ActionResult } from "./_guard";
+import { revalidatePath } from "next/cache";
+import type { PostgrestError } from "@supabase/supabase-js";
+import { z } from "zod";
+
+import { uuidField } from "@/lib/validation/common";
+
+import {
+  actionInvalid,
+  actionOk,
+  ActionError,
+  requireAdmin,
+  toActionFailure,
+  type ActionErrorCode,
+  type ActionResult,
+} from "./_guard";
 
 /** Both ids are required and must differ. `keterangan` overrides the default. */
 export type MergeInput = {
@@ -57,32 +71,168 @@ export type MergeResult = {
   movedChildren: number;
 };
 
+/** The three merge RPCs. Same arguments, same return shape, one per entity. */
+type MergeRpc = "merge_org_unit" | "merge_jabatan" | "merge_lookup";
+
+const mergeSchema = z
+  .object({
+    sourceId: uuidField("Data Referensi asal"),
+    targetId: uuidField("Data Referensi tujuan"),
+    keterangan: z
+      .string()
+      .trim()
+      .max(500, { error: "Keterangan maksimal 500 karakter." })
+      .optional(),
+  })
+  .refine((value) => value.sourceId !== value.targetId, {
+    error: "Asal dan tujuan Merge tidak boleh sama.",
+    path: ["targetId"],
+  });
+
+/**
+ * SQLSTATE → `ActionErrorCode`.
+ *
+ * The migration raises with a deliberate errcode per refusal so the UI can
+ * tell "kamu bukan admin" from "sudah pernah di-merge" without parsing
+ * Indonesian prose. Every SQLSTATE listed here is one HC Core's own SQL raises
+ * — `assert_admin()`, the merge guards, `org_units_prevent_cycle`,
+ * `assert_lookup_tipe` — so the message really is the Indonesian sentence that
+ * code wrote, and is safe to show verbatim.
+ */
+const OWN_MESSAGE_BY_SQLSTATE: Record<string, ActionErrorCode> = {
+  // insufficient_privilege — assert_admin(), or RLS refusing the write
+  "42501": "BUKAN_ADMIN",
+  // no_data_found — source/target row missing
+  P0002: "TIDAK_DITEMUKAN",
+  // invalid_parameter_value — same id twice, cross-tipe Lookup, missing id
+  "22023": "VALIDASI",
+  // object_not_in_prerequisite_state — already merged
+  "55000": "KONFLIK",
+  // check_violation — target sits below source (cycle), wrong Lookup tipe
+  "23514": "KONFLIK",
+};
+
+/**
+ * Constraint violations Postgres itself words, in English.
+ *
+ * The code is meaningful, the message is not: a real unique or foreign-key
+ * violation reads `duplicate key value violates unique constraint "…"`, which
+ * is exactly what `_guard.ts` says staf HC should never have to read. A merge
+ * only ever writes `status`, `merged_into_id`, `parent_id` and FK uuids it has
+ * just locked, so neither should be reachable — which is the other reason not
+ * to show the raw text: it would mean something unexpected happened.
+ */
+const CONSTRAINT_SQLSTATES: Record<string, string> = {
+  "23505": "Nilai ini sudah dipakai data lain, jadi Merge tidak bisa dilanjutkan.",
+  "23503": "Data yang dirujuk tidak ada lagi, jadi Merge tidak bisa dilanjutkan.",
+};
+
+function actionErrorFromRpc(error: PostgrestError, fallback: string): ActionError {
+  const sqlstate = error.code ?? "";
+
+  const own = OWN_MESSAGE_BY_SQLSTATE[sqlstate];
+  if (own) return new ActionError(own, error.message);
+
+  const constraint = CONSTRAINT_SQLSTATES[sqlstate];
+  if (constraint) {
+    console.error("[merge]", error);
+    return new ActionError("KONFLIK", constraint);
+  }
+
+  console.error("[merge]", error);
+  return new ActionError("GAGAL", fallback);
+}
+
+function asCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/** Decode the jsonb the merge RPCs return, defensively. */
+function readMergeResult(data: unknown): MergeResult {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new ActionError("GAGAL", "Merge tidak mengembalikan hasil yang bisa dibaca.");
+  }
+  const row = data as Record<string, unknown>;
+  const batchId = row.batch_id;
+  const sourceId = row.source_id;
+  const targetId = row.target_id;
+  if (
+    typeof batchId !== "string" ||
+    typeof sourceId !== "string" ||
+    typeof targetId !== "string"
+  ) {
+    throw new ActionError("GAGAL", "Merge tidak mengembalikan hasil yang bisa dibaca.");
+  }
+  return {
+    batchId,
+    sourceId,
+    targetId,
+    movedEmployees: asCount(row.moved_employees),
+    movedChildren: asCount(row.moved_children),
+  };
+}
+
+async function runMerge(
+  rpc: MergeRpc,
+  input: MergeInput,
+  revalidate: readonly string[],
+): Promise<ActionResult<MergeResult>> {
+  const parsed = mergeSchema.safeParse(input);
+  if (!parsed.success) return actionInvalid(parsed.error);
+  const { sourceId, targetId, keterangan } = parsed.data;
+
+  try {
+    const { client } = await requireAdmin();
+
+    const { data, error } = await client.rpc(rpc, {
+      p_source: sourceId,
+      p_target: targetId,
+      p_keterangan: keterangan,
+    });
+    if (error) throw actionErrorFromRpc(error, "Gagal menggabungkan data. Coba lagi.");
+
+    const result = readMergeResult(data);
+
+    for (const path of revalidate) revalidatePath(path);
+
+    return actionOk(result);
+  } catch (error) {
+    return toActionFailure(error);
+  }
+}
+
 /** Merge dua Unit Organisasi. Children are re-parented onto the target. */
 export async function mergeOrgUnit(
   input: MergeInput,
 ): Promise<ActionResult<MergeResult>> {
-  void input;
-  throw new Error(
-    "not implemented — owned by unit Struktur Organisasi (lib/actions/merge.ts:mergeOrgUnit)",
-  );
+  return runMerge("merge_org_unit", input, [
+    "/struktur",
+    "/karyawan",
+    "/bereskan",
+    "/log",
+  ]);
 }
 
 /** Merge dua Jabatan. Every holder moves to the target. */
 export async function mergeJabatan(
   input: MergeInput,
 ): Promise<ActionResult<MergeResult>> {
-  void input;
-  throw new Error(
-    "not implemented — owned by unit Jabatan (lib/actions/merge.ts:mergeJabatan)",
-  );
+  return runMerge("merge_jabatan", input, [
+    "/jabatan",
+    "/karyawan",
+    "/bereskan",
+    "/log",
+  ]);
 }
 
 /** Merge dua Lookup of the same `tipe`. Refuses a cross-tipe merge. */
 export async function mergeLookup(
   input: MergeInput,
 ): Promise<ActionResult<MergeResult>> {
-  void input;
-  throw new Error(
-    "not implemented — owned by unit Master Data (lib/actions/merge.ts:mergeLookup)",
-  );
+  return runMerge("merge_lookup", input, [
+    "/master-data",
+    "/karyawan",
+    "/bereskan",
+    "/log",
+  ]);
 }

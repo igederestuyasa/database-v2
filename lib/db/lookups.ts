@@ -2,7 +2,8 @@
  * Read layer for Lookup (`lookups`) — the values behind every dropdown.
  *
  * FROZEN CONTRACT (Wave 1) — reads only. Writes live in
- * `lib/actions/lookups.ts` (another unit) and always go through `withBatch()`.
+ * `lib/actions/lookups.ts` (another unit): one statement per Server Action, or
+ * `merge_lookup` when several rows move (ADR-006).
  *
  * The 11 valid `tipe` values come from `lib/validation/lookupTypes.ts`, which
  * is kept byte-identical to the CHECK constraint in the migration. Anything
