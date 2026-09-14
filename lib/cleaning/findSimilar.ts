@@ -1,0 +1,181 @@
+/**
+ * Temuan "nama mirip" untuk Data Referensi (PRD #11).
+ *
+ * Unit Organisasi, Jabatan and Lookup were seeded from Excel **as they were
+ * written** (ADR-002): trimmed, never corrected. So the same Divisi is in the
+ * database three times, once per spelling. This module finds those groups; the
+ * admin merges them from "Perlu Dibereskan" (PRD #12) and they disappear.
+ *
+ * COST
+ * ---------------------------------------------------------------------------
+ * Grouping is a single pass into a Map keyed by `similarityKey()`, so the scan
+ * is O(n), not the O(n²) that comparing every pair against every other would
+ * cost. Within a group, the difference explanation compares each row against
+ * the group's first row only — O(k), not O(k²) — because the rows already
+ * share a key and "kenapa" needs one representative, not a matrix. A few
+ * thousand Data Referensi rows are therefore linear work, and measured at a
+ * few milliseconds (see `findSimilar.test.ts`).
+ *
+ * WHY NONAKTIF ROWS ARE LEFT OUT BY DEFAULT
+ * ---------------------------------------------------------------------------
+ * A Merge sets the source `status = 'nonaktif'` and records `merged_into_id`;
+ * it never deletes (PRD §6). If nonaktif rows stayed in the comparison, every
+ * merge the admin performed would leave its own Temuan behind and the page
+ * could never reach zero — which PRD §7 names as the measure of success. So a
+ * merged row drops out of this list the moment it is merged, which is exactly
+ * what makes the list finishable.
+ *
+ * Pure: plain rows in, Temuan out. No Supabase, no React (CLAUDE.md).
+ */
+import {
+  explainSimilarity,
+  NAME_DIFFERENCES,
+  similarityKey,
+  type NameDifference,
+} from "./normalize";
+
+/** Which kind of Data Referensi a Temuan is about. Matches `MergeEntityKind`. */
+export type ReferenceKind = "org_unit" | "jabatan" | "lookup";
+
+/**
+ * One Data Referensi row, reduced to what similarity needs.
+ *
+ * Callers map their own rows onto this: `org_units.nama`, `jabatan.nama` and
+ * `lookups.label` all arrive as `nama`.
+ */
+export type ReferenceRow = {
+  id: string;
+  /** The stable half of the row — shown so two identical nama stay tellable apart. */
+  kode: string;
+  /** `org_units.nama` / `jabatan.nama` / `lookups.label`. */
+  nama: string;
+  /** `aktif` | `nonaktif`. */
+  status: string;
+  /**
+   * `lookups.tipe`, or `undefined` for Unit Organisasi and Jabatan.
+   *
+   * Rows of different tipe are **never** grouped: `merge_lookup` refuses a
+   * cross-tipe merge (a Job Grade and a Person Grade that read alike are two
+   * different columns on `employees`), so offering the pair would only offer a
+   * merge the database is going to reject.
+   */
+  tipe?: string | null;
+  /** Second line for the UI: the induk, the tipe label, whatever disambiguates. */
+  keterangan?: string | null;
+};
+
+/** One group of Data Referensi rows that fold onto the same name. */
+export type TemuanNamaMirip = {
+  /** Stable across renames — built from the row ids, not from the nama. */
+  id: string;
+  jenis: "nama_mirip";
+  entitas: ReferenceKind;
+  /** The `lookups.tipe` the whole group shares, or `null`. */
+  tipe: string | null;
+  /** The normalization key every row in the group folds to. */
+  kunci: string;
+  /** Two or more rows, ordered by kode. */
+  baris: ReferenceRow[];
+  /**
+   * Why they differ on screen. Empty either because the names are identical
+   * (see `namaIdentik`) or because the difference is a mixture no single
+   * dimension owns — `explainSimilarity()` does not guess.
+   */
+  perbedaan: NameDifference[];
+  /**
+   * Every row spells the nama exactly the same way.
+   *
+   * Two rows really can share a nama and differ only by kode, and saying
+   * "penulisan berbeda" over two identical strings reads as a bug. With this
+   * the UI can say "nama identik" instead — which is also the stronger case
+   * for merging them.
+   */
+  namaIdentik: boolean;
+};
+
+export type FindSimilarOptions = {
+  /**
+   * Include rows whose `status` is not `aktif`. Default `false` — see the
+   * header: a merged row must stop being a Temuan, or the page never empties.
+   */
+  includeNonaktif?: boolean;
+};
+
+/** `tipe` and key in one string, so one Map does the whole grouping. */
+function groupKey(row: ReferenceRow, key: string): string {
+  return `${row.tipe ?? ""}\u0000${key}`;
+}
+
+/** Ordering inside a group and between groups: by kode, which never changes. */
+function byKode(a: ReferenceRow, b: ReferenceRow): number {
+  return a.kode.localeCompare(b.kode, "id") || a.id.localeCompare(b.id);
+}
+
+/**
+ * Every set of Data Referensi rows whose names fold onto one another.
+ *
+ * Rows with a blank name are skipped: an empty nama is a different problem
+ * (and would otherwise collect every other empty nama into one useless group).
+ * Groups of one are not Temuan and are not returned.
+ */
+export function findSimilarNames(
+  entitas: ReferenceKind,
+  rows: readonly ReferenceRow[],
+  options: FindSimilarOptions = {},
+): TemuanNamaMirip[] {
+  const { includeNonaktif = false } = options;
+
+  const groups = new Map<string, { kunci: string; rows: ReferenceRow[] }>();
+
+  for (const row of rows) {
+    if (!includeNonaktif && row.status !== "aktif") continue;
+
+    const kunci = similarityKey(row.nama);
+    if (kunci.length === 0) continue;
+
+    const key = groupKey(row, kunci);
+    const bucket = groups.get(key);
+    if (bucket) bucket.rows.push(row);
+    else groups.set(key, { kunci, rows: [row] });
+  }
+
+  const temuan: TemuanNamaMirip[] = [];
+
+  for (const { kunci, rows: bucket } of groups.values()) {
+    if (bucket.length < 2) continue;
+
+    const baris = [...bucket].sort(byKode);
+
+    // One representative, not every pair: the rows already share a key, so the
+    // first row explains the group and the work stays linear in group size.
+    // Reported in `NAME_DIFFERENCES` order, never in the order the rows
+    // happened to arrive, so the badge on screen does not reshuffle itself.
+    const terlihat = new Set<NameDifference>();
+    for (let i = 1; i < baris.length; i += 1) {
+      for (const beda of explainSimilarity(baris[0].nama, baris[i].nama)) {
+        terlihat.add(beda);
+      }
+    }
+    const perbedaan = NAME_DIFFERENCES.filter((beda) => terlihat.has(beda));
+
+    temuan.push({
+      id: `nama_mirip:${entitas}:${baris.map((row) => row.id).join("+")}`,
+      jenis: "nama_mirip",
+      entitas,
+      tipe: baris[0].tipe ?? null,
+      kunci,
+      baris,
+      perbedaan,
+      namaIdentik: baris.every((row) => row.nama === baris[0].nama),
+    });
+  }
+
+  // Biggest groups first — three spellings of one Divisi is worth more of the
+  // admin's attention than two — then alphabetically, so the list is stable.
+  return temuan.sort(
+    (a, b) =>
+      b.baris.length - a.baris.length ||
+      a.baris[0].nama.localeCompare(b.baris[0].nama, "id") ||
+      a.id.localeCompare(b.id),
+  );
+}
