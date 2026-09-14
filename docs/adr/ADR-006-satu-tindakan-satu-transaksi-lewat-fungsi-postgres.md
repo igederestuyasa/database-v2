@@ -1,4 +1,4 @@
-# ADR-006 — Satu tindakan = satu transaksi: pekerjaan multi-baris pindah ke fungsi Postgres
+# ADR-006 — Satu tindakan = satu Batch: pekerjaan multi-baris pindah ke fungsi Postgres, dan tidak ada Batch yang dibuka dari TypeScript
 
 Status: Diterima
 Tanggal: 2026-09-14
@@ -35,8 +35,11 @@ Pengelompokan hanya dijamin **per statement**.
 
 Akibatnya konkret:
 
-- Merge = tiga `UPDATE` di dua tabel → **tiga** Batch. "Kembalikan Merge ini"
-  akan membatalkan sepertiganya.
+- Edit biasa (satu `UPDATE`) = **dua** baris di Log Perubahan: satu Batch
+  bernama-bagus yang kosong, dan satu Batch `edit` otomatis yang memuat
+  Revisi-nya. Baris yang bisa dibaca bukan baris yang berisi.
+- Merge = tiga `UPDATE` di dua tabel → **tiga** Batch (plus satu yang kosong).
+  "Kembalikan Merge ini" akan membatalkan sepertiganya.
 - Seed ±1.475 Karyawan → ±1.475 Batch. Exit criteria Fase 1 ("satu batch
   `seed`") tidak mungkin tercapai.
 - Revert satu Batch = satu `UPDATE` per Revisi → satu Batch per Revisi, sehingga
@@ -46,6 +49,11 @@ Ini bukan salah ketik di satu tempat; ini konsekuensi desain yang mengenai
 setiap operasi multi-baris di aplikasi.
 
 ## Keputusan
+
+Dua bagian, satu aturan: **Batch hanya dibuat di tempat yang benar-benar
+memegang satu transaksi.**
+
+### Bagian 1 — pekerjaan multi-baris pindah ke fungsi Postgres
 
 **Setiap unit kerja yang lebih dari satu statement dipindahkan ke satu fungsi
 Postgres.** Satu panggilan RPC = satu transaksi = satu `app.batch_id` = satu
@@ -74,6 +82,46 @@ memanggil RPC, dan `revalidatePath()`; `lib/revisions/revert.ts:applyRevert()`
 dan `revertBatch()` memanggil RPC dan menerjemahkan hasilnya. Tanda tangan
 ekspornya tidak berubah sama sekali — tiga belas unit paralel sudah menulis kode
 terhadapnya.
+
+### Bagian 2 — tindakan satu-statement tidak membuka Batch sama sekali
+
+**`withBatch()`, `beginBatch()` dan `endBatch()` dihapus.** Sebuah Server Action
+untuk tindakan satu statement menjalankan `UPDATE`/`INSERT`-nya langsung, dan
+**Batch `edit` otomatis dari trigger `log_revision` itulah catatan tindakan
+tersebut**. Hasilnya: `/log` menampilkan **tepat satu** baris per tindakan, dan
+baris itu benar-benar memuat Revisi-nya.
+
+Versi pertama ADR ini membiarkan bagian ini apa adanya dan mendokumentasikannya
+sebagai batas yang diterima. Pemilik proyek meninjau batas itu dan memutuskan
+menutupnya: Batch kosong tidak pernah punya pembaca, dan membiarkan setiap
+tindakan menghasilkan dua baris log — satu yang bisa dibaca dan satu yang berisi
+— justru merusak halaman yang PRD #16 minta.
+
+Yang hilang, dan diterima secara sadar:
+
+- **`keterangan` per edit.** Tidak ada lagi kalimat "Ganti nama Jabatan: "A" →
+  "B"" di tingkat Batch.
+- **`jenis` yang spesifik.** `create`, `deactivate` dan `rename` sekarang
+  **hanya** pernah ditulis oleh fungsi RPC di `0002_batch_operations.sql`; edit
+  biasa selalu `edit`.
+
+Yang tidak hilang, dan inilah alasan harganya pantas: `revisions.action` tetap
+memisahkan `insert` dari `update`, `before`/`after` tetap menunjukkan kolom mana
+yang bergerak (termasuk perubahan `status`, yang membuat "dinonaktifkan" tetap
+terbaca), `actor_id` dan `created_at` tetap ada, dan setiap Revisi tetap bisa
+dikembalikan satu per satu (PRD #15). PRD tidak pernah meminta deskripsi per
+edit; ia meminta siapa, kapan, apa yang berubah, dan bisa dikembalikan —
+keempatnya selamat.
+
+Karena Batch `edit` otomatis sekarang menjadi **jalur normal**, bukan jalur
+pengecualian, `keterangan`-nya di `0001_init.sql` diganti dari "Perubahan tanpa
+batch eksplisit (dibuat otomatis oleh trigger log_revision)" menjadi "Perubahan
+data": baris itu kini dibaca staf HC di halaman Log Perubahan, bukan oleh
+developer yang sedang mencari batch id yang hilang.
+
+Satu-satunya pemanggil `begin_batch` yang tersisa di TypeScript adalah
+`lib/revisions/seedBatch.ts`, yang memegang koneksi dan transaksinya sendiri —
+di sana batch id memang bertahan sampai `COMMIT`.
 
 ### Model keamanan: `SECURITY INVOKER` + `assert_admin()`, bukan `SECURITY DEFINER`
 
@@ -167,6 +215,17 @@ Dipilih daripada `seed_employees(p_rows jsonb)` karena:
   keadaan sebelum ADR ini. Artinya mencoret janji di empat dokumen, membuang
   PRD #16 sepenuhnya, dan membiarkan exit criteria Fase 1 dan Fase 3 tidak bisa
   dipenuhi.
+- **Mempertahankan `withBatch()` untuk tindakan satu-statement demi
+  `keterangan` dan `jenis` yang spesifik** — versi pertama ADR ini memilih itu.
+  Harganya: setiap tindakan menghasilkan dua baris di Log Perubahan, yang bisa
+  dibaca kosong dan yang berisi tidak bisa dibaca, dan "kembalikan Batch ini"
+  atas baris yang bisa dibaca tidak melakukan apa-apa. Label yang salah tempat
+  lebih buruk daripada tidak ada label: yang hilang cuma kalimat, sedangkan yang
+  didapat adalah satu baris log yang isinya cocok dengan judulnya.
+- **Membuat setiap Server Action jadi fungsi Postgres supaya `keterangan` dan
+  `jenis` tetap ada** — satu fungsi SQL per tulisan, validasi zod bersama jadi
+  tidak terpakai, dan tiga belas unit paralel menulis SQL alih-alih TypeScript.
+  Biaya besar untuk sebuah label yang PRD tidak minta.
 - **Satu `UPDATE ... FROM` raksasa per Merge** — tiga tabel berbeda dengan
   kolom berbeda tidak bisa disatukan jadi satu statement, dan yang bisa pun akan
   jadi SQL yang tidak ada yang berani sunting.
@@ -191,8 +250,13 @@ Dipilih daripada `seed_employees(p_rows jsonb)` karena:
   dan `merged_into_id`, lalu penolakan revert kedua.
 - Lebih mudah: Seed ±1.475 Karyawan jadi satu Batch `seed` yang bisa dibatalkan
   utuh, dan gagal-total kalau ada satu baris rusak.
+- Lebih mudah: `/log` menampilkan **tepat satu** baris per tindakan, dan baris
+  itu memuat Revisi-nya. Tidak ada lagi Batch kosong di mana pun —
+  `scripts/verify-schema.sql` §19.2 gagal kalau ada satu saja.
 - Lebih mudah: aturan barunya sederhana dan bisa diucapkan — **satu statement →
-  `withBatch()`, lebih dari satu statement → fungsi Postgres.**
+  tulis langsung, jangan buka Batch; lebih dari satu statement → fungsi
+  Postgres.** Tidak ada lagi keputusan "pakai `withBatch()` atau tidak", karena
+  `withBatch()` sudah tidak ada.
 - **Lebih susah, dan ini biayanya: logika pindah ke SQL.** Merge dan revert
   sekarang hidup di `0002_batch_operations.sql`, di luar jangkauan TypeScript,
   `npm run typecheck` dan unit test biasa. Yang menjaganya adalah
@@ -205,33 +269,41 @@ Dipilih daripada `seed_employees(p_rows jsonb)` karena:
   `revert_plan_for_batch()` di SQL (untuk revert satu Batch). Keduanya harus
   diubah bersamaan; pesan `skipped`-nya sengaja identik kata per kata supaya
   perbedaan langsung terlihat.
+- **Lebih susah: Log Perubahan jadi lebih sepi kata-kata.** Edit biasa muncul
+  sebagai "Edit — Perubahan data" plus daftar Revisi-nya; halaman `/log` harus
+  menjelaskan tindakan dari baris Revisi (tabel mana, baris mana, kolom apa yang
+  bergerak), bukan dari judul Batch. Untuk Merge, Revert dan Seed judulnya tetap
+  kaya, karena fungsi RPC-nya menulis `keterangan` sendiri.
+- Lebih susah: `batches.jenis` kini tidak seimbang — `create`, `deactivate` dan
+  `rename` hanya pernah muncul dari fungsi RPC. Ketujuh nilainya tetap sah di
+  CHECK constraint dan di `BATCH_TYPE_LABELS`; jangan "membersihkan" yang tidak
+  terpakai.
 - Terkunci lagi: `supabase/migrations/` beku pada **dua** file. Perubahan skema
   berikutnya dilakukan di dalam file yang sudah ada — sampai ada project
   Supabase berisi data, yang akan menuntut ADR baru lagi.
 
-## Yang sengaja TIDAK diubah
+## Bagaimana keputusan ini dijaga
 
-**Tindakan satu-statement tetap memakai `withBatch()`, dan Batch bernamanya
-tetap kosong.** Untuk `renameJabatan`, `updateEmployee`, dan sejenisnya,
-`begin_batch` masih dikirim sebagai request tersendiri, jadi `app.batch_id`
-sudah hilang saat `UPDATE`-nya tiba dan Revisi-nya tetap mendarat di Batch
-`edit` otomatis. `/log` menampilkan **dua** baris untuk tindakan seperti itu:
-Batch bernama yang memuat `jenis`/`keterangan`, dan Batch otomatis yang memuat
-Revisi-nya.
+Aturan yang cuma ditulis di dokumen akan dilanggar oleh unit paralel berikutnya
+yang membaca contoh lama. Karena itu keduanya dicek mesin:
 
-Itu dibiarkan, bukan tidak terlihat:
+- `scripts/verify-schema.sql` §19 — sisi database: satu `UPDATE` telanjang
+  menghasilkan **tepat satu** Batch yang memuat Revisi-nya (§19.1); **tidak ada
+  satu pun Batch kosong** di seluruh database setelah seluruh suite berjalan
+  (§19.2) — gejala yang pasti muncul kalau ada yang membuka Batch dari kode
+  lagi; dan tidak ada `keterangan` Batch yang menyebut istilah internal, karena
+  halaman itu dibaca staf HC (§19.3).
+- `tests/batchDiscipline.test.ts` — sisi TypeScript, yang tidak bisa dilihat
+  SQL: tidak ada berkas di `lib/`, `app/`, `components/` atau `scripts/` yang
+  memanggil `withBatch()`/`beginBatch()`/`endBatch()` atau RPC
+  `begin_batch`/`end_batch`, dengan **satu** pengecualian yang terdaftar
+  eksplisit: `lib/revisions/seedBatch.ts`.
+- `lib/revisions/batch.ts` tetap ada sebagai tempat aturan ini dijelaskan —
+  berisi penjelasan kenapa `withBatch()` tidak ada lagi, plus
+  `batchKeterangan()`, satu-satunya label Batch yang masih ditulis manusia
+  (yang diserahkan ke RPC merge/revert).
 
-- Perubahannya tetap **tercatat penuh** dan tetap bisa dikembalikan **per
-  Revisi** (PRD #15) lewat `planRevert()` + `applyRevert()` — yang memang cara
-  UI membalikkan satu edit. Yang tidak berlaku adalah "kembalikan Batch ini"
-  atas Batch bernama itu, dan PRD #16 menyebut contohnya "satu merge atau satu
-  seed" — dua-duanya sudah ditangani ADR ini.
-- Memindahkan setiap tulisan satu-baris ke SQL berarti satu fungsi Postgres per
-  Server Action, menghapus manfaat validasi zod bersama, dan mengubah kontrak
-  `withBatch()` yang tiga belas unit paralel sudah tulis kodenya.
-
-Kalau nanti ada tindakan satu-statement yang benar-benar butuh revert
-per-Batch, aturannya sudah jelas: pindahkan tindakan itu ke fungsi Postgres,
-seperti Merge dan Revert di sini. Komentar di `lib/revisions/batch.ts` dan
-`lib/actions/_reference.ts` menyebutkan batas ini apa adanya — peringatan basi
-lebih buruk daripada tidak ada peringatan.
+Kalau nanti ada tindakan satu-statement yang benar-benar butuh `keterangan` atau
+`jenis` sendiri, jalannya sudah jelas dan sudah terbukti: pindahkan tindakan itu
+ke fungsi Postgres, seperti Merge dan Revert di sini. Jangan menghidupkan lagi
+Batch yang dibuka dari TypeScript — ia akan kosong, persis seperti sebelumnya.

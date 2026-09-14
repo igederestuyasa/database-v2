@@ -2,7 +2,8 @@
  * Read layer for Unit Organisasi (`org_units`).
  *
  * FROZEN CONTRACT (Wave 1) — reads only. Writes live in
- * `lib/actions/orgUnits.ts` (another unit) and always go through `withBatch()`.
+ * `lib/actions/orgUnits.ts` (another unit): one statement per Server Action, or
+ * `merge_org_unit` when several rows move (ADR-006).
  *
  * The hierarchy is one self-referencing table (ADR-002). Trees, descendant
  * sets and ancestor paths are assembled **in TypeScript** from one flat read:

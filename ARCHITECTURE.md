@@ -42,7 +42,7 @@ hc-core/
 │   ├── supabase/                    # client.ts (browser), server.ts (server, cookie session), admin.ts (service role — HANYA untuk api/v1 & seed)
 │   ├── db/                          # satu file per entitas: employees.ts, orgUnits.ts, jabatan.ts, lookups.ts, revisions.ts, apiKeys.ts
 │   ├── actions/                     # Server Actions per entitas; SATU-SATUNYA jalur tulis dari UI
-│   ├── revisions/                   # batch.ts (mulai/akhiri batch), revert.ts (revert revisi & batch), seedBatch.ts (transaksi seed via pg — script saja)
+│   ├── revisions/                   # batch.ts (label Batch + kenapa tidak ada withBatch), revert.ts (revert revisi & batch), seedBatch.ts (transaksi seed via pg — script saja)
 │   ├── cleaning/                    # normalize.ts, findSimilar.ts, findOrphans.ts
 │   ├── api/                         # auth.ts (validasi key), fields.ts (whitelist), response.ts (envelope)
 │   ├── derived/                     # perhitungan usia, masa kerja (dipakai view & UI)
@@ -172,20 +172,29 @@ Semua view dibuat dengan `security_invoker = true` agar RLS tabel dasar tetap be
 
 ### A. Admin mengedit satu karyawan
 1. Form di `app/(app)/karyawan/[id]` submit → Server Action `lib/actions/employees.ts:updateEmployee`.
-2. Server Action memvalidasi input dengan zod (`lib/validation/employee.ts`), lalu memanggil `lib/revisions/batch.ts:withBatch({ jenis:'edit', keterangan })`.
-3. `withBatch` memanggil RPC `begin_batch` (insert `batches` + `set_config('app.batch_id', …, p_local => true)`), lalu menjalankan `UPDATE employees` via session user (RLS admin).
-4. Trigger `log_revision` menulis baris `revisions` dengan `before`/`after`.
+2. Server Action memvalidasi input dengan zod (`lib/validation/employee.ts`), `requireAdmin()`, lalu membaca baris yang sekarang.
+3. Server Action menjalankan **satu** `UPDATE employees` via session user (RLS admin) — **tanpa membuka Batch sendiri**.
+4. Trigger `log_revision` melihat `app.batch_id` kosong, membuat satu Batch `edit`, dan menulis baris `revisions` dengan `before`/`after` ke dalamnya.
 5. Revalidate path; halaman detail menampilkan revisi baru di daftar riwayat.
 
-Catatan yang harus diketahui pembaca: `begin_batch` dan `UPDATE` adalah **dua
-request PostgREST**, jadi dua transaksi. `app.batch_id` ber-scope transaksi
-(ADR-005 §9), sehingga trigger tidak melihat Batch yang dibuka di langkah 3 dan
-membuat Batch `edit` otomatis untuk Revisi-nya. `/log` menampilkan **dua** baris
-untuk satu edit: Batch bernama yang memuat `jenis`/`keterangan`, dan Batch
-otomatis yang memuat Revisi. Perubahannya tetap tercatat penuh dan tetap bisa
-dikembalikan **per Revisi** (PRD #15). Itulah sebatas yang bisa dilakukan satu
-statement lewat PostgREST; tindakan yang menulis banyak baris tidak boleh
-dibangun seperti ini — lihat §4B, §4C dan ADR-006.
+Kenapa tidak ada Batch yang dibuka dari kode: `begin_batch` dan `UPDATE` adalah
+**dua request PostgREST**, jadi dua transaksi. `app.batch_id` ber-scope
+transaksi (ADR-005 §9, dan scope sesi ditolak karena bocor lewat koneksi
+pooled), sehingga Batch yang dibuka di request pertama sudah hilang saat
+`UPDATE` tiba di request kedua — Batch itu akan nongkrong di `/log` tanpa isi
+apa pun. Dengan membiarkan Batch otomatis trigger menjadi catatannya, `/log`
+menampilkan **tepat satu** baris per tindakan, dan baris itu benar-benar memuat
+Revisi-nya (ADR-006).
+
+Harganya: satu edit biasa tidak punya `keterangan` per tindakan, dan `jenis`-nya
+selalu `edit` (`create`/`deactivate`/`rename` kini hanya ditulis fungsi RPC).
+Yang ditanyakan PRD tetap utuh — siapa, kapan, apa yang berubah, dan bisa
+dikembalikan: `revisions.action` memisahkan insert dari update, `before`/`after`
+menunjukkan kolom mana yang bergerak (termasuk perubahan `status`), dan setiap
+Revisi tetap bisa dikembalikan satu per satu (PRD #15).
+
+Tindakan yang menulis banyak baris tidak boleh dibangun seperti ini — lihat
+§4B, §4C dan ADR-006.
 
 ### B. Merge dua unit organisasi
 
@@ -271,8 +280,9 @@ Implementasi: RLS di setiap tabel (`select` untuk authenticated; `insert/update`
 ## 6. Aturan & Konvensi
 
 - Semua tulisan ke database dari UI lewat Server Action di `lib/actions/`; tidak ada `supabase.from(...).insert/update` di Client Component.
-- Semua Server Action yang mengubah data dibungkus `withBatch()`; tidak ada UPDATE/INSERT di luar batch.
-- **Tindakan yang menyentuh lebih dari satu baris atau lebih dari satu tabel ditulis sebagai fungsi Postgres, bukan sebagai urutan panggilan supabase-js** (ADR-006). Satu panggilan RPC = satu transaksi = satu Batch; urutan panggilan lewat PostgREST = satu Batch per statement. `withBatch()` tetap benar untuk tindakan satu statement.
+- Satu Server Action = **satu statement**, ditulis langsung; tidak ada Batch yang dibuka dari TypeScript. Trigger `log_revision` yang membuat Batch-nya, jadi Batch itu selalu berisi Revisi-nya (ADR-006).
+- **Tindakan yang menyentuh lebih dari satu baris atau lebih dari satu tabel ditulis sebagai fungsi Postgres, bukan sebagai urutan panggilan supabase-js** (ADR-006). Satu panggilan RPC = satu transaksi = satu Batch; urutan panggilan lewat PostgREST = satu Batch per statement. Fungsi RPC membuka Batch-nya sendiri — jangan dibungkus apa pun.
+- `batches.jenis` `create` / `deactivate` / `rename` hanya ditulis fungsi RPC; edit biasa selalu masuk Batch `edit` otomatis.
 - Tidak ada `DELETE` ke tabel `employees`, `employee_private`, `org_units`, `jabatan`, `lookups`, `api_keys` — di kode maupun migration. Nonaktifkan dengan `status`.
 - Service-role client (`lib/supabase/admin.ts`) hanya di-import oleh `app/api/v1/**` dan `scripts/**`.
 - Semua perubahan skema lewat file di `supabase/migrations/`; tidak ada perubahan skema dari dashboard Supabase.

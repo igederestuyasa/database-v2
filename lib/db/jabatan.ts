@@ -2,7 +2,8 @@
  * Read layer for Jabatan.
  *
  * FROZEN CONTRACT (Wave 1) — reads only. Writes live in
- * `lib/actions/jabatan.ts` (another unit) and always go through `withBatch()`.
+ * `lib/actions/jabatan.ts` (another unit): one statement per Server Action, or
+ * `merge_jabatan` when several rows move (ADR-006).
  *
  * Jabatan is a *nama pekerjaan* that many Karyawan can hold at once, not a
  * seat: there is no quota and no unit binding (ADR-002, CONTEXT.md).

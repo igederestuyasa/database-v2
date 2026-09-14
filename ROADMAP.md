@@ -13,7 +13,7 @@ Termasuk: migration semua tabel dan view, trigger `log_revision` (walaupun UI be
 
 ## Fase 2 — Tulis & revert
 **Scope:** fitur **3, 4, 5, 7, 8, 9, 13, 14, 15** (form tambah/edit/nonaktifkan karyawan; CRUD unit organisasi berhierarki, jabatan, lookups; riwayat revisi di halaman detail; revert satu revisi).
-Termasuk: `withBatch()`, semua Server Action, komponen `EntityPicker` (pilih unit/jabatan/lookup), `RevisionList`.
+Termasuk: semua Server Action (satu statement, tanpa membuka Batch sendiri — ADR-006), komponen `EntityPicker` (pilih unit/jabatan/lookup), `RevisionList`.
 **Exit criteria:** admin mengubah divisi seorang karyawan → muncul di riwayat dengan before/after → klik "kembalikan" → data kembali dan riwayat bertambah satu revisi `revert`; rename sebuah divisi → semua karyawan di bawahnya menampilkan nama baru tanpa ada baris karyawan yang berubah; viewer tidak melihat tombol edit dan Server Action-nya menolak jika dipanggil paksa.
 
 ## Fase 3 — Pembersihan & log global

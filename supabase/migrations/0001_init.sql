@@ -405,7 +405,9 @@ comment on function public.is_admin() is
   'TRUE kalau pengguna yang login punya profiles.role = ''admin''. Dipakai semua policy RLS tulis.';
 
 -- ----------------------------------------------------------------------------
--- 4. Batch helpers (RPC) — dipakai lib/revisions/batch.ts:withBatch()
+-- 4. Batch helpers (RPC) — dipakai fungsi merge/revert di 0002_batch_operations.sql
+--    dan skrip seed lewat koneksi langsung (lib/revisions/seedBatch.ts).
+--    TIDAK dipanggil dari Server Action: lihat ADR-006.
 -- ----------------------------------------------------------------------------
 
 create or replace function public.current_batch_id()
@@ -484,7 +486,7 @@ end;
 $fn$;
 
 comment on function public.begin_batch(text, text, boolean) is
-  'Membuka Batch baru dan mengarahkan app.batch_id ke sana. Dipakai withBatch(). Lihat ADR-003.';
+  'Membuka Batch baru dan mengarahkan app.batch_id ke sana. Hanya berguna di dalam satu transaksi: fungsi merge/revert di 0002, atau skrip seed. Lihat ADR-003 & ADR-006.';
 
 create or replace function public.end_batch()
 returns void
@@ -553,9 +555,17 @@ begin
 
   -- No batch set? Make one. This is what guarantees that *no* change can
   -- escape the log, however it was written (ADR-003).
+  --
+  -- Since ADR-006 this is not the exceptional path but the NORMAL one: an
+  -- ordinary Server Action writes its single statement without opening a Batch,
+  -- and this is the Batch that ends up holding its Revisi and showing on
+  -- `/log`. The keterangan is therefore read by staf HC, not by a developer
+  -- debugging a missing batch id — so it says something plain instead of
+  -- naming this trigger. The Revisi rows carry the detail (which table, which
+  -- row, which columns moved).
   if v_batch_id is null then
     insert into public.batches (jenis, keterangan, actor_id)
-    values ('edit', 'Perubahan tanpa batch eksplisit (dibuat otomatis oleh trigger log_revision)', v_actor)
+    values ('edit', 'Perubahan data', v_actor)
     returning id into v_batch_id;
     -- transaction-local: the rest of this statement/transaction joins the
     -- same batch, but nothing leaks into the next request on this connection.

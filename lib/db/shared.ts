@@ -4,8 +4,10 @@
  * FROZEN CONTRACT (Wave 1). Feature units import from here; they do not edit
  * it. Every module in `lib/db/` follows the same three rules:
  *
- *   1. **Reads only.** Writes go through a Server Action in `lib/actions/`
- *      wrapped in `withBatch()` (ARCHITECTURE.md §6).
+ *   1. **Reads only.** Writes go through a Server Action in `lib/actions/` —
+ *      one statement written directly, or an RPC in
+ *      `0002_batch_operations.sql` when several rows move (ARCHITECTURE.md §6,
+ *      ADR-006).
  *   2. **The caller supplies the client.** Every function takes a `DbClient`
  *      as its first argument, so a Server Component, a Server Action and a
  *      script can all reuse the same query without this layer reaching for

@@ -33,7 +33,7 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 ```
 
 ## Aturan
-- Semua tulisan ke DB dari UI lewat Server Action di `lib/actions/`, dibungkus `withBatch({ jenis, keterangan })`. Tidak ada insert/update di Client Component.
+- Semua tulisan ke DB dari UI lewat Server Action di `lib/actions/`. Tidak ada insert/update di Client Component. Satu Server Action = **satu statement**, ditulis langsung tanpa membuka Batch — trigger `log_revision` yang membuat Batch-nya, dan Batch itulah yang memuat Revisi-nya. **Tidak ada `withBatch()`**, dan jangan membuatnya lagi: Batch yang dibuka dari TypeScript selalu kosong (ADR-006). Contoh lengkapnya `lib/actions/_reference.ts`.
 - **Tidak ada `DELETE`** ke tabel data (`employees`, `employee_private`, `org_units`, `jabatan`, `lookups`, `api_keys`) — di kode maupun migration. Pakai `status = 'nonaktif'`.
 - Log revisi ditulis oleh **trigger**, bukan kode. Tabel data baru wajib dipasangi trigger `log_revision` di migration yang sama. **Tujuh** tabel ter-log: enam tabel data di atas **plus `profiles`** (perubahan role wajib teraudit). `profiles` sengaja tidak ikut larangan DELETE karena cascade dari `auth.users` — jangan samakan kedua daftar itu.
 - Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya: revisi `employee_private`/`api_keys` admin saja, revisi `profiles` admin atau pemiliknya, sisanya semua yang login.
@@ -44,7 +44,8 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Kolom referensi di `employees` selalu FK (uuid) ke `org_units` / `jabatan` / `lookups`. Jangan tambah kolom teks bebas untuk hal yang punya daftar.
 - Kolom turunan (usia, masa kerja) dihitung di view atau `lib/derived/`; jangan disimpan.
 - Skema hanya berubah lewat file di `supabase/migrations/` — jangan ubah dari dashboard Supabase. **Ada tepat DUA file migration** — `0001_init.sql` dan `0002_batch_operations.sql` — dan direktorinya **beku lagi**: ubah di dalam keduanya, jangan tambah `0003_*.sql`. Pembekuan satu-file ADR-005 dibuka satu kali untuk ADR-006 dan sudah ditutup; `tests/migrationInvariants.test.ts` gagal kalau ada file ketiga.
-- Tindakan yang menulis **lebih dari satu baris atau lebih dari satu tabel** ditulis sebagai fungsi Postgres di `0002_batch_operations.sql`, bukan sebagai urutan panggilan supabase-js (ADR-006). Satu panggilan RPC = satu transaksi = satu Batch; lewat PostgREST, satu statement = satu Batch. `withBatch()` tetap benar untuk tindakan satu statement. Jangan bungkus RPC merge/revert dengan `withBatch()` — fungsinya membuka Batch-nya sendiri.
+- Tindakan yang menulis **lebih dari satu baris atau lebih dari satu tabel** ditulis sebagai fungsi Postgres di `0002_batch_operations.sql`, bukan sebagai urutan panggilan supabase-js (ADR-006). Satu panggilan RPC = satu transaksi = satu Batch; lewat PostgREST, satu statement = satu Batch. Fungsi merge/revert membuka Batch-nya sendiri — panggil RPC-nya apa adanya, jangan dibungkus apa pun.
+- `batches.jenis` `create` / `deactivate` / `rename` **hanya** ditulis fungsi RPC; edit biasa selalu masuk Batch `edit` otomatis dari trigger. Keterangan per-edit memang hilang, dan itu disengaja — siapa, kapan, apa yang berubah, dan bisa-dikembalikan semuanya tetap ada di `revisions` (ADR-006).
 - Fungsi di `0002_batch_operations.sql` **`SECURITY INVOKER`** (RLS tetap berlaku) **plus** `assert_admin()` sebagai statement pertama. Jangan ubah jadi `SECURITY DEFINER`.
 - `lib/types/db.ts` dan `lib/schema/columns.generated.ts` **auto-generated** — jangan diedit tangan; ubah migration lalu `npm run db:local && npm run gen:types`.
 - `components/ui/*` beku — pakai, jangan ubah.

@@ -2,7 +2,7 @@
  * Browser Supabase client (anon key, RLS applies).
  *
  * Read-only convenience for Client Components. Every write from the UI goes
- * through a Server Action in `lib/actions/` wrapped in `withBatch()` — never
+ * through a Server Action in `lib/actions/` — never
  * `supabase.from(...).insert/update` in a Client Component (CLAUDE.md).
  */
 import { createBrowserClient } from "@supabase/ssr";

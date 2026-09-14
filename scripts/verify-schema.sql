@@ -1600,6 +1600,143 @@ begin
 end
 $$;
 
+-- ===========================================================================
+-- 19. Tindakan satu-statement menghasilkan TEPAT SATU Batch (ADR-006)
+--
+-- Inti keputusan ADR-006 bagian kedua: Server Action untuk tindakan satu
+-- statement TIDAK membuka Batch sendiri. Batch yang dibuka dari TypeScript
+-- selalu kosong — `begin_batch` dan UPDATE-nya adalah dua request PostgREST,
+-- jadi dua transaksi, dan `app.batch_id` sudah hilang saat UPDATE tiba. Yang
+-- jadi catatan tindakan itu adalah Batch `edit` otomatis dari trigger, yang
+-- benar-benar memuat Revisi-nya.
+--
+-- Yang bisa dibuktikan dari sisi database ada dua, dan keduanya di bawah:
+-- (19.1) satu UPDATE telanjang menghasilkan tepat satu Batch yang memuat
+-- Revisi-nya, dan (19.2) tidak ada satu pun Batch kosong yang tertinggal —
+-- gejala yang pasti muncul kalau ada yang membuka Batch dari kode lagi.
+-- Sisi TypeScript-nya dijaga `tests/batchDiscipline.test.ts`.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- 19.1 Satu UPDATE tanpa Batch eksplisit -> satu Batch, dan Batch itu berisi
+--      Revisi-nya (bukan satu Batch bernama yang kosong + satu Batch yatim)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_id       uuid;
+  v_sebelum  integer;
+  v_sesudah  integer;
+  v_batches  uuid[];
+  v_batch    public.batches%rowtype;
+  v_n        integer;
+begin
+  insert into public.jabatan (kode, nama)
+  values ('UJI-1STMT', 'Jabatan Uji Satu Statement')
+  returning id into v_id;
+
+  -- Tiru persis apa yang dilakukan Server Action sekarang: satu UPDATE, tanpa
+  -- begin_batch sama sekali (lib/actions/_reference.ts langkah 5).
+  perform set_config('app.batch_id', '', true);
+  select count(*) into v_sebelum from public.batches;
+
+  update public.jabatan set nama = 'Jabatan Uji Satu Statement (baru)'
+   where id = v_id;
+
+  select count(*) into v_sesudah from public.batches;
+  if v_sesudah <> v_sebelum + 1 then
+    raise exception
+      'GAGAL: satu UPDATE tanpa Batch eksplisit menghasilkan % Batch (harus tepat 1)',
+      v_sesudah - v_sebelum;
+  end if;
+
+  -- Batch yang baru itu harus memuat Revisi-nya.
+  select array_agg(distinct r.batch_id) into v_batches
+  from public.revisions r
+  where r.table_name = 'jabatan' and r.row_id = v_id and r.action = 'update';
+
+  if coalesce(array_length(v_batches, 1), 0) <> 1 then
+    raise exception 'GAGAL: Revisi rename tersebar di % Batch (harus 1)',
+      coalesce(array_length(v_batches, 1), 0);
+  end if;
+
+  select * into v_batch from public.batches where id = v_batches[1];
+  if v_batch.jenis <> 'edit' then
+    raise exception 'GAGAL: Batch otomatis berjenis "%" (harus "edit")', v_batch.jenis;
+  end if;
+
+  select count(*) into v_n from public.revisions where batch_id = v_batch.id;
+  if v_n <> 1 then
+    raise exception 'GAGAL: Batch tindakan ini memuat % Revisi (harus 1)', v_n;
+  end if;
+
+  -- Sejak ADR-006 baris inilah yang paling sering muncul di halaman Log
+  -- Perubahan, jadi keterangannya dibaca staf HC — bukan developer yang sedang
+  -- mencari batch id yang hilang.
+  if v_batch.keterangan is null then
+    raise exception 'GAGAL: Batch otomatis tidak punya keterangan sama sekali';
+  end if;
+
+  raise notice
+    'OK   tindakan satu-statement -> tepat 1 Batch "edit" berisi Revisi-nya ("%")',
+    v_batch.keterangan;
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 19.2 TIDAK ADA Batch kosong di seluruh database
+--
+-- Satu Batch tanpa Revisi berarti ada yang membuka Batch dari TypeScript lagi
+-- — persis cacat yang ADR-006 tutup. Batch `merge` dan `revert` pun selalu
+-- berisi, karena fungsinya menolak rencana nol langkah sebelum membuka Batch.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_kosong integer;
+  v_contoh text;
+begin
+  select count(*) into v_kosong
+  from public.batches b
+  where not exists (select 1 from public.revisions r where r.batch_id = b.id);
+
+  if v_kosong > 0 then
+    select string_agg(
+             format('%s/%s', b.jenis, coalesce(b.keterangan, '(tanpa keterangan)')),
+             '; ')
+      into v_contoh
+    from public.batches b
+    where not exists (select 1 from public.revisions r where r.batch_id = b.id);
+
+    raise exception
+      'GAGAL: ada % Batch tanpa satu pun Revisi — Batch yang dibuka dari kode selalu kosong (ADR-006): %',
+      v_kosong, v_contoh;
+  end if;
+
+  raise notice 'OK   tidak ada satu pun Batch kosong di seluruh database';
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 19.3 Tidak ada keterangan Batch yang menyebut istilah internal
+--      (halaman Log Perubahan dibaca staf HC, bukan developer)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_buruk text;
+begin
+  select string_agg(distinct b.keterangan, '; ') into v_buruk
+  from public.batches b
+  where b.keterangan ~* '(trigger|log_revision|app\.batch_id|withBatch)';
+
+  if v_buruk is not null then
+    raise exception
+      'GAGAL: keterangan Batch menyebut istilah internal, padahal dibaca staf HC di halaman Log Perubahan: %',
+      v_buruk;
+  end if;
+
+  raise notice 'OK   tidak ada keterangan Batch yang menyebut istilah internal';
+end
+$$;
+
 \echo ''
 \echo '================ SEMUA ASSERTION LULUS ================'
 \echo ''
