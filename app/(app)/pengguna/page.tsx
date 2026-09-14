@@ -1,0 +1,18 @@
+import type { Metadata } from "next";
+
+import PagePlaceholder from "@/components/PagePlaceholder";
+
+// Live data only — never prerendered at build time. See ADR-005.
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Pengguna" };
+
+export default function Page() {
+  return (
+    <PagePlaceholder
+      judul={"Pengguna"}
+      keterangan={"Atur role admin / viewer untuk pengguna aplikasi."}
+      fitur={[21]}
+    />
+  );
+}

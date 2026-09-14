@@ -17,10 +17,12 @@ Next.js 15 App Router + TypeScript · Supabase (Postgres, Auth, RLS) · Vercel �
 ## Commands
 - `npm run dev` — dev server
 - `npm run lint` · `npm run typecheck` — wajib hijau sebelum commit
-- `npm test` — unit test (`lib/cleaning`, `lib/revisions/revert`, `lib/api/fields`)
-- `npx supabase db push` — apply migration ke project Supabase
-- `npx supabase gen types typescript --linked > lib/supabase/types.ts` — regenerate tipe setelah migration
+- `npm test` — cek nama kolom (`check:columns`) + unit test (`lib/cleaning`, `lib/revisions/revert`, `lib/api/fields`)
+- `npm run db:local` — start Postgres lokal, pasang `db/local/00-shim.sql` + `supabase/migrations/0001_init.sql`, jalankan `scripts/verify-schema.sql`
+- `npm run gen:types` — regenerate `lib/types/db.ts` & `lib/schema/columns.generated.ts` dari database lokal (menggantikan `supabase gen types`, yang tidak bisa jalan di sini — lihat ADR-005)
 - `npx tsx scripts/seed-from-excel.ts <file.xlsx>` — seed awal, sekali saja
+
+Supabase CLI (`supabase db push`, `supabase gen types`) **tidak tersedia** dan `supabase.com` diblokir proxy. Skema diverifikasi terhadap PostgreSQL 16 lokal; lihat ADR-005.
 
 ## Struktur
 ```
@@ -39,7 +41,11 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Route `api/v1` hanya membaca `v_employees_api`, `org_units`, `jabatan`, `lookups`. Tidak pernah `employee_private` / `v_employees_private`.
 - Kolom referensi di `employees` selalu FK (uuid) ke `org_units` / `jabatan` / `lookups`. Jangan tambah kolom teks bebas untuk hal yang punya daftar.
 - Kolom turunan (usia, masa kerja) dihitung di view atau `lib/derived/`; jangan disimpan.
-- Skema hanya berubah lewat file di `supabase/migrations/` — jangan ubah dari dashboard Supabase.
+- Skema hanya berubah lewat file di `supabase/migrations/` — jangan ubah dari dashboard Supabase. **`0001_init.sql` adalah satu-satunya file migration**; ubah di dalamnya, jangan tambah `0002_*.sql` (ADR-005).
+- `lib/types/db.ts` dan `lib/schema/columns.generated.ts` **auto-generated** — jangan diedit tangan; ubah migration lalu `npm run db:local && npm run gen:types`.
+- `components/ui/*` beku — pakai, jangan ubah.
+- Jangan menambah dependency. Semua yang dibutuhkan sudah ada di `package.json` (ADR-005).
+- Setiap `page.tsx` di `app/(app)/**` dan `route.ts` di `app/api/v1/**` wajib `export const dynamic = "force-dynamic"` (ADR-005 §6).
 - Daftar `tipe` lookup harus sama di `lib/validation/lookupTypes.ts` dan CHECK constraint migration.
 - Error API memakai satu envelope `{ error: { code, message, details } }` (lihat API-CONTRACT).
 - Cek role di Server Action **dan** RLS — keduanya, bukan salah satu.
