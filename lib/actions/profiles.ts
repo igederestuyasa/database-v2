@@ -13,18 +13,12 @@
  *     did it and when, and the Log Perubahan can revert it. Application code
  *     writing to `revisions` would duplicate the row and break that guarantee
  *     (ADR-003: the log is written by triggers, not by code).
- *   * **It does not open a Batch by hand.** This is ONE UPDATE of ONE row, and
- *     over PostgREST `withBatch()` cannot group it: `begin_batch` runs with
- *     `p_local = true` (ADR-005 §9), so `app.batch_id` dies with that RPC's
- *     transaction and the UPDATE — a separate HTTP request — never sees it.
- *     `lib/revisions/batch.ts` says so in its own header, and
- *     `lib/actions/_reference.ts` spells out the result: TWO rows in the Log
- *     Perubahan, one carrying the keterangan and one carrying the Revisi.
- *     For a single-statement action that is a worse log, not a better one, so
- *     the trigger's automatic Batch is used as-is. Nothing escapes the log
- *     either way, and the Revisi itself still records `before.role`,
- *     `after.role`, `actor_id` and the timestamp — which is the audit trail
- *     that matters for a promotion.
+ *   * **It does not open a Batch.** ADR-006: one statement, written directly,
+ *     and the trigger makes the Batch that holds the Revisi. Nothing in HC Core
+ *     opens a Batch from TypeScript any more, and `tests/batchDiscipline.test.ts`
+ *     fails the build if anything starts. The Revisi still records
+ *     `before.role`, `after.role`, `actor_id` and the timestamp, which is the
+ *     audit trail a promotion actually needs.
  *
  * The role check is here AND in RLS: `profiles_update` already requires
  * `is_admin()`, so a viewer who called this directly would get zero rows back.
