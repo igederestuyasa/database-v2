@@ -163,12 +163,12 @@ describe("findSimilarNames — Lookup", () => {
   it("memasangkan Lookup dengan tipe sama", () => {
     const temuan = findSimilarNames("lookup", [
       row({ id: "l1", kode: "JG-A", nama: "Pratama III - 13", tipe: "job_grade" }),
-      row({ id: "l2", kode: "JG-B", nama: "Pratama III-13", tipe: "job_grade" }),
+      row({ id: "l2", kode: "JG-B", nama: "PRATAMA III - 13", tipe: "job_grade" }),
     ]);
 
     expect(temuan).toHaveLength(1);
     expect(temuan[0].tipe).toBe("job_grade");
-    expect(temuan[0].perbedaan).toEqual(["spasi"]);
+    expect(temuan[0].perbedaan).toEqual(["kapitalisasi"]);
   });
 });
 

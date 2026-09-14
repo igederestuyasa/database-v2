@@ -30,12 +30,13 @@ import {
   type ReferenceRow,
   type TemuanNamaMirip,
 } from "@/lib/cleaning/findSimilar";
-import { listEmployees } from "@/lib/db/employees";
+import { listEmployees, type EmployeeListParams } from "@/lib/db/employees";
 import { listAllJabatan } from "@/lib/db/jabatan";
 import { listAllLookups } from "@/lib/db/lookups";
 import { listAllOrgUnits } from "@/lib/db/orgUnits";
 import { DbError, type DbClient } from "@/lib/db/shared";
-import { ORG_UNIT_TYPE_LABELS } from "@/lib/i18n/terms";
+import type { VEmployee } from "@/lib/types/db";
+import { ORG_UNIT_TYPE_LABELS, TERMS } from "@/lib/i18n/terms";
 import {
   isLookupType,
   LOOKUP_TYPE_LABELS,
@@ -62,20 +63,40 @@ export type BereskanData = {
     jabatan: EntityOption[];
     lookup: Record<string, EntityOption[]>;
   };
-  /** `id` → how many aktif Karyawan point at it. Feeds "… akan dipindahkan". */
+  /**
+   * `id` → how many Karyawan point at it, every status included, because that
+   * is what a Merge moves. `0` means counted-and-empty; a missing key means
+   * not counted at all.
+   */
   jumlahKaryawan: Record<string, number>;
   /** Anything the page must admit it could not show in full. */
   catatan: string[];
 };
 
 /**
- * How many Karyawan to read per "tanpa referensi" query.
+ * Hard ceiling on the "tanpa referensi" lists.
  *
- * `lib/db/shared.ts` caps a page at 500. If there are more than that, the page
- * says so rather than quietly showing a prefix — the whole point of this page
- * is knowing how much is left.
+ * There are ~1.500 Karyawan in total, so reaching this would mean nearly every
+ * one of them is missing a reference. If it ever is reached the page says so
+ * out loud (`catatan`) instead of presenting a prefix as the whole answer —
+ * the point of this page is knowing how much work is left.
  */
-const MAX_KARYAWAN = 500;
+const MAX_KARYAWAN = 2000;
+
+/**
+ * Rows per request when paging Karyawan.
+ *
+ * Kept **below PostgREST's `db-max-rows`** (1000 by default). That cap is
+ * applied server-side before any `limit` we ask for and comes back as a short
+ * array with no error — so a single 1.500-row read would look like a complete
+ * answer while quietly hiding 500 Karyawan. On a page whose whole job is to say
+ * whether the data is clean, "clean" must never come from a read that was cut
+ * short, so we ask for less than the cap and page instead.
+ */
+const PER_PAGE = 500;
+
+/** The PostgREST default row cap, used to spot a truncated read. */
+const CAP_POSTGREST = 1000;
 
 /** `in(...)` chunk size — keeps the PostgREST query string well under any URL cap. */
 const CHUNK = 100;
@@ -96,93 +117,106 @@ function chunked<T>(values: readonly T[], size = CHUNK): T[][] {
 }
 
 /**
- * Refuse a truncated tally.
+ * Count Karyawan per FK value, for the ids given — paged, and verified.
  *
- * PostgREST answers `count: "exact"` with the number of matching rows even
- * when it returns fewer of them, so the two disagreeing is exactly the signal
- * that something capped the result. Failing here is deliberate: the number
- * this feeds is read immediately before a Merge that moves people, and a
- * silently low one would be worse than no page at all (same reasoning as
- * `getOrgUnitDescendantIds()` in `lib/db/orgUnits.ts`).
- */
-function assertLengkap(count: number | null, diterima: number): void {
-  if ((count ?? diterima) > diterima) {
-    throw new Error(
-      `Jumlah Karyawan yang dibaca terpotong (${diterima} dari ${count}); hitungan "akan dipindahkan" tidak bisa dipercaya. Tambahkan pagination sebelum melanjutkan.`,
-    );
-  }
-}
-
-/**
- * Count Karyawan per `employees.org_unit_id`, for the ids given.
+ * WHY IT PAGES
+ * PostgREST applies `db-max-rows` (1000 by default) before any range we ask
+ * for, and a capped answer is a short array with no error. One chunk of ids can
+ * easily match more Karyawan than that, so a single read would tally only part
+ * of them and report a number that is quietly too low — right where the user is
+ * about to press Merge. So: read a window below the cap, keep going until the
+ * exact `count` is accounted for, and throw if we ever stop short of it.
  *
- * One read per chunk of ids and a tally in memory, rather than one `count`
- * request per candidate: a first cleanup pass can have hundreds of candidates,
- * and that would be hundreds of round trips for one page render.
- *
- * **Every status is counted, not just aktif.** `merge_org_unit` moves rows with
- * `where org_unit_id = p_source` and no status predicate
- * (`0002_batch_operations.sql`), so a count that skipped nonaktif Karyawan
+ * WHY EVERY STATUS COUNTS
+ * `merge_org_unit` / `merge_jabatan` / `merge_lookup` move rows with
+ * `where <kolom> = p_source` and no status predicate
+ * (`0002_batch_operations.sql`), so a tally that skipped nonaktif Karyawan
  * would promise to move fewer people than the Merge actually moves.
  *
  * Ids with no Karyawan are seeded to `0`, so "0 Karyawan" — the safest merge
- * there is — reads differently from "not counted".
+ * there is — reads differently from "belum dihitung".
+ *
+ * `column` is never caller text: it is `org_unit_id`, `jabatan_id`, or the
+ * column the frozen `LOOKUP_TYPE_TO_EMPLOYEE_COLUMN` map assigns to a tipe.
  */
+async function tallyByColumn(
+  client: DbClient,
+  column: string,
+  ids: readonly string[],
+  konteks: string,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
+
+  for (const chunk of chunked(ids)) {
+    let dibaca = 0;
+    let total = 0;
+
+    for (;;) {
+      // hc-check-columns-ignore — `column` is an employees FK column chosen by
+      // the caller from a frozen list, never from user input.
+      const { data, count, error } = await client
+        .from("employees")
+        .select(column, { count: "exact" })
+        .in(column, chunk)
+        // Stable order, or a range-paged read can show one row twice and miss
+        // another as Postgres re-orders equal keys.
+        .order("id", { ascending: true })
+        .range(dibaca, dibaca + PER_PAGE - 1);
+      if (error) throw new DbError(konteks, error);
+
+      const rows = (data ?? []) as unknown as Record<string, string | null>[];
+      total = count ?? rows.length;
+      for (const row of rows) {
+        const id = row[column];
+        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      dibaca += rows.length;
+
+      if (rows.length === 0) break;
+      if (dibaca >= total) break;
+      if (dibaca >= MAX_COUNT_ROWS) break;
+    }
+
+    if (dibaca < total) {
+      // Never show a number we know is short: this one is read immediately
+      // before a Merge that moves people (same reasoning as
+      // `getOrgUnitDescendantIds()` in `lib/db/orgUnits.ts`).
+      throw new Error(
+        `${konteks}: baru ${dibaca} dari ${total} baris yang terbaca, jadi hitungan "akan dipindahkan" tidak bisa dipercaya. Tambahkan pagination sebelum melanjutkan.`,
+      );
+    }
+  }
+
+  return counts;
+}
+
+/** Karyawan per `employees.org_unit_id`. */
 async function countByOrgUnit(
   client: DbClient,
   ids: readonly string[],
 ): Promise<Map<string, number>> {
-  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
-
-  for (const chunk of chunked(ids)) {
-    const { data, count, error } = await client
-      .from("employees")
-      .select("org_unit_id", { count: "exact" })
-      .in("org_unit_id", chunk)
-      .range(0, MAX_COUNT_ROWS - 1);
-    if (error) throw new DbError("Gagal menghitung Karyawan per Unit Organisasi", error);
-
-    const rows = data ?? [];
-    assertLengkap(count, rows.length);
-    for (const row of rows) {
-      const id = row.org_unit_id;
-      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-  }
-  return counts;
+  return tallyByColumn(
+    client,
+    "org_unit_id",
+    ids,
+    "Gagal menghitung Karyawan per Unit Organisasi",
+  );
 }
 
-/** The same tally for `employees.jabatan_id`. */
+/** Karyawan per `employees.jabatan_id`. */
 async function countByJabatan(
   client: DbClient,
   ids: readonly string[],
 ): Promise<Map<string, number>> {
-  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
-
-  for (const chunk of chunked(ids)) {
-    const { data, count, error } = await client
-      .from("employees")
-      .select("jabatan_id", { count: "exact" })
-      .in("jabatan_id", chunk)
-      .range(0, MAX_COUNT_ROWS - 1);
-    if (error) throw new DbError("Gagal menghitung Karyawan per Jabatan", error);
-
-    const rows = data ?? [];
-    assertLengkap(count, rows.length);
-    for (const row of rows) {
-      const id = row.jabatan_id;
-      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-  }
-  return counts;
+  return tallyByColumn(client, "jabatan_id", ids, "Gagal menghitung Karyawan per Jabatan");
 }
 
 /**
- * The same tally for Lookup, one query per tipe involved.
+ * Karyawan per Lookup, one tally per tipe involved.
  *
  * The `employees` column is chosen by tipe through the frozen
- * `LOOKUP_TYPE_TO_EMPLOYEE_COLUMN` map — never from anything a caller typed —
- * so this can only ever reach the column that tipe owns.
+ * `LOOKUP_TYPE_TO_EMPLOYEE_COLUMN` map, so this can only ever reach the column
+ * that tipe owns — the same rule `merge_lookup` follows in SQL.
  */
 async function countByLookup(
   client: DbClient,
@@ -192,27 +226,72 @@ async function countByLookup(
 
   for (const [tipe, ids] of idsByTipe) {
     if (!isLookupType(tipe) || ids.length === 0) continue;
-    const column = LOOKUP_TYPE_TO_EMPLOYEE_COLUMN[tipe];
-    for (const id of ids) counts.set(id, 0);
-
-    for (const chunk of chunked(ids)) {
-      // hc-check-columns-ignore — `column` comes from the frozen tipe→kolom map.
-      const { data, count, error } = await client
-        .from("employees")
-        .select(column, { count: "exact" })
-        .in(column, chunk)
-        .range(0, MAX_COUNT_ROWS - 1);
-      if (error) throw new DbError("Gagal menghitung Karyawan per Lookup", error);
-
-      const rows = (data ?? []) as unknown as Record<string, string | null>[];
-      assertLengkap(count, rows.length);
-      for (const row of rows) {
-        const id = row[column];
-        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-      }
-    }
+    const perTipe = await tallyByColumn(
+      client,
+      LOOKUP_TYPE_TO_EMPLOYEE_COLUMN[tipe],
+      ids,
+      "Gagal menghitung Karyawan per Lookup",
+    );
+    for (const [id, jumlah] of perTipe) counts.set(id, jumlah);
   }
   return counts;
+}
+
+/**
+ * Every matching Karyawan, paged until the exact count is accounted for.
+ *
+ * `Paged.total` comes from PostgREST's `count: "exact"`, which is **not**
+ * subject to `db-max-rows` — so comparing what arrived against it is how a
+ * truncated read is detected at all. `lengkap: false` means the caller must say
+ * so on screen rather than present the list as the complete answer: a
+ * data-cleaning page that reports "bersih" for rows it never read is worse than
+ * one that admits it cannot see them.
+ *
+ * The order (`full_name`, then `personnel_number` as a tie-break inside
+ * `listEmployees`) is stable, so paging cannot show one row twice and miss
+ * another.
+ */
+async function listEmployeesAll(
+  client: DbClient,
+  filter: Pick<EmployeeListParams, "orgUnitId" | "jabatanId">,
+): Promise<{ rows: VEmployee[]; total: number; lengkap: boolean }> {
+  const rows: VEmployee[] = [];
+  let total = 0;
+
+  for (let page = 1; ; page += 1) {
+    const halaman = await listEmployees(client, {
+      ...filter,
+      status: "aktif",
+      orderBy: "full_name",
+      page,
+      perPage: PER_PAGE,
+    });
+    total = halaman.total;
+    rows.push(...halaman.rows);
+
+    // Nothing came back, everything is accounted for, or the server handed
+    // back less than asked (the `db-max-rows` signature) — stop either way.
+    if (halaman.rows.length === 0) break;
+    if (rows.length >= total) break;
+    if (halaman.rows.length < PER_PAGE) break;
+    if (rows.length >= MAX_KARYAWAN) break;
+  }
+
+  return { rows, total, lengkap: rows.length >= total };
+}
+
+/**
+ * Warn when a read stopped exactly on PostgREST's default row cap.
+ *
+ * `lib/db/**` asks for these lists with a `limit` far above the cap, and a
+ * capped response is indistinguishable from a complete one — except that it
+ * lands on precisely 1000 rows. That is a heuristic, not proof, so this is a
+ * note on the page rather than an exception; HK has a few hundred Unit
+ * Organisasi (ARCHITECTURE.md §7), so it should never fire.
+ */
+function peringatanCap(jumlah: number, label: string): string | null {
+  if (jumlah !== CAP_POSTGREST) return null;
+  return `Daftar ${label} berhenti tepat di ${CAP_POSTGREST} baris — persis batas bawaan PostgREST (db-max-rows). ${TERMS.temuan} di bawah mungkin belum lengkap.`;
 }
 
 /** Read everything, run the rules, and shape the page's props. */
@@ -226,30 +305,28 @@ export async function loadBereskan(client: DbClient): Promise<BereskanData> {
   ]);
 
   const [tanpaUnit, tanpaJabatan] = await Promise.all([
-    listEmployees(client, {
-      orgUnitId: null,
-      status: "aktif",
-      perPage: MAX_KARYAWAN,
-      orderBy: "full_name",
-    }),
-    listEmployees(client, {
-      jabatanId: null,
-      status: "aktif",
-      perPage: MAX_KARYAWAN,
-      orderBy: "full_name",
-    }),
+    listEmployeesAll(client, { orgUnitId: null }),
+    listEmployeesAll(client, { jabatanId: null }),
   ]);
 
   const catatan: string[] = [];
-  if (tanpaUnit.total > tanpaUnit.rows.length) {
+  if (!tanpaUnit.lengkap) {
     catatan.push(
-      `Menampilkan ${tanpaUnit.rows.length} dari ${tanpaUnit.total} Karyawan tanpa Unit Organisasi.`,
+      `Menampilkan ${tanpaUnit.rows.length} dari ${tanpaUnit.total} ${TERMS.karyawan} tanpa ${TERMS.unitOrganisasi} — daftar di bawah belum lengkap.`,
     );
   }
-  if (tanpaJabatan.total > tanpaJabatan.rows.length) {
+  if (!tanpaJabatan.lengkap) {
     catatan.push(
-      `Menampilkan ${tanpaJabatan.rows.length} dari ${tanpaJabatan.total} Karyawan tanpa Jabatan.`,
+      `Menampilkan ${tanpaJabatan.rows.length} dari ${tanpaJabatan.total} ${TERMS.karyawan} tanpa ${TERMS.jabatan} — daftar di bawah belum lengkap.`,
     );
+  }
+  for (const [jumlah, label] of [
+    [orgUnits.length, TERMS.unitOrganisasi],
+    [jabatan.length, TERMS.jabatan],
+    [lookups.length, TERMS.lookup],
+  ] as const) {
+    const peringatan = peringatanCap(jumlah, label);
+    if (peringatan) catatan.push(peringatan);
   }
 
   const namaUnitById = new Map(orgUnits.map((unit) => [unit.id, unit.nama]));

@@ -11,17 +11,20 @@
  *
  * WHY THESE ARE HERE AND NOT IN `lib/actions/`
  * ---------------------------------------------------------------------------
- * `lib/actions/orgUnits.ts`, `lib/actions/jabatan.ts` and
- * `lib/actions/lookups.ts` belong to the Struktur Organisasi, Jabatan and
- * Master Data units, which are being written in parallel with this one. This
- * unit must not create those files, so the three renames "Perlu Dibereskan"
- * needs are colocated with the route that calls them. Everything that matters
- * about the convention is kept: the write still goes through a Server Action,
- * still guards, still validates with the **frozen** shared zod schemas, still
- * returns `ActionResult`, and there is still nothing writing to the database
- * from a Client Component. When the three entity action files land, these
- * should be deleted and their callers pointed at them — the input and output
- * types are already the shared ones, so that is an import change.
+ * `lib/actions/orgUnits.ts` and `lib/actions/jabatan.ts` belong to the Struktur
+ * Organisasi and Jabatan units, which are being written in parallel with this
+ * one. This unit must not create those files, so the two renames "Perlu
+ * Dibereskan" needs are colocated with the route that calls them. Everything
+ * that matters about the convention is kept: the write still goes through a
+ * Server Action, still guards, still validates with the **frozen** shared zod
+ * schemas, still returns `ActionResult`, and there is still nothing writing to
+ * the database from a Client Component. When those two entity action files
+ * land, these should be deleted and their callers pointed at them — the input
+ * and output types are already the shared ones, so that is an import change.
+ *
+ * `lib/actions/lookups.ts` has already landed, so `renameLookup()` below does
+ * exactly that: it delegates instead of writing a third path to the same
+ * column.
  *
  * Shape copied from `lib/actions/_reference.ts`, step for step: validate →
  * `requireAdmin()` → read current row → ONE statement → revalidate → return.
@@ -32,12 +35,12 @@ import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 
 import { getJabatanById } from "@/lib/db/jabatan";
-import { getLookupById } from "@/lib/db/lookups";
 import { getOrgUnitById } from "@/lib/db/orgUnits";
 import { DbError } from "@/lib/db/shared";
 import { jabatanRenameSchema, type JabatanRenameInput } from "@/lib/validation/jabatan";
 import { lookupRenameSchema, type LookupRenameInput } from "@/lib/validation/lookup";
 import { orgUnitRenameSchema, type OrgUnitRenameInput } from "@/lib/validation/orgUnit";
+import { updateLookup } from "@/lib/actions/lookups";
 
 import {
   actionInvalid,
@@ -150,11 +153,18 @@ export async function renameJabatan(
 }
 
 /**
- * Ganti label Lookup (PRD #9).
+ * Ganti label Lookup (PRD #9) — delegated, not reimplemented.
  *
- * The column is `label`, not `nama` — `lookupRenameSchema` says so, and the
- * result is reported as `nama` only so the three renames share one shape for
- * the dialog that calls them.
+ * `lib/actions/lookups.ts` landed while this page was being built, and its
+ * `updateLookup()` already owns the single-row write for a Lookup: it sends
+ * only the fields that moved, refuses to reactivate a row that was merged
+ * away, and revalidates `/bereskan` among others. A second UPDATE path to the
+ * same column would be one more place for those rules to fall out of step, so
+ * this is a thin adapter — it exists only to keep the dialog's one shape
+ * (`{ id, nama }`) across all three kinds.
+ *
+ * The column really is `label`, not `nama` (CONTEXT.md); `lookupRenameSchema`
+ * validates that here before the shared action validates it again.
  */
 export async function renameLookup(
   input: LookupRenameInput,
@@ -163,25 +173,7 @@ export async function renameLookup(
   if (!parsed.success) return actionInvalid(parsed.error);
   const { id, label } = parsed.data;
 
-  try {
-    const { client } = await requireAdmin();
-
-    const current = await getLookupById(client, id);
-    if (!current) throw new ActionError("TIDAK_DITEMUKAN", "Lookup tidak ditemukan.");
-    if (current.label === label) return actionOk({ id: current.id, nama: current.label });
-
-    const { data, error } = await client
-      .from("lookups")
-      .update({ label })
-      .eq("id", id)
-      .select("id, label")
-      .single();
-
-    if (error) throw updateError("Gagal mengganti label Lookup", error);
-
-    revalidate(["/master-data"]);
-    return actionOk({ id: data.id, nama: data.label });
-  } catch (error) {
-    return toActionFailure(error);
-  }
+  const hasil = await updateLookup({ id, label });
+  if (!hasil.ok) return hasil;
+  return actionOk({ id: hasil.data.id, nama: hasil.data.label });
 }
