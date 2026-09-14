@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { isAdmin } from "@/lib/actions/_guard";
-import { listAllJabatan } from "@/lib/db/jabatan";
+import { listAllJabatan, listJabatan } from "@/lib/db/jabatan";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,13 +23,33 @@ export default async function Page({ searchParams }: PageProps) {
   const status = bacaStatusFilter((await searchParams).status);
 
   const client = await createClient();
-  // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya ratusan,
-  // dan daftar utuh itu juga yang menjadi calon tujuan Merge — filter di layar
-  // tidak boleh membuat sebuah Jabatan hilang dari pilihan.
-  const [rows, admin] = await Promise.all([
+  const [rows, halamanPertama, admin] = await Promise.all([
+    // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya
+    // ratusan, dan daftar utuh itu juga yang menjadi calon tujuan Merge —
+    // filter di layar tidak boleh membuat sebuah Jabatan hilang dari pilihan.
     listAllJabatan(client, { status: "semua" }),
+    // Satu baris saja, diambil hanya untuk `total`-nya: `count: "exact"` dari
+    // PostgREST dihitung di database dan tidak ikut dipotong batas baris.
+    listJabatan(client, { status: "semua", perPage: 1 }),
     isAdmin(),
   ]);
+
+  /**
+   * Apakah daftar di atas utuh?
+   *
+   * PostgREST punya batas `db-max-rows` sendiri (bawaan 1000) yang berlaku
+   * SEBELUM `.limit()` milik pemanggil, dan pemotongannya **dilaporkan sebagai
+   * sukses**. `listAllJabatan` meminta 5001 baris dan baru mengeluh kalau
+   * menerima lebih dari 5000, jadi potongan di angka 1000 lolos tanpa suara:
+   * daftarnya pendek, filternya pendek, dan — yang paling berbahaya — daftar
+   * calon tujuan Merge ikut pendek tanpa ada yang tahu.
+   *
+   * Karena itu jumlah baris yang benar-benar diterima dibandingkan dengan
+   * hitungan pasti dari database. Kalau kurang, halaman mengatakannya alih-alih
+   * memajang daftar yang diam-diam tidak lengkap.
+   */
+  const totalJabatan = halamanPertama.total;
+  const terpotong = rows.length < totalJabatan;
 
   return (
     <div className="space-y-6">
@@ -44,6 +64,22 @@ export default async function Page({ searchParams }: PageProps) {
           kuota, atau unit di halaman ini.
         </p>
       </header>
+
+      {terpotong ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+        >
+          <p className="font-medium">Daftar ini belum lengkap.</p>
+          <p className="mt-1 text-muted-foreground">
+            Baru {rows.length} dari {totalJabatan} {TERMS.jabatan} yang berhasil
+            dimuat, karena database membatasi jumlah baris per permintaan.
+            Pencarian, filter, dan terutama daftar tujuan Gabungkan di halaman
+            ini ikut tidak lengkap — jangan memakainya untuk memutuskan Merge
+            sampai batas itu dinaikkan atau daftarnya dibuat berhalaman.
+          </p>
+        </div>
+      ) : null}
 
       <JabatanTable rows={rows} status={status} isAdmin={admin} />
     </div>

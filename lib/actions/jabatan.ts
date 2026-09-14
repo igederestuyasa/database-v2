@@ -4,10 +4,20 @@
  * Server Actions untuk Jabatan (PRD #8) — tambah, ganti nama, dan
  * nonaktifkan/aktifkan.
  *
- * Bentuknya mengikuti `lib/actions/_reference.ts` langkah demi langkah:
- * validasi zod → `requireAdmin()` → baca baris sekarang → tulis di dalam
- * `withBatch()` → `revalidatePath()` → kembalikan `ActionResult`, tidak pernah
- * melempar.
+ * Bentuknya mengikuti enam langkah `lib/actions/_reference.ts`: validasi zod →
+ * `requireAdmin()` → baca baris sekarang → tulis SATU statement langsung →
+ * `revalidatePath()` → kembalikan `ActionResult`, tidak pernah melempar.
+ *
+ * Tidak ada Batch yang dibuka di sini, dan itu disengaja (ADR-006). Ketiga
+ * tindakan di bawah masing-masing satu statement, jadi trigger `log_revision`
+ * yang membuat Batch-nya — dan Batch itulah yang memuat Revisi-nya, satu baris
+ * di Log Perubahan per tindakan. Konsekuensinya yang perlu diketahui saat
+ * membaca `/log`: ketiganya muncul sebagai Batch `edit` berketerangan
+ * "Perubahan data". `jenis` yang spesifik (`create`, `rename`, `deactivate`)
+ * hanya pernah ditulis fungsi RPC di `0002_batch_operations.sql`, dan tidak ada
+ * satu pun di antaranya untuk Jabatan. Yang membuat sebuah penonaktifan tetap
+ * terbaca bukan judul Batch-nya, melainkan `revisions.before/after` yang
+ * menunjukkan kolom `status` bergerak.
  *
  * Dua hal yang membentuk seluruh file ini:
  *
@@ -20,9 +30,9 @@
  *     `v_employees.jabatan_nama`. Kalau sebuah rename sampai menulis ke
  *     `employees`, itu tandanya salah.
  *
- * Merge (PRD #10) TIDAK ada di sini: satu operasi banyak baris sudah punya
- * rumahnya sendiri di `lib/actions/merge.ts:mergeJabatan`, dan menuliskannya
- * ulang dalam TypeScript justru memecahnya menjadi beberapa Batch.
+ * Merge (PRD #10) TIDAK ada di sini: memindahkan semua pemegang, menonaktifkan
+ * asal, dan mencatat tujuannya adalah tiga statement, jadi tempatnya satu
+ * fungsi Postgres — `merge_jabatan`, dipanggil lewat `lib/actions/merge.ts`.
  */
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -33,7 +43,6 @@ import {
   getJabatanByKode,
 } from "@/lib/db/jabatan";
 import { DbError } from "@/lib/db/shared";
-import { batchKeterangan, withBatch } from "@/lib/revisions/batch";
 import { statusSchema, uuidField } from "@/lib/validation/common";
 import {
   jabatanCreateSchema,
@@ -108,28 +117,18 @@ export async function createJabatan(
       );
     }
 
-    const { result } = await withBatch(
-      client,
-      {
-        jenis: "create",
-        keterangan: batchKeterangan("Tambah Jabatan", null, `${kode} — ${nama}`),
-      },
-      async ({ client: tx }) => {
-        const { data, error } = await tx
-          .from("jabatan")
-          .insert({ kode, nama, status })
-          .select("id, kode, nama, status")
-          .single();
+    const { data, error } = await client
+      .from("jabatan")
+      .insert({ kode, nama, status })
+      .select("id, kode, nama, status")
+      .single();
 
-        if (error) throw new DbError("Gagal menambah Jabatan", error);
-        return data;
-      },
-    );
+    if (error) throw new DbError("Gagal menambah Jabatan", error);
 
     revalidatePath("/jabatan");
     revalidatePath("/karyawan");
 
-    return actionOk(result);
+    return actionOk(ringkas(data));
   } catch (error) {
     return toActionFailure(asActionError(error));
   }
@@ -159,32 +158,22 @@ export async function renameJabatan(
 
     // Tidak ada yang berubah. `log_revision` toh mengabaikan update yang hanya
     // menggeser `updated_at`, jadi berhenti di sini menjaga Log Perubahan
-    // bersih dari Batch kosong.
+    // bersih dari baris yang tidak mencatat apa pun.
     if (current.nama === nama) return actionOk(ringkas(current));
 
-    const { result } = await withBatch(
-      client,
-      {
-        jenis: "rename",
-        keterangan: batchKeterangan("Ganti nama Jabatan", current.nama, nama),
-      },
-      async ({ client: tx }) => {
-        const { data, error } = await tx
-          .from("jabatan")
-          .update({ nama })
-          .eq("id", id)
-          .select("id, kode, nama, status")
-          .single();
+    const { data, error } = await client
+      .from("jabatan")
+      .update({ nama })
+      .eq("id", id)
+      .select("id, kode, nama, status")
+      .single();
 
-        if (error) throw new DbError("Gagal mengganti nama Jabatan", error);
-        return data;
-      },
-    );
+    if (error) throw new DbError("Gagal mengganti nama Jabatan", error);
 
     revalidatePath("/jabatan");
     revalidatePath("/karyawan");
 
-    return actionOk(result);
+    return actionOk(ringkas(data));
   } catch (error) {
     return toActionFailure(asActionError(error));
   }
@@ -197,6 +186,10 @@ export async function renameJabatan(
  * selamanya, sehingga Karyawan yang memegangnya, Revisi lama, dan Konsumen
  * yang menyimpan id-nya semuanya tetap bisa diselesaikan. Menonaktifkan
  * **tidak** memindahkan pemegangnya — itu pekerjaan Merge (PRD #10).
+ *
+ * Kedua arah adalah `UPDATE` satu kolom yang sama, jadi keduanya masuk Batch
+ * `edit` otomatis; yang membedakannya di Log Perubahan adalah `status` di
+ * `before`/`after` Revisi-nya.
  */
 export async function setJabatanStatus(
   input: JabatanStatusInput,
@@ -214,36 +207,19 @@ export async function setJabatanStatus(
     }
     if (current.status === status) return actionOk(ringkas(current));
 
-    const { result } = await withBatch(
-      client,
-      {
-        // Daftar `BATCH_JENIS` tidak punya "activate", dan memberi label
-        // `deactivate` pada pengaktifan kembali akan membuat Log Perubahan
-        // membaca "Nonaktifkan" untuk perubahan yang justru sebaliknya.
-        jenis: status === "nonaktif" ? "deactivate" : "edit",
-        keterangan: batchKeterangan(
-          status === "nonaktif" ? "Nonaktifkan Jabatan" : "Aktifkan Jabatan",
-          null,
-          `${current.kode} — ${current.nama}`,
-        ),
-      },
-      async ({ client: tx }) => {
-        const { data, error } = await tx
-          .from("jabatan")
-          .update({ status })
-          .eq("id", id)
-          .select("id, kode, nama, status")
-          .single();
+    const { data, error } = await client
+      .from("jabatan")
+      .update({ status })
+      .eq("id", id)
+      .select("id, kode, nama, status")
+      .single();
 
-        if (error) throw new DbError("Gagal mengubah status Jabatan", error);
-        return data;
-      },
-    );
+    if (error) throw new DbError("Gagal mengubah status Jabatan", error);
 
     revalidatePath("/jabatan");
     revalidatePath("/karyawan");
 
-    return actionOk(result);
+    return actionOk(ringkas(data));
   } catch (error) {
     return toActionFailure(asActionError(error));
   }
@@ -285,19 +261,45 @@ function ringkas(row: {
 }
 
 /**
- * Terjemahkan pelanggaran UNIQUE dari Postgres menjadi pesan yang bisa dibaca.
+ * Terjemahkan penolakan dari database menjadi pesan yang bisa dibaca staf HC.
  *
- * Dua admin yang menyimpan kode yang sama dalam sekejap akan lolos dari
- * pengecekan di atas dan ditangkap oleh constraint; tanpa ini, staf HC membaca
- * "duplicate key value violates unique constraint jabatan_kode_key".
+ * Tiga yang bisa sampai ke sini, dan ketiganya tidak boleh muncul sebagai
+ * "Gagal menyimpan perubahan. Coba lagi.":
+ *
+ *   * `23505` — dua admin menyimpan kode yang sama dalam sekejap: yang kedua
+ *     lolos pengecekan `getJabatanByKode` dan ditangkap UNIQUE. Tanpa ini staf
+ *     HC membaca "duplicate key value violates unique constraint
+ *     jabatan_kode_key".
+ *   * `PGRST116` — **penolakan RLS pada UPDATE**, dan bentuknya menipu. Policy
+ *     `jabatan_update` ditulis `using (is_admin())`, jadi tulisan dari yang
+ *     bukan admin tidak melempar `insufficient_privilege`; ia hanya cocok
+ *     dengan NOL baris, lalu `.single()` mengeluh "tidak ada baris". Di sini
+ *     baris itu jelas ada — baru saja dibaca — jadi nol baris berarti
+ *     tulisannya yang ditolak, bukan barisnya yang hilang.
+ *   * `42501` — penolakan yang memang melempar: `with check` pada INSERT, dan
+ *     `assert_admin()` di fungsi RPC.
+ *
+ * `requireAdmin()` di setiap action seharusnya sudah menyaring semuanya; ini
+ * lapis keduanya (CLAUDE.md: "Cek role di Server Action **dan** RLS"), untuk
+ * saat role berubah di tengah request atau sesi habis setelah guard lewat.
  */
 function asActionError(error: unknown): unknown {
-  if (error instanceof DbError && error.code === "23505") {
+  if (!(error instanceof DbError)) return error;
+
+  if (error.code === "23505") {
     return new ActionError(
       "KONFLIK",
       "Kode Jabatan itu sudah dipakai. Muat ulang halaman lalu coba lagi.",
       { kode: "Kode Jabatan sudah dipakai." },
     );
   }
+
+  if (error.code === "PGRST116" || error.code === "42501") {
+    return new ActionError(
+      "BUKAN_ADMIN",
+      "Perubahan ditolak database: akun Anda tidak berhak mengubah Jabatan. Muat ulang halaman, lalu hubungi admin HC Core kalau masih ditolak.",
+    );
+  }
+
   return error;
 }

@@ -288,11 +288,23 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
     ubahStatus,
   ]);
 
+  /**
+   * Calon tujuan Merge: semua Jabatan lain, disaring hanya untuk membuang
+   * sumbernya sendiri.
+   *
+   * Sengaja TIDAK menyaring yang nonaktif. Merge ada justru untuk membereskan
+   * data kotor, dan kasus yang paling sering adalah ejaan kembar di mana yang
+   * "benar" kebetulan sudah dinonaktifkan orang lain; menyembunyikannya dari
+   * daftar berarti menutup satu-satunya jalan membereskannya. `EntityPicker`
+   * memang dirancang menampilkan yang nonaktif dengan tanda, bukan
+   * menghilangkannya. Aturan sahnya sebuah Merge — sumber ≠ tujuan, dan tidak
+   * ada yang sudah pernah digabungkan — ditegakkan di dalam `merge_jabatan`,
+   * tempat yang tidak bisa dilewati; menebak-nebak aturan tambahan di sini
+   * hanya akan memblokir kasus yang seharusnya bisa dibereskan.
+   */
   const kandidatMerge = React.useMemo(() => {
     if (!sumberMerge) return [];
-    return toJabatanOptions(
-      rows.filter((row) => row.id !== sumberMerge.id && row.status === "aktif"),
-    );
+    return toJabatanOptions(rows.filter((row) => row.id !== sumberMerge.id));
   }, [rows, sumberMerge]);
 
   const pemegangTarget =
@@ -420,28 +432,34 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
 
       {/*
         Merge (PRD #10). Dialog dan aksinya milik unit Merge
-        (`components/shared/MergeDialog.tsx` → `lib/actions/merge.ts`);
-        halaman ini hanya menyerahkan sumber, calon tujuan, dan jumlah pemegang
-        yang akan pindah — logika merge-nya sendiri tetap satu RPC di database,
-        tidak pernah ditulis ulang di sini.
+        (`components/shared/MergeDialog.tsx` → `lib/actions/merge.ts` →
+        `merge_jabatan`); halaman ini hanya menyerahkan sumber, calon tujuan,
+        dan jumlah pemegang yang akan pindah. Seluruh pemindahannya satu
+        transaksi di database, tidak pernah ditulis ulang di sini (ADR-006).
+
+        Dipasang hanya saat dibuka, supaya `source` selalu ada dan pilihan
+        tujuan tidak tertinggal dari baris sebelumnya.
       */}
       {sumberMerge ? (
-        <BatasGagalMerge onTutup={() => setSumberMerge(null)}>
-          <MergeDialog
-            kind="jabatan"
-            open
-            onOpenChange={(open) => {
-              if (!open) setSumberMerge(null);
-            }}
-            source={toJabatanOptions([sumberMerge])[0]}
-            candidates={kandidatMerge}
-            affectedCount={pemegangSumber?.jumlah?.total}
-            onMerged={() => {
-              setSumberMerge(null);
-              router.refresh();
-            }}
-          />
-        </BatasGagalMerge>
+        <MergeDialog
+          kind="jabatan"
+          open
+          onOpenChange={(open) => {
+            if (!open) setSumberMerge(null);
+          }}
+          source={toJabatanOptions([sumberMerge])[0]}
+          candidates={kandidatMerge}
+          affectedCount={pemegangSumber?.jumlah?.total}
+          // HANYA menyegarkan. Jangan menutup dialognya di sini: `onMerged`
+          // dipanggil tepat sebelum MergeDialog menampilkan layar "Merge
+          // selesai", dan layar itulah yang memuat tautan ke Batch yang bisa
+          // membatalkan Merge tadi. Menutup dari sini menghapus satu-satunya
+          // tempat pemakainya bisa membaca cara mengembalikannya.
+          // Penutupan tetap lewat `onOpenChange` di atas.
+          onMerged={() => {
+            router.refresh();
+          }}
+        />
       ) : null}
     </>
   );
@@ -457,63 +475,6 @@ function kalimatPemegang(pemegang: Pemegang | null): string {
     return `Belum ada ${TERMS.karyawan} yang memegang ${TERMS.jabatan} ini.`;
   }
   return `${pemegang.jumlah.total} ${TERMS.karyawan} memegang ${TERMS.jabatan} ini (${pemegang.jumlah.aktif} di antaranya aktif). Menonaktifkan tidak memindahkan mereka.`;
-}
-
-/**
- * Jaring pengaman untuk dialog milik unit lain.
- *
- * `MergeDialog` adalah komponen bersama yang dipakai empat halaman, dan
- * halaman Jabatan tidak mengendalikan isinya. Tanpa batas ini, satu kesalahan
- * saat dialog itu dirender akan menjatuhkan seluruh rute — daftar Jabatan,
- * filter, dan posisi gulir ikut hilang hanya karena sebuah dialog. Dengan
- * batas ini, yang gagal hanya dialognya, dan admin masih bisa memakai daftar
- * serta jalur lain (Ubah, Nonaktifkan) seperti biasa.
- *
- * React hanya menyediakan error boundary lewat class component; itu sebabnya
- * satu-satunya class di unit ini ada di sini.
- */
-class BatasGagalMerge extends React.Component<
-  { children: React.ReactNode; onTutup: () => void },
-  { gagal: boolean }
-> {
-  constructor(props: { children: React.ReactNode; onTutup: () => void }) {
-    super(props);
-    this.state = { gagal: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { gagal: true };
-  }
-
-  componentDidCatch(error: unknown) {
-    console.error("[jabatan] MergeDialog gagal dirender:", error);
-  }
-
-  render() {
-    if (!this.state.gagal) return this.props.children;
-    return (
-      <Dialog
-        open
-        onOpenChange={(open) => {
-          if (!open) {
-            this.setState({ gagal: false });
-            this.props.onTutup();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gabungkan {TERMS.jabatan}</DialogTitle>
-            <DialogDescription>
-              Dialog {TERMS.merge} tidak bisa ditampilkan saat ini. Daftar{" "}
-              {TERMS.jabatan} tetap bisa dipakai; coba lagi setelah halaman
-              dimuat ulang.
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 }
 
 export default JabatanTable;
