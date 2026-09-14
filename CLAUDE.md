@@ -35,7 +35,8 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 ## Aturan
 - Semua tulisan ke DB dari UI lewat Server Action di `lib/actions/`, dibungkus `withBatch({ jenis, keterangan })`. Tidak ada insert/update di Client Component.
 - **Tidak ada `DELETE`** ke tabel data (`employees`, `employee_private`, `org_units`, `jabatan`, `lookups`, `api_keys`) — di kode maupun migration. Pakai `status = 'nonaktif'`.
-- Log revisi ditulis oleh **trigger**, bukan kode. Tabel data baru wajib dipasangi trigger `log_revision` di migration yang sama.
+- Log revisi ditulis oleh **trigger**, bukan kode. Tabel data baru wajib dipasangi trigger `log_revision` di migration yang sama. **Tujuh** tabel ter-log: enam tabel data di atas **plus `profiles`** (perubahan role wajib teraudit). `profiles` sengaja tidak ikut larangan DELETE karena cascade dari `auth.users` — jangan samakan kedua daftar itu.
+- Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya: revisi `employee_private`/`api_keys` admin saja, revisi `profiles` admin atau pemiliknya, sisanya semua yang login.
 - Revert selalu membuat revisi baru. Jangan pernah `UPDATE`/`DELETE` tabel `revisions` atau `batches` selain mengisi `reverted_by_batch_id`.
 - `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`.
 - Route `api/v1` hanya membaca `v_employees_api`, `org_units`, `jabatan`, `lookups`. Tidak pernah `employee_private` / `v_employees_private`.

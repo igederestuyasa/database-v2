@@ -106,12 +106,14 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------
--- 3. Trigger log_revision terpasang di keenam tabel data
+-- 3. Trigger log_revision terpasang di KETUJUH tabel ter-log
+--    (enam tabel data + profiles; profiles sengaja tanpa guard DELETE)
 -- ---------------------------------------------------------------------------
 do $$
 declare
   v_tables text[] := array[
-    'employees','employee_private','org_units','jabatan','lookups','api_keys'
+    'employees','employee_private','org_units','jabatan','lookups','api_keys',
+    'profiles'
   ];
   v_missing text[];
 begin
@@ -132,7 +134,27 @@ begin
   if v_missing is not null then
     raise exception 'GAGAL: trigger log_revision tidak terpasang di: %', array_to_string(v_missing, ', ');
   end if;
-  raise notice 'OK   trigger log_revision terpasang di 6 tabel data';
+  raise notice 'OK   trigger log_revision terpasang di 7 tabel ter-log';
+end
+$$;
+
+-- profiles TIDAK boleh punya guard DELETE: barisnya ikut terhapus lewat
+-- ON DELETE CASCADE dari auth.users, dan Supabase Auth yang memiliki siklus
+-- hidup itu. Kalau seseorang "merapikan" kedua daftar jadi sama, ini gagal.
+do $$
+begin
+  if exists (
+    select 1
+    from pg_trigger tg
+    join pg_class c on c.oid = tg.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'profiles'
+      and tg.tgname = 'no_delete' and not tg.tgisinternal
+  ) then
+    raise exception
+      'GAGAL: profiles punya trigger no_delete — itu memblokir ON DELETE CASCADE dari auth.users';
+  end if;
+  raise notice 'OK   profiles ter-log tapi sengaja tanpa guard DELETE';
 end
 $$;
 
@@ -618,6 +640,48 @@ on conflict (id) do nothing;
 update public.profiles set role = 'admin'
 where id = 'a0000000-0000-4000-8000-000000000001';
 
+-- Kenaikan hak akses adalah perubahan yang paling layak diaudit di sistem HR
+-- (PRD #13: "setiap perubahan pada tabel mana pun").
+do $$
+declare
+  v_admin uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_n     integer;
+  v_rev   public.revisions%rowtype;
+begin
+  select count(*) into v_n
+  from public.revisions
+  where table_name = 'profiles' and action = 'insert';
+  if v_n <> 2 then
+    raise exception
+      'GAGAL: pembuatan 2 profil menghasilkan % revisi insert (harus 2)', v_n;
+  end if;
+
+  select count(*) into v_n
+  from public.revisions
+  where table_name = 'profiles' and row_id = v_admin and action = 'update';
+  if v_n <> 1 then
+    raise exception
+      'GAGAL: perubahan role menghasilkan % revisi update (harus 1)', v_n;
+  end if;
+
+  select * into v_rev
+  from public.revisions
+  where table_name = 'profiles' and row_id = v_admin and action = 'update';
+
+  if v_rev.before ->> 'role' <> 'viewer' then
+    raise exception 'GAGAL: before->>role = "%" (harus "viewer")', v_rev.before ->> 'role';
+  end if;
+  if v_rev.after ->> 'role' <> 'admin' then
+    raise exception 'GAGAL: after->>role = "%" (harus "admin")', v_rev.after ->> 'role';
+  end if;
+  if v_rev.after ->> 'email' <> 'admin.uji@hutamakarya.com' then
+    raise exception 'GAGAL: after->>email = "%"', v_rev.after ->> 'email';
+  end if;
+
+  raise notice 'OK   perubahan profiles.role tercatat sebagai Revisi (viewer -> admin)';
+end
+$$;
+
 -- domain email kantor benar-benar dipaksa
 do $$
 begin
@@ -745,6 +809,32 @@ begin
 end
 $$;
 
+-- Revisi `profiles` memuat email + role. Aturannya mengikuti profiles_select:
+-- viewer hanya boleh melihat revisi profilnya sendiri, bukan milik orang lain.
+do $$
+declare
+  v_viewer uuid := 'b0000000-0000-4000-8000-000000000002';
+  v_admin  uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_n      integer;
+begin
+  select count(*) into v_n
+  from public.revisions where table_name = 'profiles' and row_id = v_admin;
+  if v_n <> 0 then
+    raise exception
+      'GAGAL: viewer bisa membaca % revisi profiles milik orang lain (email & role bocor)', v_n;
+  end if;
+
+  select count(*) into v_n
+  from public.revisions where table_name = 'profiles' and row_id = v_viewer;
+  if v_n <> 1 then
+    raise exception
+      'GAGAL: viewer melihat % revisi profilnya sendiri (harus 1, sama seperti profiles_select)', v_n;
+  end if;
+
+  raise notice 'OK   RLS: viewer hanya melihat revisi profiles miliknya sendiri';
+end
+$$;
+
 do $$
 begin
   begin
@@ -793,6 +883,14 @@ begin
     raise exception 'GAGAL: admin tidak bisa membaca revisi employee_private/api_keys';
   end if;
   raise notice 'OK   RLS: admin bisa membaca revisi employee_private & api_keys (% baris)', v_n;
+
+  -- admin melihat SEMUA revisi profiles, termasuk milik orang lain
+  select count(*) into v_n from public.revisions where table_name = 'profiles';
+  if v_n <> 3 then
+    raise exception
+      'GAGAL: admin melihat % revisi profiles (harus 3: 2 insert + 1 kenaikan role)', v_n;
+  end if;
+  raise notice 'OK   RLS: admin bisa membaca seluruh revisi profiles (% baris)', v_n;
 end
 $$;
 

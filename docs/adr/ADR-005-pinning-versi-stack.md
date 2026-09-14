@@ -181,10 +181,13 @@ jadi dicatat di sini supaya tidak "diperbaiki" balik oleh orang berikutnya.
 - **`revisions` tidak boleh dibaca bebas.** `revisions.after` adalah salinan
   jsonb baris yang berubah, jadi policy `select ... using (true)` akan
   menyerahkan persis apa yang RLS tolak di tempat lain: Data Pribadi Sensitif
-  lewat `table_name = 'employee_private'`, dan `key_hash` lewat
-  `table_name = 'api_keys'`. Policy `revisions_select` karena itu menyembunyikan
-  kedua `table_name` itu dari non-admin; sisa log tetap terbaca semua yang login
-  sesuai matriks §5. Diuji di `verify-schema.sql` §16.
+  lewat `table_name = 'employee_private'`, `key_hash` lewat
+  `table_name = 'api_keys'`, dan email + role seluruh rekan kerja lewat
+  `table_name = 'profiles'`. Prinsipnya: **satu baris `revisions` boleh dibaca
+  persis oleh orang yang boleh membaca baris yang diceritakannya** — setiap
+  cabang `revisions_select` mencerminkan policy SELECT tabel asalnya. Sisa log
+  tetap terbaca semua yang login sesuai matriks §5. Diuji di
+  `verify-schema.sql` §16, termasuk dari sisi viewer maupun admin.
 - **`v_employees_private` tidak pernah di-grant ke `service_role`.**
   `service_role` menembus RLS, jadi `security_invoker` tidak melindungi apa pun
   di sana. Tanpa grant, route `app/api/v1/**` yang salah menyebut view itu gagal
@@ -232,23 +235,49 @@ Juga: `masa_kerja_tahun` adalah tahun penuh dan `masa_kerja_bulan` adalah
   untuk mereka.
 - **Deploy Vercel** — `vercel.com` tidak bisa dijangkau.
 
-### 12. Kekurangan yang diketahui: perubahan role tidak tercatat
+### 12. Perubahan role DICATAT: `profiles` adalah tabel ter-log ketujuh
 
-`profiles` tidak dipasangi trigger `log_revision`, karena ARCHITECTURE.md §3
-menyebut enam tabel data secara eksplisit dan seluruh pekerjaan paralel
-(terutama unit revert) dikodekan terhadap angka enam itu. Akibatnya: admin yang
-menaikkan akun lain dari `viewer` ke `admin` tidak meninggalkan jejak di
-`revisions`, tidak muncul di halaman Log Perubahan, dan tidak bisa dikembalikan
-— padahal justru itu perubahan yang paling layak diaudit (PRD #13 sendiri
-berbunyi "perubahan pada tabel mana pun").
+Versi pertama ADR ini mencatat "perubahan role tidak tercatat" sebagai
+kekurangan yang diketahui, dengan alasan ARCHITECTURE.md §3 menyebut enam tabel
+data secara eksplisit. Itu ditinjau ulang dan **ditutup, bukan diterima**.
 
-Menambah trigger ketujuh adalah perubahan yang benar, tapi menyentuh kontrak
-yang sudah dibekukan untuk banyak orang. Karena itu ditunda ke ADR tersendiri,
-bukan diselundupkan ke sini. Kalau diambil nanti: pasang `log_revision` di
-`profiles`, tambahkan `'profiles'` ke daftar `table_name` yang khusus admin di
-policy `revisions_select` (email + role semua orang tidak boleh terbaca viewer),
-dan perbarui assertion "6 tabel data" di `scripts/verify-schema.sql` dan
-`tests/migrationInvariants.test.ts`.
+Alasannya lebih kuat daripada konsistensi angka:
+
+- PRD #13 berbunyi "Sistem otomatis mencatat setiap perubahan pada **tabel mana
+  pun** sebagai revisi". Enam adalah pembacaan yang lebih sempit daripada
+  fiturnya sendiri.
+- Menaikkan sebuah akun dari `viewer` ke `admin` adalah satu-satunya perubahan
+  di sistem ini yang memberi seseorang kuasa atas semua data Karyawan. Di sistem
+  HR, justru itu baris log yang paling dicari saat ada yang salah.
+- Tanpa trigger, perubahan itu tidak muncul di halaman Log Perubahan dan tidak
+  bisa dikembalikan — padahal "bisa dibalikkan" adalah janji inti aplikasi ini.
+
+Yang dikerjakan:
+
+- `log_revision` dipasang di `profiles`, di `0001_init.sql` yang sama. Pembekuan
+  satu-file-migration tetap berlaku; skemanya memang belum beku, dan baru beku
+  saat perubahan ini masuk.
+- **`profiles` tidak** dipasangi guard DELETE. Daftar tabel ter-log (tujuh) dan
+  daftar tabel yang dilarang di-DELETE (enam) sekarang berbeda satu, dan itu
+  disengaja: `profiles` menggantung pada `auth.users` dengan `ON DELETE
+  CASCADE`, dan siklus hidup itu milik Supabase Auth. `verify-schema.sql` §3
+  dan `tests/migrationInvariants.test.ts` masing-masing punya assertion yang
+  gagal kalau ada yang menyamakan kedua daftar itu.
+- Policy `revisions_select` ditulis ulang sebagai `CASE` per `table_name`, dan
+  aturannya dinaikkan jadi prinsip: **satu baris `revisions` boleh dibaca persis
+  oleh orang yang boleh membaca baris yang diceritakannya.** Untuk `profiles`
+  itu berarti admin **atau pemilik profil itu sendiri** — cerminan persis
+  `profiles_select`. Viewer jadi tidak bisa memanen email dan role seluruh rekan
+  kerjanya lewat log, tapi tetap bisa melihat riwayat profilnya sendiri.
+
+Alternatif yang ditolak: menyembunyikan seluruh revisi `profiles` dari non-admin.
+Lebih sederhana, tapi menyembunyikan dari seseorang informasi tentang dirinya
+sendiri yang sudah boleh ia lihat langsung di tabelnya — ketat tanpa menambah
+keamanan apa pun.
+
+**Implikasi untuk unit revert:** baris `profiles` sekarang muncul di
+`revisions`, jadi `revertRevision`/`revertBatch` harus menangani
+`table_name = 'profiles'` seperti tabel lain.
 
 ## Alternatif yang Ditolak
 

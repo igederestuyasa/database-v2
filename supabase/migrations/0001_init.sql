@@ -12,10 +12,18 @@
 -- and must never be applied to production.
 --
 -- Hard rules enforced here (CLAUDE.md, ADR-003):
---   * No DELETE on the six data tables — enforced by BEFORE DELETE triggers
+--   * Every INSERT/UPDATE on a LOGGED TABLE is written to `revisions` by
+--     trigger, never by application code. There are SEVEN logged tables:
+--       employees, employee_private, org_units, jabatan, lookups, api_keys,
+--       profiles
+--   * No DELETE on the SIX data tables — enforced by BEFORE DELETE triggers
 --     AND by never granting DELETE. Deactivate with status = 'nonaktif'.
---   * Every INSERT/UPDATE on a data table is logged to `revisions` by trigger,
---     never by application code.
+--       employees, employee_private, org_units, jabatan, lookups, api_keys
+--   * The two lists differ by exactly one table, on purpose: `profiles` is
+--     logged (a role change is the single most audit-worthy event in an HR
+--     system, PRD #13) but is NOT delete-guarded, because it hangs off
+--     `auth.users` with ON DELETE CASCADE and Supabase Auth owns that
+--     lifecycle. Do not "fix" this by making the lists match.
 --   * `revisions` is append-only; `batches` may only ever have
 --     `reverted_by_batch_id` filled in.
 -- ============================================================================
@@ -743,7 +751,7 @@ drop trigger if exists set_updated_at on public.profiles;
 create trigger set_updated_at before update on public.profiles
   for each row execute function public.set_updated_at();
 
--- log_revision on ALL SIX data tables (ADR-003).
+-- log_revision on ALL SEVEN logged tables (ADR-003).
 -- Trigger names are chosen so that `log_revision` sorts before
 -- `zz_autocreate_private`: the employees Revisi gets the lower revisions.id,
 -- which is the order revertBatch() wants to see.
@@ -771,7 +779,15 @@ drop trigger if exists log_revision on public.api_keys;
 create trigger log_revision after insert or update on public.api_keys
   for each row execute function public.log_revision();
 
--- no DELETE on the six data tables
+-- `profiles` is logged too: promoting an account from viewer to admin is the
+-- change most worth auditing in this system, and PRD #13 says "setiap
+-- perubahan pada tabel mana pun". Unlike the six data tables it gets NO
+-- delete guard — see the header comment.
+drop trigger if exists log_revision on public.profiles;
+create trigger log_revision after insert or update on public.profiles
+  for each row execute function public.log_revision();
+
+-- no DELETE on the six data tables (profiles deliberately excluded)
 drop trigger if exists no_delete on public.employees;
 create trigger no_delete before delete on public.employees
   for each statement execute function public.prevent_delete();
@@ -1146,16 +1162,31 @@ create policy batches_update on public.batches
   for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- `revisions.after` is a jsonb snapshot of the row that changed, so a blanket
--- read policy here would hand a viewer everything RLS denies them elsewhere:
--- Data Pribadi Sensitif via `table_name = 'employee_private'`, and API key
--- hashes via `table_name = 'api_keys'`. Those two are admin-only; the rest of
--- the log stays readable by everyone who can log in (matriks §5).
+-- read policy here would hand a viewer everything RLS denies them elsewhere.
+--
+-- The rule: a Revisi is readable by exactly the people who may read the row it
+-- describes. Each branch below mirrors that table's own SELECT policy, so the
+-- log can never become a back door around it.
+--
+--   employee_private -> admin only            (Data Pribadi Sensitif, PRD #22)
+--   api_keys         -> admin only            (key_hash)
+--   profiles         -> admin, or your own    (email + role are personnel data;
+--                                              mirrors profiles_select, which
+--                                              already limits a viewer to their
+--                                              own row)
+--   everything else  -> anyone logged in      (matriks §5: viewer boleh melihat
+--                                              riwayat & log)
 drop policy if exists revisions_select on public.revisions;
 create policy revisions_select on public.revisions
   for select to authenticated
   using (
-    table_name not in ('employee_private', 'api_keys')
-    or public.is_admin()
+    case table_name
+      when 'employee_private' then public.is_admin()
+      when 'api_keys'         then public.is_admin()
+      when 'profiles'         then public.is_admin()
+                                   or row_id = public.current_actor_id()
+      else true
+    end
   );
 
 -- 9.8 profiles — lihat profil sendiri; admin melihat & mengubah semua

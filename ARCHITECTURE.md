@@ -139,7 +139,11 @@ UNIQUE `(tipe, kode)`. Daftar `tipe` yang sah didefinisikan di `lib/validation/l
 | actor_id | uuid NULL |
 | created_at | timestamptz |
 
-Diisi **oleh trigger `AFTER INSERT OR UPDATE`** pada `employees`, `employee_private`, `org_units`, `jabatan`, `lookups`, `api_keys` — bukan oleh kode aplikasi (ADR-003). Trigger membaca `current_setting('app.batch_id', true)`; kalau kosong, trigger membuat batch baru berjenis `edit` otomatis, sehingga tidak ada perubahan yang lolos tanpa log. Index `(table_name, row_id, id desc)`, `(batch_id)`.
+Diisi **oleh trigger `AFTER INSERT OR UPDATE`** pada **tujuh** tabel — `employees`, `employee_private`, `org_units`, `jabatan`, `lookups`, `api_keys`, `profiles` — bukan oleh kode aplikasi (ADR-003). Trigger membaca `current_setting('app.batch_id', true)`; kalau kosong, trigger membuat batch baru berjenis `edit` otomatis, sehingga tidak ada perubahan yang lolos tanpa log. Index `(table_name, row_id, id desc)`, `(batch_id)`.
+
+> **Tujuh tabel ter-log vs enam tabel data.** Daftar tabel yang di-log sengaja satu lebih panjang daripada daftar tabel yang dilarang di-`DELETE`. `profiles` ikut di-log karena kenaikan hak akses (viewer → admin) adalah perubahan yang paling layak diaudit di sistem HR, dan PRD #13 berbunyi "setiap perubahan pada tabel mana pun". Tapi `profiles` **tidak** dipasangi guard DELETE, karena barisnya menggantung pada `auth.users` dengan `ON DELETE CASCADE` dan siklus hidupnya dipegang Supabase Auth. Jangan menyamakan kedua daftar itu.
+
+Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya, supaya log tidak jadi pintu belakang: revisi `employee_private` dan `api_keys` hanya admin; revisi `profiles` hanya admin atau pemilik profil itu sendiri; sisanya boleh dibaca semua yang login.
 
 ### `api_keys` — Konsumen
 | Kolom | Tipe | Catatan |
@@ -154,6 +158,8 @@ Diisi **oleh trigger `AFTER INSERT OR UPDATE`** pada `employees`, `employee_priv
 
 ### `profiles` — Pengguna aplikasi
 `id` uuid PK = `auth.users.id`, `email`, `role` CHECK IN ('admin','viewer') default 'viewer'. Dibuat otomatis oleh trigger saat user pertama kali login.
+
+Ikut dipasangi trigger `log_revision`, jadi setiap pembuatan profil dan setiap perubahan `role` muncul di halaman Log Perubahan dan bisa di-revert. Tidak dipasangi guard DELETE (cascade dari `auth.users`).
 
 ### Views
 - **`v_employees`** — karyawan + nama unit terendah + `direktorat_nama`, `divisi_nama`, `departemen_nama`, `bagian_nama`, `sub_bagian_nama`, `proyek_nama` (dari recursive CTE ke atas) + label semua lookup + `jabatan_nama` + turunan: `masa_kerja_tahun`, `masa_kerja_bulan`, `masa_sejak_diangkat_*`, `masa_pg_tahun`, `masa_jg_tahun`. Dipakai halaman daftar & detail.
@@ -207,7 +213,9 @@ Login: Supabase Auth email + password (atau magic link), dibatasi domain email k
 | Revert revisi/batch | ✅ | ❌ | ❌ |
 | Kelola API key & pengguna | ✅ | ❌ | ❌ |
 
-Implementasi: RLS di setiap tabel (`select` untuk authenticated; `insert/update` hanya jika `profiles.role = 'admin'`; `employee_private` select+update admin saja). Server Action juga mengecek role sebelum menyentuh DB (defense in depth). Route `api/v1` **tidak** memakai session user; otentikasinya API key.
+Implementasi: RLS di setiap tabel (`select` untuk authenticated; `insert/update` hanya jika `profiles.role = 'admin'`; `employee_private` select+update admin saja; `api_keys` select admin saja; `profiles` select hanya baris sendiri atau admin). Server Action juga mengecek role sebelum menyentuh DB (defense in depth). Route `api/v1` **tidak** memakai session user; otentikasinya API key.
+
+`revisions` ikut aturan yang sama: karena `revisions.after` adalah salinan utuh baris yang berubah, policy bacanya mencerminkan policy baca tabel asalnya (lihat §3). Tanpa itu, viewer bisa membaca Data Pribadi Sensitif, `key_hash`, dan email rekan kerja lewat log.
 
 ## 6. Aturan & Konvensi
 

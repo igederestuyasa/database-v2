@@ -8,6 +8,10 @@ const MIGRATION = path.join(MIGRATIONS_DIR, "0001_init.sql");
 
 const sql = readFileSync(MIGRATION, "utf8");
 
+/**
+ * The six tables that may never be DELETEd from (CLAUDE.md, ADR-003).
+ * Deactivate with `status = 'nonaktif'` instead.
+ */
 const DATA_TABLES = [
   "employees",
   "employee_private",
@@ -16,6 +20,15 @@ const DATA_TABLES = [
   "lookups",
   "api_keys",
 ];
+
+/**
+ * The seven tables whose writes are recorded in `revisions`.
+ *
+ * Deliberately one longer than DATA_TABLES: `profiles` is logged, because a
+ * role change is the single most audit-worthy event here (PRD #13), but it is
+ * NOT delete-guarded, because it cascades from `auth.users`.
+ */
+const LOGGED_TABLES = [...DATA_TABLES, "profiles"];
 
 const VIEWS = ["v_employees", "v_employees_private", "v_employees_api"];
 
@@ -66,14 +79,20 @@ describe("0001_init.sql — tabel & view", () => {
 });
 
 describe("0001_init.sql — ADR-003 (log revisi lewat trigger)", () => {
-  it("memasang trigger log_revision di keenam tabel data", () => {
-    for (const table of DATA_TABLES) {
+  it("memasang trigger log_revision di ketujuh tabel ter-log", () => {
+    for (const table of LOGGED_TABLES) {
       const re = new RegExp(
         `create trigger log_revision after insert or update on public\\.${table}\\b`,
         "i",
       );
       expect(sql, `${table} harus punya trigger log_revision`).toMatch(re);
     }
+  });
+
+  it("mencatat perubahan profiles (PRD #13: 'tabel mana pun')", () => {
+    expect(sql).toMatch(
+      /create trigger log_revision after insert or update on public\.profiles\b/i,
+    );
   });
 
   it("trigger membaca app.batch_id dan membuat batch 'edit' kalau kosong", () => {
@@ -95,6 +114,12 @@ describe("0001_init.sql — larangan DELETE", () => {
       );
       expect(sql, `${table} harus menolak DELETE`).toMatch(re);
     }
+  });
+
+  it("TIDAK memasang no_delete di profiles (cascade dari auth.users)", () => {
+    expect(sql).not.toMatch(
+      /create trigger no_delete before delete on public\.profiles\b/i,
+    );
   });
 
   it("tidak pernah membuat policy DELETE", () => {
