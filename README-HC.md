@@ -38,9 +38,9 @@ email Anda.
 | **Admin** | Mengubah semua data, membereskan data kotor, mengembalikan perubahan, mengelola API Key, dan melihat Data Pribadi Sensitif (agama, tanggal & tempat lahir, status pernikahan). |
 | **Viewer** | Membaca dan mencari saja. Tidak ada tombol ubah, dan Data Pribadi Sensitif tidak ditampilkan. |
 
-Siapa jadi apa diatur di halaman **Pengguna** (khusus admin). Setiap orang yang
-baru pertama kali masuk otomatis menjadi **viewer** — lihat catatan penting di
-bagian 8 di bawah.
+Siapa jadi apa diatur di halaman **Pengguna** (khusus admin). Akun tidak dibuat
+sendiri: seseorang harus **diundang** dulu oleh admin (bagian 8b), dan setiap
+orang yang baru pertama kali masuk otomatis menjadi **viewer**.
 
 ---
 
@@ -100,7 +100,7 @@ Ini bagian yang membuat HC Core berbeda dari Excel. **Tidak ada perubahan yang
 hilang, dan setiap perubahan bisa dikembalikan.** Satu catatan yang jujur:
 "dikembalikan" selalu berarti menulis keadaan lama kembali, tidak pernah
 menghapus. Mengembalikan sebuah **penambahan** berarti barisnya ditandai
-nonaktif, bukan lenyap — lihat catatan di bagian 8b untuk satu-satunya tempat
+nonaktif, bukan lenyap — lihat catatan di bagian 8c untuk satu-satunya tempat
 di mana bedanya terasa.
 
 Dua istilah yang dipakai di layar:
@@ -121,12 +121,12 @@ Datanya kembali ke keadaan sebelum Revisi itu — dan pengembaliannya sendiri
 **tercatat sebagai Revisi baru**. Riwayat tidak pernah dihapus, jadi salah
 mengembalikan pun masih bisa dikembalikan lagi.
 
-> Panel **Riwayat Revisi** dengan tombol **Kembalikan** per perubahan untuk
-> sekarang baru ada di halaman detail Karyawan. Unit Organisasi, Jabatan dan
-> Lookup belum punya halaman detail sendiri; perubahannya tetap tercatat
-> lengkap dan dibalikkan lewat halaman **Log Perubahan** di bawah. Untuk satu
-> kali penyimpanan biasa isinya memang satu perubahan itu saja, jadi
-> "Kembalikan seluruh Batch" di sana melakukan hal yang sama persis.
+> Panel **Riwayat Revisi** dengan tombol **Kembalikan** yang sama ada di
+> halaman detail **Unit Organisasi**, **Jabatan**, dan **Lookup** juga — klik
+> namanya di halaman daftarnya. Jadi salah mengganti nama satu divisi
+> dikembalikan di halaman divisi itu, dengan cara yang persis sama seperti di
+> atas. Halaman **Log Perubahan** di bawah adalah untuk tindakan yang lebih
+> besar dari satu baris.
 
 ### Mengembalikan satu tindakan utuh
 
@@ -224,9 +224,9 @@ dan mana yang sebenarnya sudah tidak memanggil apa-apa lagi.
 | Halaman | Isinya |
 |---|---|
 | **Karyawan** | Daftar, pencarian, penyaring, dan pintu ke setiap halaman detail. |
-| **Struktur Organisasi** | Hierarki Unit Organisasi (direktorat → divisi → departemen → bagian → sub bagian, plus proyek), beserta jumlah Karyawan aktif di tiap unit. Tempat menambah, mengganti nama, dan menggabungkan unit. |
-| **Jabatan** | Daftar nama pekerjaan. Satu Jabatan boleh dipegang banyak orang sekaligus — ini bukan daftar kursi. |
-| **Master Data** | Semua daftar pilihan: work contract, person grade, job grade, band jabatan, BoD range, kategori penempatan, kategori fungsi, klasifikasi rekrutmen, teknik/non teknik, gender, legal entity. |
+| **Struktur Organisasi** | Hierarki Unit Organisasi (direktorat → divisi → departemen → bagian → sub bagian, plus proyek), beserta jumlah Karyawan aktif di tiap unit. Tempat menambah, mengganti nama, dan menggabungkan unit. Klik nama unit untuk membuka halaman detailnya: rantai induknya, jumlah Karyawan, dan Riwayat Revisinya. |
+| **Jabatan** | Daftar nama pekerjaan. Satu Jabatan boleh dipegang banyak orang sekaligus — ini bukan daftar kursi. Klik namanya untuk detail dan Riwayat Revisi. |
+| **Master Data** | Semua daftar pilihan: work contract, person grade, job grade, band jabatan, BoD range, kategori penempatan, kategori fungsi, klasifikasi rekrutmen, teknik/non teknik, gender, legal entity. Klik labelnya untuk detail dan Riwayat Revisi. |
 | **Perlu Dibereskan** | Temuan data kotor beserta tombol perbaikannya (bagian 5). |
 | **Log Perubahan** | Semua Batch, terbaru di atas, dengan tombol kembalikan (bagian 4). |
 | **API Key** | Kredensial aplikasi Konsumen (bagian 6). |
@@ -234,13 +234,92 @@ dan mana yang sebenarnya sudah tidak memanggil apa-apa lagi.
 
 ---
 
-## 8. Dua hal yang perlu orang teknis, sekali saja
+## 8. Yang perlu orang teknis, sekali saja
 
-Dua langkah berikut dilakukan **satu kali di awal**, oleh orang yang memasang
-aplikasinya. Keduanya ditulis di sini supaya tidak hilang bersama orang yang
-memasangnya.
+Langkah-langkah berikut dilakukan **satu kali di awal**, oleh orang yang
+memasang aplikasinya. Semuanya ditulis di sini supaya tidak hilang bersama
+orang yang memasangnya. Urutannya penting: 8a dulu (memasang), lalu 8b (admin
+pertama), lalu 8c (Seed).
 
-### 8a. Admin pertama harus dinaikkan lewat SQL
+### 8a. Memasang aplikasi
+
+Aplikasi ini terdiri dari dua bagian yang dipasang terpisah: **database** di
+Supabase dan **aplikasi web** di Vercel. Tidak ada alat baris perintah Supabase
+yang dipakai — semuanya lewat layar web keduanya.
+
+**Di Supabase**
+
+1. Buat satu project baru. Catat tiga hal dari **Settings → API**: *Project
+   URL*, *anon key*, dan *service_role key*. Yang terakhir **rahasia** — jangan
+   pernah ditempel ke mana pun selain langkah Vercel di bawah.
+2. Buka **SQL Editor**. Tempel seluruh isi file
+   `supabase/migrations/0001_init.sql`, jalankan, tunggu selesai. Lalu tempel
+   seluruh isi `supabase/migrations/0002_batch_operations.sql`, jalankan.
+   **Urutannya harus begitu.** Keduanya aman dijalankan ulang kalau ragu sudah
+   jalan atau belum. Harus lewat SQL Editor, bukan dari aplikasi: file pertama
+   memasang penjaga di tabel pengguna Supabase, dan hanya SQL Editor yang punya
+   izin untuk itu.
+3. Masih di SQL Editor, jalankan satu baris ini supaya database tahu domain
+   email kantor:
+
+   ```sql
+   alter database postgres set app.allowed_email_domain = 'hutamakarya.com';
+   ```
+
+   Nilainya harus **sama persis** dengan `ALLOWED_EMAIL_DOMAIN` di langkah
+   Vercel. Kalau lupa, database memakai `hutamakarya.com` sebagai bawaan.
+4. Buka **Authentication**:
+   - **URL Configuration → Site URL**: alamat aplikasi di Vercel, misalnya
+     `https://hc-core.vercel.app`.
+   - **URL Configuration → Redirect URLs**: hanya satu,
+     `https://<alamat-vercel>/login/callback`. Daftar ini adalah pintu
+     keamanan sungguhan — tautan masuk hanya boleh mendarat di alamat yang
+     tercantum di sini. Jangan diisi `*`.
+   - **Email Templates**: pada template **Magic Link** dan **Invite user**,
+     ganti tautan di dalamnya supaya menuju halaman pendaratan aplikasi:
+     `{{ .SiteURL }}/login/callback?token_hash={{ .TokenHash }}&type=magiclink`
+     untuk Magic Link, dan `…&type=invite` untuk Invite user. Tanpa ini,
+     tautan di email mendarat di halaman depan tanpa membawa sesi.
+   - **Sign In / Providers → Email**: pastikan *Email* aktif, dan **matikan**
+     *Allow new users to sign up*. Aplikasi ini memakai **undangan**: akun
+     dibuat oleh admin, bukan oleh orang yang mendaftar sendiri. Cara
+     mengundang ada di 8b.
+
+**Di Vercel**
+
+5. Import repositori ini sebagai project baru. Vercel mengenali Next.js
+   sendiri; tidak ada pengaturan build khusus.
+6. Isi **Environment Variables** — persis empat ini, tidak lebih:
+
+   | Nama | Isi |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | *Project URL* dari langkah 1 |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | *anon key* dari langkah 1 |
+   | `SUPABASE_SERVICE_ROLE_KEY` | *service_role key* dari langkah 1 |
+   | `ALLOWED_EMAIL_DOMAIN` | `hutamakarya.com` (sama dengan langkah 3) |
+
+   `HC_SEED_DB_URL` (bagian 8c) **tidak** dipasang di Vercel — itu hanya untuk
+   komputer yang menjalankan Seed.
+7. Deploy, lalu buka `https://<alamat-vercel>/login`. Halaman **Masuk** harus
+   tampil. Kalau yang tampil adalah kalimat "belum dikonfigurasi", periksa
+   kembali keempat variabel di langkah 6.
+
+Sesudah ini, lanjut ke 8b: orang pertama diundang, masuk sekali, lalu
+dinaikkan jadi admin.
+
+### 8b. Mengundang pengguna, dan admin pertama harus dinaikkan lewat SQL
+
+Karena pendaftaran sendiri dimatikan (8a langkah 4), setiap pengguna baru
+**diundang** dulu: di Supabase, buka **Authentication → Users → Invite user**,
+isi email kantornya. Email di luar domain kantor ditolak otomatis. Orang itu
+menerima email undangan, membuka tautannya, dan masuk. Sesudah admin pertama
+ada, undangan tetap dari layar Supabase itu; halaman **Pengguna** di aplikasi
+hanya mengatur *siapa jadi apa*, bukan membuat akun.
+
+> Orang yang belum diundang lalu mencoba "Kirim tautan masuk ke email" akan
+> melihat kalimat *"Masuk lewat email sedang dimatikan di Supabase. Hubungi
+> admin HC Core."* Kalimatnya kurang tepat tetapi arahnya benar: ia memang
+> harus minta diundang.
 
 Setiap orang yang baru pertama kali masuk otomatis menjadi **viewer** — termasuk
 orang pertama. Artinya, setelah pemasangan selesai, orang pertama yang masuk
@@ -263,10 +342,15 @@ SQL tidak diperlukan lagi selamanya.
 > Sebaiknya segera buat **admin kedua** lewat halaman Pengguna. Kalau hanya ada
 > satu admin dan akun itu hilang, jalan satu-satunya kembali ke SQL di atas.
 
-### 8b. Menjalankan Seed awal dari Excel
+### 8c. Menjalankan Seed awal dari Excel
 
 Seed adalah pemasukan data awal dari file Excel "Demografi Karyawan - Posisi",
 **sekali jalan**. Sesudahnya Excel pensiun.
+
+Berbeda dari 8a dan 8b, langkah ini **tidak bisa dari peramban**: ia dijalankan
+dari satu komputer yang punya Node.js, salinan repositori ini, dan sudah
+menjalankan `npm ci` sekali. Kalau tidak ada komputer seperti itu, ini
+pekerjaan orang teknis — mintalah, jangan dipaksa.
 
 Seed membutuhkan **sambungan Postgres langsung**, bukan alamat API yang dipakai
 aplikasi. Di Supabase: **Settings → Database → "Direct connection"**. Salin

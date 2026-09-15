@@ -17,8 +17,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * THE SIDEBAR. All eight destinations live here, in this one file, so that no
- * two units ever edit the same nav markup. Routes whose page is still a stub
- * render a placeholder until their unit lands — that is expected.
+ * two units ever edit the same nav markup.
  */
 const NAV_ITEMS: readonly SidebarNavItem[] = [
   {

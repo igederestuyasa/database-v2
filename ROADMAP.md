@@ -4,7 +4,7 @@ Aturan main: fase berikutnya baru mulai setelah exit criteria fase sekarang bisa
 
 ## Fase 0 — Setup
 **Scope:** repo GitHub, project Supabase, project Vercel, skeleton Next.js + Tailwind + shadcn, `lib/supabase/{client,server,admin}.ts`, environment variable, migration pertama kosong.
-**Exit criteria:** `npm run dev` jalan; `supabase db push` sukses; deploy kosong di Vercel bisa dibuka; halaman `/login` tampil.
+**Exit criteria:** `npm run dev` jalan; kedua file `supabase/migrations/*.sql` terpasang lewat SQL Editor Supabase (prosedurnya di README-HC §8a — Supabase CLI tidak dipakai, ADR-005) dan `npm run db:local` lulus; deploy kosong di Vercel bisa dibuka; halaman `/login` tampil.
 
 ## Fase 1 — Skema, seed, dan baca
 **Scope:** fitur **1, 2, 6, 21, 22** (skema penuh + RLS + trigger revisi & profiles; seed dari Excel; login 2 role; daftar karyawan dengan search/filter; halaman detail read-only dengan kolom turunan).
@@ -39,5 +39,6 @@ Termasuk: `README-HC.md` berbahasa Indonesia non-teknis (cara login, cara ganti 
 - Rumus kelayakan kenaikan PG/JG sebagai aturan bisnis.
 - Export Excel.
 - Riwayat posisi eksplisit (`valid_from/valid_to`) jika query histori dari `revisions` terasa lambat/ribet.
-- Rate limiting dan `updated_since` webhook untuk konsumen.
+- Rate limiting API.
+- Webhook ke konsumen saat data berubah. (Parameter `updated_since` untuk tarik-inkremental **sudah ada** — lihat API-CONTRACT.)
 - Pindah dari Supabase ke Postgres yang dikelola HK jika kebijakan mewajibkan.

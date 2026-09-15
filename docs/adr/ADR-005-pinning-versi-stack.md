@@ -221,7 +221,10 @@ Juga: `masa_kerja_tahun` adalah tahun penuh dan `masa_kerja_bulan` adalah
 
 ### 11. Yang tidak dibuat di fondasi ini — dan yang WAJIB menyusul
 
-- **`middleware.ts` — belum ada, dan ini lubang yang harus ditutup unit login.**
+- **`middleware.ts` — ✅ sudah ditutup.** Unit login membuatnya; file itu
+  me-refresh sesi dan mengalihkan pengunjung tanpa sesi ke `/login`, persis
+  dua hal yang diminta di bawah. Paragraf berikut dibiarkan sebagai catatan
+  mengapa ia wajib ada.
   Selama file itu belum ada: (a) tidak ada batas otentikasi di depan
   `app/(app)/**`, jadi unit pertama yang mengganti `PagePlaceholder` dengan
   Server Component sungguhan akan merilis halaman tanpa login; (b)
@@ -233,7 +236,10 @@ Juga: `masa_kerja_tahun` adalah tahun penuh dan `masa_kerja_bulan` adalah
   unit yang memang memilikinya.
 - **`app/api/v1/**`** — milik unit Fase 4. Aturan §6 (`force-dynamic`) berlaku
   untuk mereka.
-- **Deploy Vercel** — `vercel.com` tidak bisa dijangkau.
+- **Deploy Vercel** — `vercel.com` tidak bisa dijangkau dari lingkungan ini,
+  jadi belum pernah dilakukan. Prosedurnya (migration lewat SQL Editor,
+  `app.allowed_email_domain`, Redirect URL & template email Supabase Auth,
+  empat env di Vercel) ditulis di README-HC §8a untuk dikerjakan orang.
 
 ### 12. Perubahan role DICATAT: `profiles` adalah tabel ter-log ketujuh
 
