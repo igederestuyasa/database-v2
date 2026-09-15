@@ -1,0 +1,87 @@
+# CI untuk HC Core.
+#
+# CLAUDE.md: `npm run lint` dan `npm run typecheck` wajib hijau sebelum commit,
+# dan `npm test` memuat penjaga yang memang ditulis untuk ditegakkan mesin —
+# tests/serverOnlyBoundary (service role bocor ke client), tests/migrationInvariants
+# (file migration ketiga, shim lokal bocor ke produksi), tests/batchDiscipline,
+# scripts/check-select-columns. Tanpa workflow ini semuanya bergantung pada
+# orang yang ingat menjalankannya.
+#
+# Tidak ada dependency baru (ADR-005 §1): semua perintah di bawah ada di
+# package.json. Tidak ada rahasia: `next build` memakai env placeholder karena
+# setiap halaman `force-dynamic` dan build tidak menyentuh database (ADR-005 §6).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cek:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key-for-build
+
+  skema:
+    # Skema diverifikasi terhadap PostgreSQL 16 biasa, bukan Supabase (ADR-005 §8):
+    # scripts/db-local.sh memasang db/local/00-shim.sql + kedua migration apa
+    # adanya, lalu menjalankan scripts/verify-schema.sql (RLS per role, trigger
+    # revisi, batch, InitPlan policy). Runner ubuntu-latest sudah membawa
+    # PostgreSQL 16 dalam keadaan berhenti; skrip memakai `sudo -u postgres`.
+    name: skema · PostgreSQL 16 lokal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start PostgreSQL yang sudah terpasang di runner
+        run: |
+          sudo systemctl start postgresql.service
+          for i in $(seq 1 20); do pg_isready -q && break; sleep 1; done
+          pg_isready
+
+      - run: npm run db:local
+
+      # lib/derived/sql.test.ts membandingkan lib/derived dengan v_employees di
+      # database sungguhan, dan di `npm test` biasa ia melewati dirinya sendiri
+      # kalau tidak ada Postgres (job `cek` di atas). Di sini databasenya ada,
+      # jadi ia dijalankan sungguhan — lewat TCP dengan kata sandi sekali pakai,
+      # karena peer-auth lewat socket hanya berlaku untuk OS user `postgres`.
+      # `grep "2 passed"` memastikan ia benar-benar jalan, bukan dilewati.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test kolom turunan terhadap v_employees sungguhan
+        run: |
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -Xqc "alter role postgres password 'ci-only'"
+          npx vitest run lib/derived/sql.test.ts 2>&1 | tee sql-test.log
+          grep -q "Tests  2 passed" sql-test.log
+        env:
+          HC_LOCAL_DB_URL: postgresql://postgres:ci-only@localhost:5432/hc_core_test
