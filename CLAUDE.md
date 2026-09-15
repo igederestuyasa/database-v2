@@ -42,7 +42,7 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya: revisi `employee_private`/`api_keys` admin saja, revisi `profiles` admin atau pemiliknya, sisanya semua yang login.
 - Revert selalu membuat revisi baru. Jangan pernah `UPDATE`/`DELETE` tabel `revisions` atau `batches` selain mengisi `reverted_by_batch_id`.
 - Seed jalan lewat koneksi `pg` langsung + transaksi sungguhan (`lib/revisions/seedBatch.ts`), bukan supabase-js — supaya ±1.475 Karyawan jadi **satu** Batch `seed` (ADR-006). `lib/revisions/seedBatch.ts` hanya boleh di-import `scripts/**`.
-- `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`.
+- `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`. Tidak ada paket `server-only` (ADR-005 §1); gantinya `tests/serverOnlyBoundary.test.ts` menggagalkan `npm test` kalau Client Component mengimpor **nilai** dari `lib/supabase/{admin,server}`, `lib/db/**`, `lib/actions/_guard`, atau `lib/revisions/seedBatch` — `import type` boleh.
 - Route `api/v1` hanya membaca `v_employees_api`, `org_units`, `jabatan`, `lookups`. Tidak pernah `employee_private` / `v_employees_private`.
 - Kolom referensi di `employees` selalu FK (uuid) ke `org_units` / `jabatan` / `lookups`. Jangan tambah kolom teks bebas untuk hal yang punya daftar.
 - Kolom turunan (usia, masa kerja) dihitung di view atau `lib/derived/`; jangan disimpan.
