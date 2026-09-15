@@ -194,7 +194,7 @@ describe("0001_init.sql — RLS", () => {
 
   it("employee_private hanya untuk admin, termasuk SELECT (PRD #22)", () => {
     const re =
-      /create policy employee_private_select on public\.employee_private\s*\n\s*for select to authenticated using \(public\.is_admin\(\)\)/i;
+      /create policy employee_private_select on public\.employee_private\s*\n\s*for select to authenticated using \(\(select public\.is_admin\(\)\)\)/i;
     expect(sql).toMatch(re);
   });
 
@@ -207,7 +207,26 @@ describe("0001_init.sql — RLS", () => {
     expect(writePolicies.length).toBeGreaterThan(0);
     for (const [, name, , , body] of writePolicies) {
       expect(body, `policy ${name} harus memeriksa is_admin()`).toContain(
-        "public.is_admin()",
+        "(select public.is_admin())",
+      );
+    }
+  });
+
+  /**
+   * `is_admin()` and `current_actor_id()` are SECURITY DEFINER, which the
+   * planner never inlines: called bare inside a policy they run once per row,
+   * each with its own `profiles` lookup (~100 ms to count a 6.000-row Batch on
+   * the local harness). Wrapped as `(select …)` they become an InitPlan run
+   * once per query. `verify-schema.sql` §20 proves it against the catalog;
+   * this reads it off the file for anyone without a database.
+   */
+  it("setiap policy memanggil is_admin()/current_actor_id() sebagai (select …), tidak pernah telanjang", () => {
+    const policies = [...sql.matchAll(/create policy (\w+) on public\.\w+([\s\S]*?);/gi)];
+    expect(policies.length).toBeGreaterThan(0);
+    for (const [, name, body] of policies) {
+      const telanjang = body.replace(/\(select public\.(is_admin|current_actor_id)\(\)\)/g, "");
+      expect(telanjang, `policy ${name} memanggil fungsi RLS tanpa (select …)`).not.toMatch(
+        /\b(is_admin|current_actor_id)\(\)/,
       );
     }
   });

@@ -1737,6 +1737,57 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------------------
+-- 20. Policy RLS memanggil fungsi penjaganya sebagai InitPlan, bukan per baris
+--
+-- `is_admin()` dan `current_actor_id()` SECURITY DEFINER, dan planner tidak
+-- pernah meng-inline fungsi SECURITY DEFINER: dipanggil telanjang di sebuah
+-- policy, keduanya dievaluasi sekali per baris (masing-masing dengan lookup
+-- `profiles` sendiri). Ditulis `(select public.is_admin())` keduanya menjadi
+-- InitPlan yang dievaluasi sekali per query. Diukur di harness ini atas Batch
+-- seed 6.000 Revisi: count(*) turun dari ~100 ms menjadi ~4 ms.
+--
+-- Dibaca dari katalog, bukan dari teks migration: pg_policies men-deparse
+-- bentuk subquery-nya sebagai `( SELECT is_admin() AS is_admin)`. Setelah
+-- potongan itu dibuang, tidak boleh tersisa satu pun pemanggilan telanjang.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_telanjang text;
+begin
+  select string_agg(format('%s.%s', p.tablename, p.policyname), ', ' order by p.tablename, p.policyname)
+    into v_telanjang
+  from pg_policies p
+  where p.schemaname = 'public'
+    and regexp_replace(
+          coalesce(p.qual, '') || ' ' || coalesce(p.with_check, ''),
+          '\( SELECT (is_admin|current_actor_id)\(\) AS (is_admin|current_actor_id)\)',
+          '', 'g'
+        ) ~ '\m(is_admin|current_actor_id)\(\)';
+
+  if v_telanjang is not null then
+    raise exception
+      'GAGAL: policy memanggil is_admin()/current_actor_id() telanjang (dievaluasi per baris) — tulis sebagai (select public.is_admin()): %',
+      v_telanjang;
+  end if;
+
+  raise notice 'OK   semua policy RLS memakai (select is_admin()) / (select current_actor_id()) — InitPlan, bukan per baris';
+end
+$$;
+
+-- 20.1 Index pada FK yang difilter halaman Log Perubahan (`?status=belum|sudah`).
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public' and tablename = 'batches' and indexname = 'batches_reverted_by_idx'
+  ) then
+    raise exception 'GAGAL: index batches_reverted_by_idx tidak ada';
+  end if;
+  raise notice 'OK   batches (reverted_by_batch_id) ber-index';
+end
+$$;
+
 \echo ''
 \echo '================ SEMUA ASSERTION LULUS ================'
 \echo ''
