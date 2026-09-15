@@ -63,13 +63,24 @@ jobs:
           for i in $(seq 1 20); do pg_isready -q && break; sleep 1; done
           pg_isready
 
+      # db-local.sh menjalankan `sudo -u postgres psql -f <file di repo>`, jadi
+      # OS user `postgres` harus bisa MEMBACA file SQL di workspace. Di runner,
+      # /home/runner bermode 750, dan tanpa ini psql berhenti di
+      # "00-shim.sql: Permission denied" (run pertama workflow ini). Diberi
+      # izin lintas (o+x) ke setiap direktori induk dan baca (o+rX) ke workspace.
+      - name: Izinkan OS user postgres membaca file SQL di workspace
+        run: |
+          d="$GITHUB_WORKSPACE"
+          while [ "$d" != "/" ]; do sudo chmod o+x "$d"; d="$(dirname "$d")"; done
+          sudo chmod -R o+rX "$GITHUB_WORKSPACE"
+
       - run: npm run db:local
 
       # lib/derived/sql.test.ts membandingkan lib/derived dengan v_employees di
       # database sungguhan, dan di `npm test` biasa ia melewati dirinya sendiri
       # kalau tidak ada Postgres (job `cek` di atas). Di sini databasenya ada,
-      # jadi ia dijalankan sungguhan — lewat TCP dengan kata sandi sekali pakai,
-      # karena peer-auth lewat socket hanya berlaku untuk OS user `postgres`.
+      # dan db-local.sh sudah membuat role superuser untuk OS user pemanggil
+      # (`runner`), jadi test masuk lewat socket peer-auth tanpa konfigurasi.
       # `grep "2 passed"` memastikan ia benar-benar jalan, bukan dilewati.
       - uses: actions/setup-node@v4
         with:
@@ -80,8 +91,5 @@ jobs:
 
       - name: Test kolom turunan terhadap v_employees sungguhan
         run: |
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -Xqc "alter role postgres password 'ci-only'"
           npx vitest run lib/derived/sql.test.ts 2>&1 | tee sql-test.log
           grep -q "Tests  2 passed" sql-test.log
-        env:
-          HC_LOCAL_DB_URL: postgresql://postgres:ci-only@localhost:5432/hc_core_test
