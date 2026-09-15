@@ -16,7 +16,7 @@
  * many Revisi), and the Revisi themselves say which rows and which columns
  * moved.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import RevisionCard from "@/components/revisions/RevisionCard";
 import type { ReferenceLabels } from "@/components/revisions/revisionDiff";
@@ -30,13 +30,19 @@ import type { BatchJenis } from "@/lib/revisions/tables";
 import type { Batch, Revision } from "@/lib/types/db";
 
 import RevertBatchButton from "./RevertBatchButton";
+import { kalimatTidakBisa, ringkasRevertability } from "./revertableRevisions";
 
 /** One row of the Log Perubahan: a Batch plus how many Revisi it holds. */
 export type BatchRow = Batch & { revisionCount: number };
 
 export type BatchListProps = {
   batches: readonly BatchRow[];
-  /** Admin only: "Kembalikan seluruh Batch" (ARCHITECTURE.md §5). */
+  /**
+   * Admin only: "Kembalikan seluruh Batch" (PRD #16) **and** "Kembalikan" on
+   * each Revisi inside it (PRD #15). Both only draw the control; the Server
+   * Action and `assert_admin()` inside the RPC decide what actually happens
+   * (ARCHITECTURE.md §5).
+   */
   canRevert: boolean;
   /** Actor emails already resolved on the server, so pelaku shows at once. */
   initialLabels: ReferenceLabels;
@@ -160,6 +166,36 @@ function BatchItem({
     if (berikutnya && muat === null && status !== "memuat") void muatRevisi();
   }
 
+  /**
+   * A Revisi inside this Batch was just put back.
+   *
+   * `RevertRevisionButton` already calls `router.refresh()`, which re-runs the
+   * Server Component and brings back the Batch list — with the new `revert`
+   * Batch at the top. What that refresh cannot touch is `muat`: it is client
+   * state inside this component, it survives the refresh, and it is where the
+   * expanded list of Revisi comes from. So it is dropped and read again here,
+   * rather than left holding a list that was read before the write.
+   */
+  const handleReverted = useCallback(() => {
+    setMuat(null);
+    void muatRevisi();
+  }, [muatRevisi]);
+
+  /**
+   * Which Revisi to offer "Kembalikan" on, and one line for the rest.
+   *
+   * Not every Revisi can be put back on its own — an `insert` on a table with
+   * no `status` column cannot, and a Seed Batch is full of them. Letting each
+   * card say so itself would print the same paragraph up to a hundred times
+   * down one Batch, so the cards that cannot are simply not offered the
+   * button and the reasons are counted into `catatanTidakBisa` below.
+   */
+  const revertability = useMemo(
+    () => ringkasRevertability(revisions),
+    [revisions],
+  );
+  const catatanTidakBisa = canRevert ? kalimatTidakBisa(revertability) : null;
+
   const panelId = `batch-${batch.id}`;
 
   return (
@@ -229,6 +265,33 @@ function BatchItem({
             </p>
           ) : (
             <>
+              {/*
+                A Batch that has already been reverted whole keeps its Revisi
+                individually revertable, and that is deliberate.
+
+                `revert_batch` refuses a second whole-Batch revert (55000) —
+                that action means "undo this one action", and it happens once.
+                `apply_revert` has no such rule, because reverting one Revisi
+                means something different: "put this row back to how it was
+                before that change". That is still a legitimate thing to ask
+                for after a Batch revert — a row can have been edited again
+                since — and it is still safe: it writes a new Revisi inside a
+                new `revert` Batch and deletes nothing.
+
+                Hiding the button here would also be a lie rather than a rule:
+                the SQL allows it, so another tab or a later session could do
+                it anyway. The note says what the state is instead.
+              */}
+              {sudahDikembalikan && canRevert ? (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Batch ini sudah pernah dikembalikan utuh, jadi tombol
+                  &ldquo;{UI.kembalikanBatch}&rdquo; di atas tidak ada lagi.
+                  Mengembalikan satu Revisi di bawah tetap bisa: barisnya
+                  ditulis kembali ke keadaan sebelum Revisi itu, dan tercatat
+                  sebagai Revisi baru.
+                </p>
+              ) : null}
+
               <ul className="space-y-3">
                 {revisions.map((revision) => (
                   <RevisionCard
@@ -236,9 +299,16 @@ function BatchItem({
                     revision={revision}
                     labels={labels}
                     showRow
+                    canRevert={canRevert && revertability.bisa.has(revision.id)}
+                    onReverted={handleReverted}
                   />
                 ))}
               </ul>
+              {catatanTidakBisa ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {catatanTidakBisa}
+                </p>
+              ) : null}
               {muat && muat.total > revisions.length ? (
                 <p className="mt-3 text-xs text-muted-foreground">
                   Menampilkan {revisions.length} dari {muat.total} Revisi.

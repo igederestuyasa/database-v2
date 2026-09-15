@@ -112,7 +112,57 @@ const PATHS_BY_TABLE: Record<LoggedTable, readonly string[]> = {
   profiles: ["/pengguna"],
 };
 
-/** A Batch can touch any table, so reverting one refreshes everything. */
+/**
+ * The detail page of one row, which `PATHS_BY_TABLE` cannot name because it
+ * carries the row id.
+ *
+ * Every one of those pages is `force-dynamic`, so none of them is in the Full
+ * Route Cache and a revert is visible on the next request either way; this is
+ * the client Router Cache, and it matches what
+ * `revalidateEmployeePages()` in `lib/actions/employees.ts` already does for
+ * `/karyawan/[id]`. `employee_private` maps to `/karyawan` too: its `row_id`
+ * IS an `employees.id`.
+ *
+ * `api_keys` and `profiles` are absent because they have no detail page —
+ * `/api-keys` and `/pengguna` are lists, and they are already in
+ * `PATHS_BY_TABLE`.
+ *
+ * The list-page actions (`lib/actions/{orgUnits,jabatan,lookups}.ts`)
+ * deliberately do NOT thread a row id into their own `revalidate…Pages()`
+ * helpers: they are called from eleven places, the pages they would refresh
+ * are `force-dynamic`, and the reader who just pressed Ubah is standing on the
+ * list, not on the detail page.
+ */
+const DETAIL_PREFIX_BY_TABLE: Partial<Record<LoggedTable, string>> = {
+  employees: "/karyawan",
+  employee_private: "/karyawan",
+  org_units: "/struktur",
+  jabatan: "/jabatan",
+  lookups: "/master-data",
+};
+
+function detailPaths(table: LoggedTable, rowId: string): string[] {
+  const prefix = DETAIL_PREFIX_BY_TABLE[table];
+  if (!prefix) return [];
+
+  const paths = [`${prefix}/${rowId}`];
+  // Karyawan is the one entity with an edit page of its own — the three Data
+  // Referensi are edited from dialogs on their list pages — and a revert has
+  // to reach the form as well as the detail page, or it reopens with the
+  // values that were just undone. Same pair as `revalidateEmployeePages()`.
+  if (table === "employees" || table === "employee_private") {
+    paths.push(`${prefix}/${rowId}/edit`);
+  }
+  return paths;
+}
+
+/**
+ * A Batch can touch any table, so reverting one refreshes everything.
+ *
+ * No detail pages here, and none possible: one Batch can hold ~3.000 rows, so
+ * there is no id to name. Every detail page is `force-dynamic` and re-reads on
+ * the next request regardless.
+ */
 const ALL_PATHS: readonly string[] = [
   "/karyawan",
   "/struktur",
@@ -537,7 +587,11 @@ export async function revertRevision(
       throw revertFailure(error, "Gagal mengembalikan Revisi. Coba lagi.");
     }
 
-    revalidate(PATHS_BY_TABLE[plan.operations[0].table]);
+    const operation = plan.operations[0];
+    revalidate([
+      ...PATHS_BY_TABLE[operation.table],
+      ...detailPaths(operation.table, operation.rowId),
+    ]);
 
     return actionOk({
       batchId: result.batchId,

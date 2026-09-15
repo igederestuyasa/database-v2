@@ -28,6 +28,8 @@ Supabase CLI (`supabase db push`, `supabase gen types`) **tidak tersedia** dan `
 ## Struktur
 ```
 app/(auth)/login · app/(app)/{karyawan,struktur,jabatan,master-data,bereskan,log,api-keys,pengguna}
+app/(app)/{karyawan,struktur,jabatan,master-data}/[id] — halaman detail + Riwayat Revisi (PRD #14)
+app/(app)/_lib — helper sisi server lintas halaman (jangan di-import Client Component)
 app/api/v1/{employees,org-units,jabatan,lookups}
 lib/{supabase,db,actions,revisions,cleaning,api,derived,validation}
 components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/

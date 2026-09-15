@@ -15,6 +15,7 @@
  * belongs to `StrukturClient`, which owns the dialogs.
  */
 import * as React from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ChevronDown,
@@ -160,14 +161,20 @@ export function OrgUnitTree({
 
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span
+                  {/* A real link, not a clickable row: the tree row already
+                      owns a chevron and (for an admin) a menu, so making the
+                      whole row navigate would fight both. A link is also the
+                      only version a keyboard or a screen reader can use, and
+                      it opens in a new tab like any other (PRD #14). */}
+                  <Link
+                    href={`/struktur/${node.id}`}
                     className={cn(
-                      "truncate font-medium",
+                      "truncate font-medium underline-offset-2 hover:underline",
                       nonaktif && "text-muted-foreground line-through",
                     )}
                   >
                     {node.nama}
-                  </span>
+                  </Link>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">
                     {node.kode}
                   </span>

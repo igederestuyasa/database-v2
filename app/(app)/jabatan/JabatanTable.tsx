@@ -15,6 +15,7 @@
  * konfirmasi Nonaktifkan dan dialog Merge.
  */
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -178,6 +179,20 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
     });
   };
 
+  /**
+   * Buka halaman detail satu Jabatan (PRD #14).
+   *
+   * Barisnya bisa diklik DAN namanya tetap sebuah tautan sungguhan: klik baris
+   * nyaman untuk mouse, tautan di dalam sel itulah yang bisa di-Tab, dibuka di
+   * tab baru, dan dibacakan pembaca layar. Sama seperti daftar Karyawan.
+   */
+  const bukaDetail = React.useCallback(
+    (row: Jabatan) => {
+      router.push(`/jabatan/${row.id}`);
+    },
+    [router],
+  );
+
   const columns = React.useMemo<ColumnDef<Jabatan>[]>(() => {
     const dasar: ColumnDef<Jabatan>[] = [
       {
@@ -191,7 +206,15 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
         accessorKey: "nama",
         header: `Nama ${TERMS.jabatan}`,
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.nama}</span>
+          <Link
+            href={`/jabatan/${row.original.id}`}
+            // Barisnya sudah bisa diklik; tanpa ini satu klik pada tautan
+            // menjalankan dua navigasi ke alamat yang sama.
+            onClick={(event) => event.stopPropagation()}
+            className="font-medium underline-offset-2 hover:underline"
+          >
+            {row.original.nama}
+          </Link>
         ),
       },
       {
@@ -232,7 +255,12 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
         cell: ({ row }) => {
           const jabatan = row.original;
           return (
-            <div className="flex flex-wrap justify-end gap-1">
+            <div
+              className="flex flex-wrap justify-end gap-1"
+              // Barisnya membuka halaman detail; tanpa ini setiap tombol di sel
+              // ini juga ikut membukanya di belakang dialog yang baru terbuka.
+              onClick={(event) => event.stopPropagation()}
+            >
               <Button
                 type="button"
                 variant="ghost"
@@ -318,6 +346,7 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
         columns={columns}
         data={barisTampil}
         getRowId={(row) => row.id}
+        onRowClick={bukaDetail}
         initialSorting={[{ id: "nama", desc: false }]}
         // Selama pindah filter, barisnya masih baris filter lama; katakan apa
         // adanya daripada membiarkannya terlihat seperti hasil yang baru.

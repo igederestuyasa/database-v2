@@ -21,12 +21,16 @@ hc-core/
 ├── app/
 │   ├── (auth)/login/                # halaman login (Supabase Auth, email kantor)
 │   ├── (app)/                       # semua halaman internal; layout dengan sidebar
+│   │   ├── _lib/                    # helper sisi server yang dipakai banyak page (riwayat.ts)
 │   │   ├── karyawan/                # daftar + filter
 │   │   │   ├── baru/                # form tambah
 │   │   │   └── [id]/                # detail + form edit + riwayat revisi
 │   │   ├── struktur/                # pohon unit organisasi + CRUD + merge
+│   │   │   └── [id]/                # detail unit + riwayat revisi (baca saja)
 │   │   ├── jabatan/                 # daftar jabatan + CRUD + merge
+│   │   │   └── [id]/                # detail jabatan + riwayat revisi (baca saja)
 │   │   ├── master-data/             # lookups, satu tab per tipe
+│   │   │   └── [id]/                # detail lookup + riwayat revisi (baca saja)
 │   │   ├── bereskan/                # halaman "Perlu Dibereskan"
 │   │   ├── log/                     # log global per batch + revert batch
 │   │   ├── api-keys/                # kelola konsumen & whitelist kolom
