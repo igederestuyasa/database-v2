@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { StrukturClient } from "@/components/struktur/StrukturClient";
 import { requirePageSession } from "@/lib/auth/session";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
@@ -15,8 +16,7 @@ export default async function Page() {
   // Both, not either (CLAUDE.md): this decides what the page offers, and RLS
   // decides what the database will actually do about it.
   const { client, user } = await requirePageSession("/struktur");
-  const { nodes, jumlahUnit, totalUnit, unitTerpotong } =
-    await loadStrukturNodes(client);
+  const { nodes, terpotong } = await loadStrukturNodes(client);
 
   return (
     <div className="space-y-6">
@@ -34,21 +34,11 @@ export default async function Page() {
         </p>
       </header>
 
-      {unitTerpotong ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Pohon ini belum lengkap.</p>
-          <p className="mt-1 text-muted-foreground">
-            Baru {jumlahUnit} dari {totalUnit} {TERMS.unitOrganisasi} yang berhasil
-            dimuat, karena database membatasi jumlah baris per permintaan. Unit yang
-            induknya ikut terpotong akan tampil seolah-olah tidak punya induk, jadi
-            hierarki di bawah ini bisa keliru — jangan memakainya untuk memutuskan
-            Merge sampai batas itu dinaikkan.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={terpotong}
+        judul="Pohon ini belum lengkap."
+        keterangan="Unit yang induknya ikut terpotong akan tampil seolah-olah tidak punya induk, jadi hierarki di bawah ini bisa keliru — jangan memakainya untuk memutuskan Merge sampai batas itu dinaikkan."
+      />
 
       <StrukturClient nodes={nodes} isAdmin={user.role === "admin"} />
     </div>

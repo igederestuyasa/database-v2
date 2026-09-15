@@ -7,10 +7,10 @@ import RevisionPanel from "@/components/revisions/RevisionPanel";
 import DetailCard from "@/components/shared/DetailCard";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeeById, getEmployeePrivate } from "@/lib/db/employees";
-import type { DbClient } from "@/lib/db/shared";
 import { TERMS } from "@/lib/i18n/terms";
-import type { EmployeePrivate } from "@/lib/types/db";
+import { isUuid } from "@/lib/validation/uuid";
 
+import { bacaAman } from "../../_lib/bacaAman";
 import { bacaRiwayat } from "../../_lib/riwayat";
 import EmployeeHeader from "./_components/EmployeeHeader";
 import {
@@ -47,37 +47,12 @@ export const metadata: Metadata = { title: "Detail Karyawan" };
  * (PRD §6 Non-Goals); the header marks the status and shows the Tanggal Keluar.
  */
 
-/** PostgREST rejects a malformed uuid with 22P02; this turns it into a 404. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // How many Revisi to draw (`RIWAYAT_DITAMPILKAN`) and how many to read for
 // them (`RIWAYAT_LIMIT`, used inside `bacaRiwayat`) both live in
 // `components/revisions/riwayat.ts`: the server read has to use the same
 // ceiling the panel would have used for itself, or its "Menampilkan N Revisi
 // terbaru" footnote lies about whether the Riwayat is complete. Four detail
 // pages depend on that, so the number and its reasoning are in one place.
-
-/**
- * Data Pribadi Sensitif, or `gagal` when the read itself broke.
- *
- * Same reasoning as `bacaRiwayat()`: this is one card on the side of the page.
- * A statement timeout on `employee_private` must not cost an admin the name,
- * the Penempatan, the dates and the whole Riwayat of the Karyawan they opened.
- * `null` with `gagal: false` is the ordinary "belum diisi"; `gagal: true` says
- * so on the card instead of pretending the columns are empty.
- */
-async function bacaPribadi(
-  client: DbClient,
-  employeeId: string,
-): Promise<{ row: EmployeePrivate | null; gagal: boolean }> {
-  try {
-    return { row: await getEmployeePrivate(client, employeeId), gagal: false };
-  } catch (error) {
-    console.error("[karyawan/detail] gagal memuat Data Pribadi Sensitif", error);
-    return { row: null, gagal: true };
-  }
-}
 
 export default async function Page({
   params,
@@ -90,7 +65,7 @@ export default async function Page({
   // so the status line is already sent. Measured, deliberate, and explained in
   // docs/adr/ADR-007 — it is NOT caused by `force-dynamic`, and removing that
   // does not change it.
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
 
   const { client, user } = await requirePageSession(`/karyawan/${id}`);
   const isAdmin = user.role === "admin";
@@ -102,19 +77,27 @@ export default async function Page({
 
   // Data Pribadi Sensitif is only ever asked for when the reader is an admin;
   // for anyone else RLS would answer `null` anyway, and not asking keeps the
-  // page honest about who it is for (PRD #22).
+  // page honest about who it is for (PRD #22). It is one card on the side of
+  // the page, so it is read through `bacaAman()`: a statement timeout on
+  // `employee_private` must not cost an admin the name, the Penempatan and
+  // the whole Riwayat of the Karyawan they opened. `null` is the ordinary
+  // "belum diisi"; `undefined` means the read failed, and the card says so
+  // instead of pretending the columns are empty.
   const [pribadi, riwayat, riwayatPribadi] = await Promise.all([
     isAdmin
-      ? bacaPribadi(client, id)
-      : Promise.resolve({ row: null, gagal: false }),
+      ? bacaAman("[karyawan/detail] gagal memuat Data Pribadi Sensitif", () =>
+          getEmployeePrivate(client, id),
+        )
+      : Promise.resolve(null),
     bacaRiwayat(client, "employees", id, "karyawan/detail"),
     isAdmin
       ? bacaRiwayat(client, "employee_private", id, "karyawan/detail")
       : Promise.resolve(undefined),
   ]);
+  const pribadiGagal = pribadi === undefined;
 
   const sections = buildEmployeeSections(karyawan);
-  const fieldsPribadi = buildPrivateFields(pribadi.row);
+  const fieldsPribadi = buildPrivateFields(pribadi ?? null);
 
   return (
     <div className="space-y-6">
@@ -147,7 +130,7 @@ export default async function Page({
               keterangan="Hanya admin yang bisa melihat dan mengubahnya, dan kolom ini tidak pernah keluar lewat API."
               fields={fieldsPribadi}
               catatan={
-                pribadi.gagal
+                pribadiGagal
                   ? "Data Pribadi Sensitif gagal dimuat, jadi kolom di atas kosong bukan karena belum diisi. Muat ulang halaman ini untuk mencoba lagi."
                   : semuaKosong(fieldsPribadi)
                     ? "Belum diisi. Kolom ini memang boleh kosong."

@@ -9,16 +9,12 @@ import DetailCard from "@/components/shared/DetailCard";
 import { Badge } from "@/components/ui/badge";
 import { requirePageSession } from "@/lib/auth/session";
 import { countEmployeesByJabatan, getJabatanById } from "@/lib/db/jabatan";
-import type { DbClient } from "@/lib/db/shared";
 import { NAV_LABELS, STATUS_LABELS, TERMS } from "@/lib/i18n/terms";
-import type { Jabatan } from "@/lib/types/db";
+import { isUuid } from "@/lib/validation/uuid";
 
+import { bacaAman } from "../../_lib/bacaAman";
 import { bacaRiwayat } from "../../_lib/riwayat";
-import {
-  buildJabatanFields,
-  labelStatusJabatan,
-  type JumlahPemegang,
-} from "./_components/jabatanDetail";
+import { buildJabatanFields, labelStatusJabatan } from "./_components/jabatanDetail";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -47,41 +43,6 @@ export const metadata: Metadata = { title: `Detail ${TERMS.jabatan}` };
  * half of a Merge, names where its holders went.
  */
 
-/** PostgREST rejects a malformed uuid with 22P02; this turns it into a 404. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Karyawan holding this Jabatan, or `null` when counting failed. */
-async function hitungPemegang(
-  client: DbClient,
-  id: string,
-): Promise<JumlahPemegang> {
-  try {
-    const [semua, aktif] = await Promise.all([
-      countEmployeesByJabatan(client, id, { status: "semua" }),
-      countEmployeesByJabatan(client, id, { status: "aktif" }),
-    ]);
-    return { semua, aktif };
-  } catch (error) {
-    console.error("[jabatan/detail] gagal menghitung pemegang", error);
-    return null;
-  }
-}
-
-/** The Merge target's row, or `null` when it is unset or unreadable. */
-async function bacaTujuanMerge(
-  client: DbClient,
-  mergedIntoId: string | null,
-): Promise<Jabatan | null> {
-  if (!mergedIntoId) return null;
-  try {
-    return await getJabatanById(client, mergedIntoId);
-  } catch (error) {
-    console.error("[jabatan/detail] gagal memuat Jabatan tujuan Merge", error);
-    return null;
-  }
-}
-
 export default async function Page({
   params,
 }: {
@@ -93,7 +54,7 @@ export default async function Page({
   // so the status line is already sent. Measured, deliberate, and explained in
   // docs/adr/ADR-007 — it is NOT caused by `force-dynamic`, and removing that
   // does not change it.
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
 
   const { client, user } = await requirePageSession(`/jabatan/${id}`);
   const isAdmin = user.role === "admin";
@@ -103,11 +64,26 @@ export default async function Page({
   // ditemukan" for the person looking at the screen.
   if (!jabatan) notFound();
 
-  const [jumlahPemegang, tujuanMerge, riwayat] = await Promise.all([
-    hitungPemegang(client, id),
-    bacaTujuanMerge(client, jabatan.merged_into_id),
+  // Every side read goes through `bacaAman()`: the Jabatan and its Riwayat are
+  // the point, the rest is context, and none of it may take the page down.
+  const mergedIntoId = jabatan.merged_into_id;
+  const [pemegang, tujuan, riwayat] = await Promise.all([
+    bacaAman("[jabatan/detail] gagal menghitung pemegang", async () => {
+      const [semua, aktif] = await Promise.all([
+        countEmployeesByJabatan(client, id, { status: "semua" }),
+        countEmployeesByJabatan(client, id, { status: "aktif" }),
+      ]);
+      return { semua, aktif };
+    }),
+    mergedIntoId
+      ? bacaAman("[jabatan/detail] gagal memuat Jabatan tujuan Merge", () =>
+          getJabatanById(client, mergedIntoId),
+        )
+      : Promise.resolve(null),
     bacaRiwayat(client, "jabatan", id, "jabatan/detail"),
   ]);
+  const jumlahPemegang = pemegang ?? null;
+  const tujuanMerge = tujuan ?? null;
 
   const fields = buildJabatanFields({
     jabatan,

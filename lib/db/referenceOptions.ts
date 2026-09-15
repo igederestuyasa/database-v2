@@ -35,27 +35,9 @@ import {
 import { listAllJabatan } from "./jabatan";
 import { getLookupsGroupedByType } from "./lookups";
 import { flattenOrgUnitTree, getOrgUnitTree } from "./orgUnits";
-import type { DbClient, StatusFilter } from "./shared";
+import type { DaftarTerpotong, DbClient, StatusFilter } from "./shared";
 
-/**
- * Satu daftar yang terbaca tidak utuh.
- *
- * PostgREST memotong pada `db-max-rows` (bawaan 1000) **sebelum** `.limit()`
- * kita, dan melaporkannya sebagai sukses. Untuk sebuah picker akibatnya khas
- * dan diam: Unit Organisasi yang sebenarnya ada tidak muncul di daftar, admin
- * tidak bisa memilihnya, dan tidak ada apa pun di layar yang menjelaskan
- * kenapa. Karena itu `truncated` dari `FullRead` diteruskan ke halaman, bukan
- * ditelan di sini (lihat `FullRead` di `lib/db/shared.ts`), dan
- * `components/shared/DaftarTerpotongAlert.tsx` yang menampilkannya.
- */
-export type DaftarTerpotong = {
-  /** Nama daftarnya, siap ditulis di layar. */
-  nama: string;
-  /** Berapa baris yang berhasil dibaca. */
-  dibaca: number;
-  /** Berapa baris yang database bilang ada. */
-  total: number;
-};
+export type { DaftarTerpotong };
 
 /** Baris seadanya yang bisa dipetakan `toLookupOptions`. */
 type LookupLike = { id: string; kode: string; label: string; status: string };
@@ -79,10 +61,14 @@ export function petakanLookupOptions(
 /**
  * Bacaan mana saja yang pulang tidak utuh, siap ditulis di layar.
  *
- * Murni, dan dipisah karena inilah aturannya yang gampang hilang saat kode
- * dirapikan: `truncated` tidak boleh ditelan. Sebuah daftar yang terpotong
- * membuat admin tidak bisa memilih nilai yang sebenarnya ada, tanpa satu pun
- * petunjuk kenapa.
+ * PostgREST memotong pada `db-max-rows` (bawaan 1000) **sebelum** `.limit()`
+ * kita, dan melaporkannya sebagai sukses. Untuk sebuah picker akibatnya khas
+ * dan diam: Unit Organisasi yang sebenarnya ada tidak muncul di daftar, admin
+ * tidak bisa memilihnya, dan tidak ada apa pun di layar yang menjelaskan
+ * kenapa. Karena itu `truncated` dari `FullRead` diteruskan ke halaman, bukan
+ * ditelan di sini, dan `components/shared/DaftarTerpotongAlert.tsx` yang
+ * menampilkannya. Murni, dan dipisah karena inilah aturannya yang gampang
+ * hilang saat kode dirapikan.
  */
 export function ringkasPemotongan(
   bacaan: readonly {

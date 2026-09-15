@@ -8,6 +8,7 @@ import type { DbClient } from "@/lib/db/shared";
 import { BATCH_TYPE_LABELS, NAV_LABELS, UI } from "@/lib/i18n/terms";
 import type { ReferenceLabels } from "@/lib/revisions/references";
 import { BATCH_JENIS, type BatchJenis } from "@/lib/revisions/tables";
+import { isUuid } from "@/lib/validation/uuid";
 
 import BatchList, { type BatchRow } from "./_components/BatchList";
 
@@ -65,11 +66,8 @@ function parseReverted(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function parseBatchId(value: string | undefined): string | undefined {
-  return value && UUID_RE.test(value) ? value : undefined;
+  return isUuid(value) ? value : undefined;
 }
 
 const SELECT_CLASS =

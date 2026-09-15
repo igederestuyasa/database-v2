@@ -247,3 +247,28 @@ export function requireComplete<T>(read: FullRead<T>, what: string): T[] {
   }
   return read.rows;
 }
+
+/**
+ * One truncated read, ready to be written on screen — the other choice a
+ * caller can make (see `FullRead`): render what arrived and say so.
+ *
+ * `components/shared/DaftarTerpotongAlert.tsx` renders a list of these;
+ * `lib/db/referenceOptions.ts` produces one per picker list.
+ */
+export type DaftarTerpotong = {
+  /** The list's name, in CONTEXT.md vocabulary: "Unit Organisasi", "Jabatan", … */
+  nama: string;
+  /** How many rows arrived. */
+  dibaca: number;
+  /** How many rows the database says exist. */
+  total: number;
+};
+
+/** `[]` when the read was whole, one entry when it was not. */
+export function terpotongDari(
+  nama: string,
+  read: Pick<FullRead<unknown>, "rows" | "total" | "truncated">,
+): DaftarTerpotong[] {
+  if (!read.truncated) return [];
+  return [{ nama, dibaca: read.rows.length, total: read.total }];
+}

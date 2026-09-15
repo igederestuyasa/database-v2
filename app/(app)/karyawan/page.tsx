@@ -1,25 +1,17 @@
 import type { Metadata } from "next";
 
-import {
-  toJabatanOptions,
-  toLookupOptions,
-  toOrgUnitOptions,
-  type EntityOption,
-} from "@/lib/entityOptions";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { requirePageSession } from "@/lib/auth/session";
 import { listEmployees } from "@/lib/db/employees";
-import { listAllJabatan } from "@/lib/db/jabatan";
-import { getLookupsGroupedByType } from "@/lib/db/lookups";
-import { flattenOrgUnitTree, getOrgUnitTree } from "@/lib/db/orgUnits";
+import { loadReferenceOptions } from "@/lib/db/referenceOptions";
 import {
   DbError,
   IncompleteReadError,
   type DbClient,
   type Paged,
 } from "@/lib/db/shared";
-import { NAV_LABELS, ORG_UNIT_TYPE_LABELS, TERMS } from "@/lib/i18n/terms";
+import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 import type { VEmployee } from "@/lib/types/db";
-import { LOOKUP_TYPES, type LookupType } from "@/lib/validation/lookupTypes";
 
 import KaryawanClient from "./_components/KaryawanClient";
 import {
@@ -73,36 +65,17 @@ export default async function Page({ searchParams }: PageProps) {
   // both states itself, so neither is a dead end.
   const { client, user } = await requirePageSession("/karyawan");
 
-  // Four reads, one round trip: the Karyawan page does not depend on the three
-  // picker lists, and awaiting it after them would add a full round trip to
-  // every filter change.
-  const [unitRead, jabatanRead, lookupRead, hasil] = await Promise.all([
-    // `status: "semua"` on all three: a nonaktif Unit Organisasi, Jabatan or
-    // Lookup still has Karyawan pointing at it, and this page is where someone
-    // goes to find them and move them somewhere alive.
-    getOrgUnitTree(client, { status: "semua" }),
-    listAllJabatan(client, { status: "semua" }),
-    getLookupsGroupedByType(client, { status: "semua" }),
+  // Two reads, one round trip: the Karyawan page does not depend on the picker
+  // lists, and awaiting it after them would add a full round trip to every
+  // filter change. `loadReferenceOptions` reads with `status: "semua"`: a
+  // nonaktif Unit Organisasi, Jabatan or Lookup still has Karyawan pointing at
+  // it, and this page is where someone goes to find them and move them
+  // somewhere alive.
+  const [options, hasil] = await Promise.all([
+    loadReferenceOptions(client),
     ambilKaryawan(client, filters),
   ]);
   const { daftar, galatHierarki } = hasil;
-
-  const unitOptions = toOrgUnitOptions(
-    // Pre-order with `depth`, so the picker shows Direktorat › Divisi › Bagian
-    // as an indented list instead of a few hundred names in one flat heap.
-    flattenOrgUnitTree(unitRead.tree),
-    ORG_UNIT_TYPE_LABELS,
-  );
-  const jabatanOptions = toJabatanOptions(jabatanRead.rows);
-  const lookupOptions = Object.fromEntries(
-    LOOKUP_TYPES.map((tipe) => [tipe, toLookupOptions(lookupRead.byType[tipe])]),
-  ) as Record<LookupType, EntityOption[]>;
-
-  const belumLengkap = [
-    { nama: TERMS.unitOrganisasi, read: unitRead },
-    { nama: TERMS.jabatan, read: jabatanRead },
-    { nama: TERMS.lookup, read: lookupRead },
-  ].filter((item) => item.read.truncated);
 
   return (
     <div className="space-y-6">
@@ -119,28 +92,11 @@ export default async function Page({ searchParams }: PageProps) {
         </p>
       </header>
 
-      {belumLengkap.length > 0 ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Pilihan filter belum lengkap.</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
-            {belumLengkap.map((item) => (
-              <li key={item.nama}>
-                Baru {item.read.rows.length} dari {item.read.total} {item.nama}{" "}
-                yang berhasil dimuat.
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-muted-foreground">
-            Database membatasi jumlah baris per permintaan, jadi ada pilihan
-            yang tidak muncul di daftar filter — dan {TERMS.karyawan} yang
-            seharusnya ketemu lewat pilihan itu ikut tidak terlihat. Pakai kotak
-            pencarian dulu, dan laporkan ini supaya batasnya dinaikkan.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={options.terpotong}
+        judul="Pilihan filter belum lengkap."
+        keterangan={`Ada pilihan yang tidak muncul di daftar filter — dan ${TERMS.karyawan} yang seharusnya ketemu lewat pilihan itu ikut tidak terlihat. Pakai kotak pencarian dulu, dan laporkan ini supaya batasnya dinaikkan.`}
+      />
 
       {galatHierarki ? (
         <div
@@ -173,9 +129,9 @@ export default async function Page({ searchParams }: PageProps) {
         perPage={daftar?.perPage ?? KARYAWAN_PER_PAGE}
         total={daftar?.total ?? 0}
         isAdmin={user.role === "admin"}
-        unitOptions={unitOptions}
-        jabatanOptions={jabatanOptions}
-        lookupOptions={lookupOptions}
+        unitOptions={options.orgUnit}
+        jabatanOptions={options.jabatan}
+        lookupOptions={options.lookup}
       />
     </div>
   );

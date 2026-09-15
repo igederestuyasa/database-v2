@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { requirePageSession } from "@/lib/auth/session";
 import { getLookupsGroupedByType } from "@/lib/db/lookups";
+import { terpotongDari } from "@/lib/db/shared";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 import type { Lookup } from "@/lib/types/db";
 import {
@@ -68,20 +70,10 @@ export default async function Page({
         </p>
       </header>
 
-      {grouped.truncated ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar ini belum lengkap.</p>
-          <p className="mt-1 text-muted-foreground">
-            Baru {grouped.rows.length} dari {grouped.total} {TERMS.lookup} yang
-            berhasil dimuat, karena database membatasi jumlah baris per permintaan.
-            Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan
-            memakainya untuk memutuskan {TERMS.merge}.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={terpotongDari(TERMS.lookup, grouped)}
+        keterangan={`Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan memakainya untuk memutuskan ${TERMS.merge}.`}
+      />
 
       <LookupTypeTabs active={tipe} counts={counts} />
 

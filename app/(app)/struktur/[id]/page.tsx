@@ -13,10 +13,10 @@ import {
   getOrgUnitAncestors,
   getOrgUnitById,
 } from "@/lib/db/orgUnits";
-import type { DbClient } from "@/lib/db/shared";
 import { NAV_LABELS, STATUS_LABELS, TERMS } from "@/lib/i18n/terms";
-import type { OrgUnit } from "@/lib/types/db";
+import { isUuid } from "@/lib/validation/uuid";
 
+import { bacaAman } from "../../_lib/bacaAman";
 import { bacaRiwayat } from "../../_lib/riwayat";
 import {
   buildOrgUnitFields,
@@ -59,54 +59,6 @@ export const metadata: Metadata = { title: `Detail ${TERMS.unitOrganisasi}` };
  * half of a Merge, names where its Karyawan went.
  */
 
-/** PostgREST rejects a malformed uuid with 22P02; this turns it into a 404. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** The ancestor chain, or the flag that says it could not be read. */
-type Rantai = { leluhur: OrgUnit[]; gagal: boolean };
-
-async function bacaRantai(client: DbClient, id: string): Promise<Rantai> {
-  try {
-    // Path from the topmost ancestor down to this unit, inclusive.
-    return { leluhur: await getOrgUnitAncestors(client, id), gagal: false };
-  } catch (error) {
-    console.error("[struktur/detail] gagal memuat rantai induk", error);
-    return { leluhur: [], gagal: true };
-  }
-}
-
-/** Karyawan pointing straight at this unit, or `null` when counting failed. */
-async function hitungKaryawan(
-  client: DbClient,
-  id: string,
-): Promise<{ semua: number; aktif: number } | null> {
-  try {
-    const [semua, aktif] = await Promise.all([
-      countEmployeesByOrgUnit(client, id, { status: "semua" }),
-      countEmployeesByOrgUnit(client, id, { status: "aktif" }),
-    ]);
-    return { semua, aktif };
-  } catch (error) {
-    console.error("[struktur/detail] gagal menghitung Karyawan", error);
-    return null;
-  }
-}
-
-/** The Merge target's row, or `null` when it is unset or unreadable. */
-async function bacaTujuanMerge(
-  client: DbClient,
-  mergedIntoId: string | null,
-): Promise<OrgUnit | null> {
-  if (!mergedIntoId) return null;
-  try {
-    return await getOrgUnitById(client, mergedIntoId);
-  } catch (error) {
-    console.error("[struktur/detail] gagal memuat unit tujuan Merge", error);
-    return null;
-  }
-}
-
 export default async function Page({
   params,
 }: {
@@ -118,7 +70,7 @@ export default async function Page({
   // so the status line is already sent. Measured, deliberate, and explained in
   // docs/adr/ADR-007 — it is NOT caused by `force-dynamic`, and removing that
   // does not change it.
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
 
   const { client, user } = await requirePageSession(`/struktur/${id}`);
   const isAdmin = user.role === "admin";
@@ -128,15 +80,32 @@ export default async function Page({
   // ditemukan" for the person looking at the screen.
   if (!unit) notFound();
 
+  // Every side read goes through `bacaAman()`: the unit and its Riwayat are the
+  // point, the rest is context, and none of it may take the page down.
+  const mergedIntoId = unit.merged_into_id;
   const [rantai, jumlah, tujuanMerge, riwayat] = await Promise.all([
-    bacaRantai(client, id),
-    hitungKaryawan(client, id),
-    bacaTujuanMerge(client, unit.merged_into_id),
+    // Path from the topmost ancestor down to this unit, inclusive.
+    bacaAman("[struktur/detail] gagal memuat rantai induk", () =>
+      getOrgUnitAncestors(client, id),
+    ),
+    bacaAman("[struktur/detail] gagal menghitung Karyawan", async () => {
+      const [semua, aktif] = await Promise.all([
+        countEmployeesByOrgUnit(client, id, { status: "semua" }),
+        countEmployeesByOrgUnit(client, id, { status: "aktif" }),
+      ]);
+      return { semua, aktif };
+    }),
+    mergedIntoId
+      ? bacaAman("[struktur/detail] gagal memuat unit tujuan Merge", () =>
+          getOrgUnitById(client, mergedIntoId),
+        )
+      : Promise.resolve(null),
     bacaRiwayat(client, "org_units", id, "struktur/detail"),
   ]);
 
   // `getOrgUnitAncestors` includes the unit itself as the last element.
-  const leluhur = rantai.leluhur.slice(0, -1);
+  const rantaiGagal = rantai === undefined;
+  const leluhur = (rantai ?? []).slice(0, -1);
   const induk =
     unit.parent_id === null
       ? null
@@ -145,9 +114,9 @@ export default async function Page({
   const fields = buildOrgUnitFields({
     unit,
     induk,
-    indukGagal: rantai.gagal,
-    digabungkanKe: tujuanMerge,
-    jumlahKaryawan: jumlah,
+    indukGagal: rantaiGagal,
+    digabungkanKe: tujuanMerge ?? null,
+    jumlahKaryawan: jumlah ?? null,
   });
 
   const nonaktif = unit.status === "nonaktif";
@@ -195,7 +164,7 @@ export default async function Page({
           <p className="font-mono text-sm text-muted-foreground">{unit.kode}</p>
         </div>
 
-        {rantai.gagal ? (
+        {rantaiGagal ? (
           <div role="alert" className="rounded-md border bg-muted/40 p-4 text-sm">
             <p className="font-medium">Rantai induk belum bisa ditampilkan.</p>
             <p className="mt-1 text-muted-foreground">

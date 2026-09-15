@@ -24,6 +24,8 @@ import type { Employee, EmployeePrivate, VEmployee } from "@/lib/types/db";
 import { getOrgUnitDescendantIds } from "./orgUnits";
 import {
   containsPattern,
+  DbError,
+  IncompleteReadError,
   normalizeSearch,
   resolvePage,
   toPaged,
@@ -271,4 +273,152 @@ export async function isNipTaken(
   let query = client.from("employees").select("id").eq("nip", nip).limit(1);
   if (exceptId) query = query.neq("id", exceptId);
   return unwrapRows("Gagal memeriksa NIP", await query).length > 0;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Tallies — how many Karyawan point at each Data Referensi row
+ *
+ * These read the whole table in pages and count in memory. The obvious
+ * alternative, one `count` query per row, is one round trip per Unit
+ * Organisasi (a few hundred) to draw one page. Both readers below keep the
+ * page BELOW PostgREST's `db-max-rows` (1000 by default): that cap is applied
+ * server-side before any range we ask for and comes back as a short array
+ * with no error, so a single 1.500-row read would look complete while quietly
+ * hiding 500 Karyawan. A tally that stops short of the exact `count` throws
+ * `IncompleteReadError` rather than reporting a number it knows is low — the
+ * number is read right before someone presses Merge.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** The FK columns of `employees` a tally may group by: two Data Referensi, eleven Lookup. */
+export type EmployeeReferenceColumn =
+  | "org_unit_id"
+  | "jabatan_id"
+  | (typeof LOOKUP_TYPE_TO_EMPLOYEE_COLUMN)[LookupType];
+
+/** Rows per request, kept below `db-max-rows`. */
+const TALLY_PAGE = 500;
+
+/** `in(...)` chunk size — keeps the PostgREST query string well under any URL cap. */
+const TALLY_CHUNK = 100;
+
+/**
+ * Ceiling on one tally. There are ~1.500 Karyawan in total, so a chunk can
+ * never legitimately come close; it exists so a runaway read stops.
+ */
+const MAX_TALLY_ROWS = 5000;
+
+function chunked<T>(values: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Count Karyawan per value of one FK column, for the ids given — paged, and
+ * verified against the exact count.
+ *
+ * Every status counts: `merge_org_unit` / `merge_jabatan` / `merge_lookup`
+ * move rows with `where <kolom> = p_source` and no status predicate
+ * (`0002_batch_operations.sql`), so a tally that skipped nonaktif Karyawan
+ * would promise to move fewer people than the Merge actually moves.
+ *
+ * Ids with no Karyawan are seeded to `0`, so "0 Karyawan" — the safest merge
+ * there is — reads differently from "belum dihitung".
+ *
+ * `column` is never caller text: the type admits only `org_unit_id`,
+ * `jabatan_id`, or a column the frozen `LOOKUP_TYPE_TO_EMPLOYEE_COLUMN` map
+ * assigns to a tipe.
+ */
+export async function countEmployeesByColumn(
+  client: DbClient,
+  column: EmployeeReferenceColumn,
+  ids: readonly string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
+
+  for (const chunk of chunked(ids, TALLY_CHUNK)) {
+    let dibaca = 0;
+    let total = 0;
+
+    for (;;) {
+      // hc-check-columns-ignore — `column` is typed to the employees FK columns;
+      // nothing here comes from user input.
+      const { data, count, error } = await client
+        .from("employees")
+        .select(column, { count: "exact" })
+        .in(column, chunk)
+        // Stable order, or a range-paged read can show one row twice and miss
+        // another as Postgres re-orders equal keys.
+        .order("id", { ascending: true })
+        .range(dibaca, dibaca + TALLY_PAGE - 1);
+      if (error) throw new DbError("Gagal menghitung Karyawan", error);
+
+      const rows = (data ?? []) as unknown as Record<string, string | null>[];
+      total = count ?? rows.length;
+      for (const row of rows) {
+        const id = row[column];
+        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      dibaca += rows.length;
+
+      if (rows.length === 0) break;
+      if (dibaca >= total) break;
+      if (dibaca >= MAX_TALLY_ROWS) break;
+    }
+
+    if (dibaca < total) throw new IncompleteReadError("Karyawan", dibaca, total);
+  }
+
+  return counts;
+}
+
+/** Karyawan per Unit Organisasi, by status — what the tree on `/struktur` prints. */
+export type PlacementCounts = {
+  /** Karyawan aktif per unit — what the tree shows. */
+  aktif: Map<string, number>;
+  /** Karyawan of any status per unit — what a Merge would move. */
+  semua: Map<string, number>;
+};
+
+/**
+ * Every Karyawan's placement in one paged read of two columns.
+ *
+ * Throws `IncompleteReadError` when the pages stop short of the exact count:
+ * a per-unit number that is quietly low is worse than no number, and the
+ * caller (`/struktur`) shows "—" instead.
+ */
+export async function countEmployeesPerOrgUnit(client: DbClient): Promise<PlacementCounts> {
+  const aktif = new Map<string, number>();
+  const semua = new Map<string, number>();
+
+  let dibaca = 0;
+  let seharusnya: number | null = null;
+
+  for (let offset = 0; offset <= MAX_TALLY_ROWS * 4; offset += TALLY_PAGE) {
+    // `.order("id")` matters: without a stable sort, paging over PostgREST can
+    // repeat or skip rows between requests, and every count would be off.
+    const { data, error, count } = await client
+      .from("employees")
+      .select("org_unit_id, status", offset === 0 ? { count: "exact" } : undefined)
+      .order("id")
+      .range(offset, offset + TALLY_PAGE - 1);
+    if (error) throw new DbError("Gagal menghitung Karyawan per Unit Organisasi", error);
+    if (offset === 0) seharusnya = count;
+
+    for (const row of data ?? []) {
+      const unitId = row.org_unit_id;
+      if (!unitId) continue;
+      semua.set(unitId, (semua.get(unitId) ?? 0) + 1);
+      if (row.status === "aktif") aktif.set(unitId, (aktif.get(unitId) ?? 0) + 1);
+    }
+
+    dibaca += data?.length ?? 0;
+    if ((data?.length ?? 0) < TALLY_PAGE) break;
+  }
+
+  if (seharusnya !== null && dibaca < seharusnya) {
+    throw new IncompleteReadError("Karyawan", dibaca, seharusnya);
+  }
+
+  return { aktif, semua };
 }

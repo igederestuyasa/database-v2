@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import EmployeePrivateForm from "@/components/forms/EmployeePrivateForm";
 import EmployeeStatusDialog from "@/components/forms/EmployeeStatusDialog";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -93,28 +94,11 @@ export default async function Page({ params }: PageProps) {
         </p>
       </header>
 
-      {options.terpotong.length > 0 ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar pilihan belum lengkap.</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
-            {options.terpotong.map((daftar) => (
-              <li key={daftar.nama}>
-                {daftar.nama}: baru {daftar.dibaca} dari {daftar.total} baris
-                yang terbaca.
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-muted-foreground">
-            Database membatasi jumlah baris per permintaan, jadi ada pilihan
-            yang benar-benar ada tetapi tidak muncul di daftar — termasuk,
-            mungkin, yang sedang dipakai {TERMS.karyawan} ini. Periksa dulu
-            sebelum menyimpan.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={options.terpotong}
+        judul="Daftar pilihan belum lengkap."
+        keterangan={`Ada pilihan yang benar-benar ada tetapi tidak muncul di daftar — termasuk, mungkin, yang sedang dipakai ${TERMS.karyawan} ini. Periksa dulu sebelum menyimpan.`}
+      />
 
       <Card>
         <CardHeader>

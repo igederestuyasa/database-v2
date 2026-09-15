@@ -34,6 +34,7 @@ app/api/v1/{employees,org-units,jabatan,lookups}
 lib/{supabase,db,actions,revisions,cleaning,api,derived,validation}
 components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 ```
+Satu konvensi untuk `app/`: folder route hanya berisi file konvensi Next (`page`, `layout`, `loading`, `error`, `route`). Komponen dan helper murni yang dipakai satu route saja → `_components/` di route itu; helper sisi server satu route (yang mengimpor `lib/db`) → `_lib/` di route itu; yang dipakai dua route atau lebih → `components/` atau `lib/`. **Semua** Server Action di `lib/actions/`, termasuk login (`auth.ts`). `lib/` tidak pernah mengimpor dari `components/` atau `app/`; pemetaan baris → opsi picker ada di `lib/entityOptions.ts`, pilihan Data Referensi untuk picker di `lib/db/referenceOptions.ts`. `lib/db/**` boleh ditambah fungsi baca baru; tiga aturannya di `lib/db/shared.ts` tetap.
 
 ## Aturan
 - Semua tulisan ke DB dari UI lewat Server Action di `lib/actions/`. Tidak ada insert/update di Client Component. Satu Server Action = **satu statement**, ditulis langsung tanpa membuka Batch — trigger `log_revision` yang membuat Batch-nya, dan Batch itulah yang memuat Revisi-nya. **Tidak ada `withBatch()`**, dan jangan membuatnya lagi: Batch yang dibuka dari TypeScript selalu kosong (ADR-006). Contoh lengkapnya `lib/actions/_reference.ts`.

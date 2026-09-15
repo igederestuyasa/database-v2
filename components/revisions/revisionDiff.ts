@@ -54,6 +54,7 @@ import {
   LOOKUP_TYPE_TO_EMPLOYEE_COLUMN,
   type LookupType,
 } from "@/lib/validation/lookupTypes";
+import { isUuid } from "@/lib/validation/uuid";
 
 /** Shown wherever a column holds no value. Not "—": this is a diff cell. */
 export const KOSONG = "(kosong)";
@@ -129,13 +130,6 @@ export const REFERENCE_COLUMNS: Record<
 const ROW_REFERENCE: Partial<Record<LoggedTable, ReferenceEntity>> = {
   employee_private: "employees",
 };
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUuid(value: unknown): value is string {
-  return typeof value === "string" && UUID_RE.test(value);
-}
 
 /** The parts of a Revisi this module reads. */
 export type RevisionLike = Pick<
