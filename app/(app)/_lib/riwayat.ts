@@ -31,7 +31,7 @@ export async function bacaRiwayat(
   rowId: string,
   konteks: string,
 ): Promise<Revision[] | undefined> {
-  return bacaAman(`[${konteks}] gagal memuat Riwayat Revisi`, () =>
+  return bacaAman(`${konteks}`, `memuat Riwayat Revisi`, () =>
     listRevisionsByRow(client, { table, rowId, limit: RIWAYAT_LIMIT }),
   );
 }

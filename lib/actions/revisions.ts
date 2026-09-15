@@ -51,6 +51,7 @@ import {
   listRevisionsByRow,
 } from "@/lib/db/revisions";
 import { DbError } from "@/lib/db/shared";
+import { logError } from "@/lib/log";
 import type { ReferenceIds, ReferenceLabels } from "@/lib/revisions/references";
 import { applyRevert, planRevert, revertBatch as revertBatchRpc } from "@/lib/revisions/revert";
 import type { RevertSkipped } from "@/lib/revisions/revert";
@@ -225,7 +226,7 @@ async function reading<T>(pesan: string, promise: Promise<T>): Promise<T> {
     return await promise;
   } catch (error) {
     if (error instanceof DbError) {
-      console.error("[revisions]", error);
+      logError("revisions", error);
       throw new ActionError("GAGAL", pesan);
     }
     throw error;
@@ -235,7 +236,7 @@ async function reading<T>(pesan: string, promise: Promise<T>): Promise<T> {
 /** A read that failed is never the user's fault; say what did not load. */
 function readFailure(error: unknown, pesan: string): ActionFailure {
   if (error instanceof DbError) {
-    console.error("[revisions]", error);
+    logError("revisions", error);
     return actionFail("GAGAL", pesan);
   }
   return toActionFailure(error);

@@ -15,6 +15,8 @@
 // `v_employees_private`.
 // ============================================================================
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+import { requirePublicEnv, requireServiceRoleKey } from "@/lib/env";
 import type { Database } from "@/lib/types/db";
 
 export type AdminClient = SupabaseClient<Database>;
@@ -27,19 +29,8 @@ export type AdminClient = SupabaseClient<Database>;
  * state at import time.
  */
 export function createAdminClient(): AdminClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL belum diisi. Lihat .env.example.",
-    );
-  }
-  if (!serviceRoleKey) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY belum diisi (server only). Lihat .env.example.",
-    );
-  }
+  const { url } = requirePublicEnv();
+  const serviceRoleKey = requireServiceRoleKey();
 
   return createClient<Database>(url, serviceRoleKey, {
     auth: {

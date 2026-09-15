@@ -306,4 +306,4 @@ Implementasi: RLS di setiap tabel (`select` untuk authenticated; `insert/update`
 - Tidak ada soft-lock/concurrent-edit detection; edit terakhir menang, dan keduanya tercatat sebagai revisi.
 - Tidak ada webhook/notifikasi ke konsumen saat data berubah — konsumen menarik saat butuh.
 - Tidak ada pagination di UI pohon struktur (≈ ratusan node, cukup dimuat sekaligus).
-- Tidak ada test end-to-end; test hanya untuk `lib/cleaning/normalize.ts`, `lib/revisions/revert.ts`, dan `lib/api/fields.ts` (logika yang salah diam-diam paling mahal).
+- Tidak ada test end-to-end dan tidak ada test render (tanpa jsdom, ADR-005 §1). Yang diuji adalah logika murni — `vitest.config.ts` mengumpulkan setiap `*.test.ts` dari `app/**`, `lib/**`, `components/**`, `scripts/**`, `tests/**` — plus invarian yang bisa dibaca dari file (`tests/migrationInvariants.test.ts`, `tests/batchDiscipline.test.ts`, `tests/serverOnlyBoundary.test.ts`) dan perilaku skema terhadap PostgreSQL lokal (`scripts/verify-schema.sql`).

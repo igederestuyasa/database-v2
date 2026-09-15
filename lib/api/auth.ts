@@ -49,6 +49,7 @@ import {
 } from "@/lib/apiKeys/keygen";
 import { findActiveApiKeyByHash, type ApiKeySummary } from "@/lib/db/apiKeys";
 import type { DbClient } from "@/lib/db/shared";
+import { logError } from "@/lib/log";
 import { API_KEY_PATTERN } from "@/lib/validation/apiKey";
 
 import { apiError } from "./errors";
@@ -179,9 +180,9 @@ export async function touchApiKeyUsage(
       .update({ last_used_at: now.toISOString() })
       .eq("id", key.id);
     if (error) {
-      console.error("[api/v1] gagal memperbarui last_used_at", error.message);
+      logError("api/v1", error, { aksi: "perbarui last_used_at", apiKeyId: key.id });
     }
   } catch (cause) {
-    console.error("[api/v1] gagal memperbarui last_used_at", cause);
+    logError("api/v1", cause, { aksi: "perbarui last_used_at", apiKeyId: key.id });
   }
 }

@@ -12,6 +12,7 @@
 import type { z } from "zod";
 
 import { DbError } from "@/lib/db/shared";
+import { logError } from "@/lib/log";
 import { formatZodErrors } from "@/lib/validation/common";
 
 import {
@@ -87,10 +88,10 @@ export function toActionFailure(error: unknown): ActionFailure {
     const known = classifyDatabaseError(error.code);
     // Logged either way: a database error nobody translated is worth seeing in
     // the server log even when the user gets a decent sentence.
-    console.error("[action]", error);
+    logError("action", error);
     if (known) return actionFail(known.code, known.message);
     return actionFail("GAGAL", "Gagal menyimpan perubahan. Coba lagi.");
   }
-  console.error("[action]", error);
+  logError("action", error);
   return actionFail("GAGAL", "Gagal menyimpan perubahan. Coba lagi.");
 }

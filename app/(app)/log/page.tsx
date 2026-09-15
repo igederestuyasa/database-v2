@@ -6,6 +6,7 @@ import { readProfileLabels } from "@/lib/db/labels";
 import { countRevisionsInBatch, getBatchById, listBatches } from "@/lib/db/revisions";
 import type { DbClient } from "@/lib/db/shared";
 import { BATCH_TYPE_LABELS, NAV_LABELS, UI } from "@/lib/i18n/terms";
+import { logError } from "@/lib/log";
 import type { ReferenceLabels } from "@/lib/revisions/references";
 import { BATCH_JENIS, type BatchJenis } from "@/lib/revisions/tables";
 import { isUuid } from "@/lib/validation/uuid";
@@ -292,7 +293,7 @@ async function bacaLabelPelaku(
   try {
     return await readProfileLabels(client, ids);
   } catch (error) {
-    console.error("[log] gagal memuat nama pelaku", error);
+    logError("log", error, { aksi: "muat nama pelaku" });
     return {};
   }
 }

@@ -68,7 +68,7 @@ export default async function Page({
   // the point, the rest is context, and none of it may take the page down.
   const mergedIntoId = jabatan.merged_into_id;
   const [pemegang, tujuan, riwayat] = await Promise.all([
-    bacaAman("[jabatan/detail] gagal menghitung pemegang", async () => {
+    bacaAman("jabatan/detail", "menghitung pemegang", async () => {
       const [semua, aktif] = await Promise.all([
         countEmployeesByJabatan(client, id, { status: "semua" }),
         countEmployeesByJabatan(client, id, { status: "aktif" }),
@@ -76,7 +76,7 @@ export default async function Page({
       return { semua, aktif };
     }),
     mergedIntoId
-      ? bacaAman("[jabatan/detail] gagal memuat Jabatan tujuan Merge", () =>
+      ? bacaAman("jabatan/detail", "memuat Jabatan tujuan Merge", () =>
           getJabatanById(client, mergedIntoId),
         )
       : Promise.resolve(null),

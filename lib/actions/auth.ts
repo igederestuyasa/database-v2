@@ -33,13 +33,14 @@ import {
   normalizeEmail,
   officeEmailMessage,
 } from "@/lib/auth/domain";
-import { readAllowedEmailDomain, readSupabaseEnv } from "@/lib/auth/env";
 import { authErrorMessage } from "@/lib/auth/errors";
 import {
   LOGIN_CALLBACK_PATH,
   loginHref,
   safeNextPath,
 } from "@/lib/auth/redirect";
+import { isSupabaseConfigured, readAllowedEmailDomain } from "@/lib/env";
+import { logError } from "@/lib/log";
 import { createClient } from "@/lib/supabase/server";
 
 const emailField = z
@@ -104,7 +105,7 @@ export async function signInWithPassword(
 
     return actionOk({ redirectTo: safeNextPath(parsed.data.next) });
   } catch (error) {
-    console.error("[login] signInWithPassword", error);
+    logError("login", error, { aksi: "signInWithPassword" });
     return actionFail(
       "GAGAL",
       authErrorMessage(asAuthError(error), { allowedDomain, context: "masuk" }),
@@ -163,7 +164,7 @@ export async function requestMagicLink(
 
     return actionOk({ email });
   } catch (error) {
-    console.error("[login] requestMagicLink", error);
+    logError("login", error, { aksi: "requestMagicLink" });
     return actionFail(
       "GAGAL",
       authErrorMessage(asAuthError(error), {
@@ -195,11 +196,11 @@ export async function signOut(): Promise<ActionResult<{ redirectTo: string }>> {
     if (error) {
       // Worth knowing about (other devices may still hold a session), but not
       // worth blocking the user on.
-      console.error("[login] signOut", error);
+      logError("login", error, { aksi: "signOut" });
     }
     return actionOk({ redirectTo: loginHref({ pesan: "keluar" }) });
   } catch (error) {
-    console.error("[login] signOut", error);
+    logError("login", error, { aksi: "signOut" });
     return actionFail(
       "GAGAL",
       "Gagal keluar. Tutup peramban untuk mengakhiri sesi, lalu coba lagi.",
@@ -234,7 +235,7 @@ async function siteOrigin(): Promise<string | null> {
 
 /** One message for "the deployment has no Supabase", instead of a raw throw. */
 function supabaseConfigFailure(): ActionFailure | null {
-  if (readSupabaseEnv()) return null;
+  if (isSupabaseConfigured()) return null;
   return actionFail(
     "GAGAL",
     "Koneksi ke Supabase belum dikonfigurasi, jadi belum ada yang bisa masuk. Hubungi admin HC Core.",

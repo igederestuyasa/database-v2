@@ -85,7 +85,7 @@ export default async function Page({
   // instead of pretending the columns are empty.
   const [pribadi, riwayat, riwayatPribadi] = await Promise.all([
     isAdmin
-      ? bacaAman("[karyawan/detail] gagal memuat Data Pribadi Sensitif", () =>
+      ? bacaAman("karyawan/detail", "memuat Data Pribadi Sensitif", () =>
           getEmployeePrivate(client, id),
         )
       : Promise.resolve(null),

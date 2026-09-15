@@ -75,7 +75,7 @@ export default async function Page({
   // take down a page whose whole job is to show the Riwayat of the odd row.
   const mergedIntoId = lookup.merged_into_id;
   const [pemakai, tujuan, riwayat] = await Promise.all([
-    bacaAman("[master-data/detail] gagal menghitung pemakai", async () => {
+    bacaAman("master-data/detail", "menghitung pemakai", async () => {
       const [semua, aktif] = await Promise.all([
         countEmployeesByLookup(client, lookup, { status: "semua" }),
         countEmployeesByLookup(client, lookup, { status: "aktif" }),
@@ -83,7 +83,7 @@ export default async function Page({
       return { semua, aktif };
     }),
     mergedIntoId
-      ? bacaAman("[master-data/detail] gagal memuat Lookup tujuan Merge", () =>
+      ? bacaAman("master-data/detail", "memuat Lookup tujuan Merge", () =>
           getLookupById(client, mergedIntoId),
         )
       : Promise.resolve(null),

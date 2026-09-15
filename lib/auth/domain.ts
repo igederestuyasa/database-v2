@@ -10,7 +10,7 @@
  *
  * This module is PURE: no `process.env`, no `next/headers`. The Client
  * Component form imports it too, so the domain always arrives as an argument
- * (`lib/auth/env.ts` is what reads `ALLOWED_EMAIL_DOMAIN`, server-side only).
+ * (`lib/env.ts` is what reads `ALLOWED_EMAIL_DOMAIN`, server-side only).
  */
 
 /** Fallback used by `handle_new_user()` when `app.allowed_email_domain` is unset. */

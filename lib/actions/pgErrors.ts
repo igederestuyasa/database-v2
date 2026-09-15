@@ -37,6 +37,7 @@
  */
 import { DbError, IncompleteReadError } from "@/lib/db/shared";
 import { UI } from "@/lib/i18n/terms";
+import { logError } from "@/lib/log";
 
 import {
   ActionError,
@@ -230,7 +231,7 @@ export function mapDbError(error: unknown, ctx: DbErrorContext): unknown {
 
   if (!(error instanceof DbError)) {
     if (ctx.fallback === undefined) return error;
-    console.error("[action]", error);
+    logError("action", error, { entitas: ctx.entitas });
     return new ActionError("GAGAL", ctx.fallback);
   }
 
@@ -278,7 +279,7 @@ export function mapDbError(error: unknown, ctx: DbErrorContext): unknown {
     default:
       // A database error nobody translated is worth seeing in the server log
       // even when the user gets a decent sentence.
-      console.error("[action]", error);
+      logError("action", error, { entitas: ctx.entitas });
       return new ActionError("GAGAL", ctx.fallback ?? GAGAL_UMUM);
   }
 }

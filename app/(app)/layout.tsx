@@ -2,9 +2,10 @@ import Link from "next/link";
 
 import { SidebarNav, type SidebarNavItem } from "@/components/SidebarNav";
 import { SignOutButton } from "@/components/SignOutButton";
-import { isSupabaseConfigured } from "@/lib/auth/env";
 import { readSession } from "@/lib/auth/session";
+import { isSupabaseConfigured } from "@/lib/env";
 import { NAV_LABELS, ROLE_LABELS } from "@/lib/i18n/terms";
+import { logError } from "@/lib/log";
 
 /**
  * Every page in this group reads live data from Supabase, so nothing here is
@@ -86,7 +87,7 @@ async function bacaAkun() {
     const state = await readSession();
     return state.status === "masuk" ? state.user : null;
   } catch (error) {
-    console.error("[layout] gagal membaca sesi untuk sidebar", error);
+    logError("layout", error, { aksi: "baca sesi untuk sidebar" });
     return null;
   }
 }

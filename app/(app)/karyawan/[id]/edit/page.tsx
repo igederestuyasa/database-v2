@@ -68,13 +68,14 @@ export default async function Page({ params }: PageProps) {
     );
   }
 
-  const employee = await getEmployeeRowById(client, id);
-  if (!employee) notFound();
-
-  const [options, privateData] = await Promise.all([
+  // Three reads, one round trip: neither the picker lists nor Data Pribadi
+  // Sensitif depend on the Karyawan row itself.
+  const [employee, options, privateData] = await Promise.all([
+    getEmployeeRowById(client, id),
     loadReferenceOptions(client),
     getEmployeePrivate(client, id),
   ]);
+  if (!employee) notFound();
 
   return (
     <div className="space-y-6">

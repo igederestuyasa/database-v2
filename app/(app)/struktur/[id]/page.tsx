@@ -85,10 +85,10 @@ export default async function Page({
   const mergedIntoId = unit.merged_into_id;
   const [rantai, jumlah, tujuanMerge, riwayat] = await Promise.all([
     // Path from the topmost ancestor down to this unit, inclusive.
-    bacaAman("[struktur/detail] gagal memuat rantai induk", () =>
+    bacaAman("struktur/detail", "memuat rantai induk", () =>
       getOrgUnitAncestors(client, id),
     ),
-    bacaAman("[struktur/detail] gagal menghitung Karyawan", async () => {
+    bacaAman("struktur/detail", "menghitung Karyawan", async () => {
       const [semua, aktif] = await Promise.all([
         countEmployeesByOrgUnit(client, id, { status: "semua" }),
         countEmployeesByOrgUnit(client, id, { status: "aktif" }),
@@ -96,7 +96,7 @@ export default async function Page({
       return { semua, aktif };
     }),
     mergedIntoId
-      ? bacaAman("[struktur/detail] gagal memuat unit tujuan Merge", () =>
+      ? bacaAman("struktur/detail", "memuat unit tujuan Merge", () =>
           getOrgUnitById(client, mergedIntoId),
         )
       : Promise.resolve(null),

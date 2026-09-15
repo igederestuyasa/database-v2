@@ -19,6 +19,8 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 
 import { looksLikeDomainRejection } from "@/lib/auth/errors";
 import { loginHref, safeNextPath } from "@/lib/auth/redirect";
+import { isSupabaseConfigured } from "@/lib/env";
+import { logError } from "@/lib/log";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -55,9 +57,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return fail("konfigurasi");
+  if (!isSupabaseConfigured()) return fail("konfigurasi");
 
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL(next, request.url));
     }
   } catch (error) {
-    console.error("[login/callback]", error);
+    logError("login/callback", error);
     return fail("tautan-gagal");
   }
 

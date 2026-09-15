@@ -2,8 +2,10 @@
 -- HC Core — 0001_init.sql
 -- Skema lengkap: tabel, view, trigger, RLS, dan RPC.
 --
--- This is the ONLY migration file in the project. Every table, view, trigger,
--- policy and grant HC Core needs lives here. See ARCHITECTURE.md §3 and §5.
+-- One of exactly TWO migration files (the other is 0002_batch_operations.sql,
+-- the Postgres functions behind Merge/Revert — ADR-006). Every table, view,
+-- trigger, policy and grant HC Core needs lives here. See ARCHITECTURE.md §3
+-- and §5. The directory is frozen at two: change these files in place.
 --
 -- Portability: plain PostgreSQL 15+. The only Supabase-specific dependency is
 -- the `auth` schema (`auth.users`, `auth.uid()`) and the three Supabase roles

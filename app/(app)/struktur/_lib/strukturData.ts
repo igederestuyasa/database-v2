@@ -44,7 +44,7 @@ export async function loadStrukturNodes(client: DbClient): Promise<StrukturData>
   // that does not exist.
   const [unitRead, counts] = await Promise.all([
     listAllOrgUnits(client, { status: "semua", orderBy: "nama" }),
-    bacaAman("[struktur] gagal menghitung Karyawan per unit", () =>
+    bacaAman("struktur", "menghitung Karyawan per unit", () =>
       countEmployeesPerOrgUnit(client),
     ),
   ]);
