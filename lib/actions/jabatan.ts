@@ -61,6 +61,24 @@ import {
   toActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
+
+/**
+ * Terjemahan penolakan database untuk Jabatan (lihat `mapDbError`).
+ *
+ * `23505` adalah dua admin menyimpan kode yang sama dalam sekejap: yang kedua
+ * lolos pengecekan `getJabatanByKode` dan ditangkap UNIQUE. Penolakan RLS
+ * (`PGRST116`, `42501`) dibentuk `mapDbError` dari `aksi`.
+ */
+const JABATAN_DB: DbErrorContext = {
+  entitas: "Jabatan",
+  aksi: "mengubah Jabatan",
+  unikDefault: {
+    message: "Kode Jabatan itu sudah dipakai. Muat ulang halaman lalu coba lagi.",
+    field: "kode",
+    fieldMessage: "Kode Jabatan sudah dipakai.",
+  },
+};
 
 /** Baris Jabatan seadanya yang dikembalikan ke UI setelah sebuah tulisan. */
 export type JabatanRingkas = {
@@ -126,7 +144,7 @@ export async function createJabatan(
     const { client } = await requireAdmin();
 
     // Dicek di sini supaya pesannya bisa menyebut Jabatan yang sudah ada;
-    // UNIQUE di database tetap penjaga terakhirnya (lihat `asActionError`).
+    // UNIQUE di database tetap penjaga terakhirnya (lihat `JABATAN_DB`).
     const existing = await getJabatanByKode(client, kode);
     if (existing) {
       throw new ActionError(
@@ -150,7 +168,7 @@ export async function createJabatan(
 
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, JABATAN_DB));
   }
 }
 
@@ -194,7 +212,7 @@ export async function renameJabatan(
 
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, JABATAN_DB));
   }
 }
 
@@ -239,7 +257,7 @@ export async function setJabatanStatus(
 
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, JABATAN_DB));
   }
 }
 
@@ -276,48 +294,4 @@ function ringkas(row: {
   status: string;
 }): JabatanRingkas {
   return { id: row.id, kode: row.kode, nama: row.nama, status: row.status };
-}
-
-/**
- * Terjemahkan penolakan dari database menjadi pesan yang bisa dibaca staf HC.
- *
- * Tiga yang bisa sampai ke sini, dan ketiganya tidak boleh muncul sebagai
- * "Gagal menyimpan perubahan. Coba lagi.":
- *
- *   * `23505` — dua admin menyimpan kode yang sama dalam sekejap: yang kedua
- *     lolos pengecekan `getJabatanByKode` dan ditangkap UNIQUE. Tanpa ini staf
- *     HC membaca "duplicate key value violates unique constraint
- *     jabatan_kode_key".
- *   * `PGRST116` — **penolakan RLS pada UPDATE**, dan bentuknya menipu. Policy
- *     `jabatan_update` ditulis `using (is_admin())`, jadi tulisan dari yang
- *     bukan admin tidak melempar `insufficient_privilege`; ia hanya cocok
- *     dengan NOL baris, lalu `.single()` mengeluh "tidak ada baris". Di sini
- *     baris itu jelas ada — baru saja dibaca — jadi nol baris berarti
- *     tulisannya yang ditolak, bukan barisnya yang hilang.
- *   * `42501` — penolakan yang memang melempar: `with check` pada INSERT, dan
- *     `assert_admin()` di fungsi RPC.
- *
- * `requireAdmin()` di setiap action seharusnya sudah menyaring semuanya; ini
- * lapis keduanya (CLAUDE.md: "Cek role di Server Action **dan** RLS"), untuk
- * saat role berubah di tengah request atau sesi habis setelah guard lewat.
- */
-function asActionError(error: unknown): unknown {
-  if (!(error instanceof DbError)) return error;
-
-  if (error.code === "23505") {
-    return new ActionError(
-      "KONFLIK",
-      "Kode Jabatan itu sudah dipakai. Muat ulang halaman lalu coba lagi.",
-      { kode: "Kode Jabatan sudah dipakai." },
-    );
-  }
-
-  if (error.code === "PGRST116" || error.code === "42501") {
-    return new ActionError(
-      "BUKAN_ADMIN",
-      "Perubahan ditolak database: akun Anda tidak berhak mengubah Jabatan. Muat ulang halaman, lalu hubungi admin HC Core kalau masih ditolak.",
-    );
-  }
-
-  return error;
 }

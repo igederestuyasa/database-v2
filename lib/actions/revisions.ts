@@ -66,10 +66,10 @@ import {
   requireAdmin,
   requireUser,
   toActionFailure,
-  type ActionErrorCode,
   type ActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
 
 /**
  * Ceiling on one Riwayat Revisi read.
@@ -172,69 +172,46 @@ function revalidate(paths: readonly string[]): void {
 // Error mapping
 // ---------------------------------------------------------------------------
 
+const SUDAH_DIKEMBALIKAN =
+  "Batch ini sudah pernah dikembalikan. Satu Batch hanya bisa dikembalikan sekali.";
+
+const TIDAK_DITEMUKAN_LAGI =
+  "Data yang akan dikembalikan tidak ditemukan lagi. Muat ulang halaman ini, lalu coba lagi.";
+
 /**
- * SQLSTATE → `ActionErrorCode`, for the errors our own SQL raises.
+ * Terjemahan penolakan database untuk Revert (lihat `mapDbError`).
  *
  * `42501` and `22023` carry sentences written by `0002_batch_operations.sql`
  * itself — "Hanya admin yang boleh mengembalikan Revisi.", "Tidak ada Revisi di
  * Batch ini yang bisa dikembalikan." — so they are shown verbatim. `55000`
- * (already reverted) and `P0002` (row or Batch gone) are re-worded below,
+ * (already reverted) and `P0002` (row or Batch gone) are re-worded (`ulang`),
  * because the database's version of those names a uuid and staf HC should never
  * have to read one.
  *
  * `22023` is `KONFLIK`, not `VALIDASI`: by the time an RPC sees these arguments
  * zod has already checked their shape, so the only way to reach it is a plan
  * with nothing revertable in it — which is a state, not a typo.
- */
-const CODE_BY_SQLSTATE: Record<string, ActionErrorCode> = {
-  "42501": "BUKAN_ADMIN",
-  "22023": "KONFLIK",
-  "55000": "KONFLIK",
-  P0002: "TIDAK_DITEMUKAN",
-  // PostgREST, not Postgres: a row the reader may not see behaves as absent.
-  PGRST116: "TIDAK_DITEMUKAN",
-};
-
-const REWORDED_BY_SQLSTATE: Record<string, string> = {
-  "55000":
-    "Batch ini sudah pernah dikembalikan. Satu Batch hanya bisa dikembalikan sekali.",
-  P0002:
-    "Data yang akan dikembalikan tidak ditemukan lagi. Muat ulang halaman ini, lalu coba lagi.",
-  PGRST116:
-    "Data yang akan dikembalikan tidak ditemukan lagi. Muat ulang halaman ini, lalu coba lagi.",
-};
-
-/**
- * Turn a failed revert into something a toast can say.
  *
- * `applyRevert()` / `revertBatch()` wrap PostgREST errors in `DbError`, which
- * keeps the SQLSTATE. Anything without one is unexpected: it is logged and
- * reported generically, exactly as `_guard.ts` asks.
+ * `fallback` is supplied per call ("Gagal mengembalikan Revisi." vs "… Batch."),
+ * and it also covers a rejection that is not a database error at all.
  */
-function revertFailure(error: unknown, fallback: string): ActionError {
-  if (!(error instanceof DbError)) {
-    console.error("[revisions]", error);
-    return new ActionError("GAGAL", fallback);
-  }
-
-  const sqlstate = error.code ?? "";
-  const code = CODE_BY_SQLSTATE[sqlstate];
-  if (!code) {
-    console.error("[revisions]", error);
-    return new ActionError("GAGAL", fallback);
-  }
-
-  const reworded = REWORDED_BY_SQLSTATE[sqlstate];
-  if (reworded) {
-    console.error("[revisions]", error);
-    return new ActionError(code, reworded);
-  }
-
-  // `DbError` prefixes its context ("Gagal mengembalikan Revisi: …"); the
-  // sentence our SQL wrote is what is worth showing.
-  const message = error.message.split(": ").slice(1).join(": ") || error.message;
-  return new ActionError(code, message);
-}
+const REVERT_DB: DbErrorContext = {
+  entitas: "Revisi",
+  aksi: "mengembalikan Revisi",
+  sendiri: {
+    "42501": "BUKAN_ADMIN",
+    "22023": "KONFLIK",
+    "55000": "KONFLIK",
+    P0002: "TIDAK_DITEMUKAN",
+    // PostgREST, not Postgres: a row the reader may not see behaves as absent.
+    PGRST116: "TIDAK_DITEMUKAN",
+  },
+  ulang: {
+    "55000": SUDAH_DIKEMBALIKAN,
+    P0002: TIDAK_DITEMUKAN_LAGI,
+    PGRST116: TIDAK_DITEMUKAN_LAGI,
+  },
+};
 
 /**
  * Wrap a read inside a write, so a failed database read says so.
@@ -482,7 +459,10 @@ export async function revertRevision(
     try {
       result = await applyRevert(plan, client);
     } catch (error) {
-      throw revertFailure(error, "Gagal mengembalikan Revisi. Coba lagi.");
+      throw mapDbError(error, {
+        ...REVERT_DB,
+        fallback: "Gagal mengembalikan Revisi. Coba lagi.",
+      });
     }
 
     const operation = plan.operations[0];
@@ -545,17 +525,18 @@ export async function revertBatch(
       throw new ActionError("TIDAK_DITEMUKAN", "Batch ini tidak ditemukan.");
     }
     if (batch.reverted_by_batch_id) {
-      throw new ActionError(
-        "KONFLIK",
-        REWORDED_BY_SQLSTATE["55000"] ?? "Batch ini sudah pernah dikembalikan.",
-      );
+      throw new ActionError("KONFLIK", SUDAH_DIKEMBALIKAN);
     }
 
     let result;
     try {
       result = await revertBatchRpc(batchId, client);
     } catch (error) {
-      throw revertFailure(error, "Gagal mengembalikan Batch. Coba lagi.");
+      throw mapDbError(error, {
+        ...REVERT_DB,
+        aksi: "mengembalikan Batch",
+        fallback: "Gagal mengembalikan Batch. Coba lagi.",
+      });
     }
 
     revalidate(ALL_PATHS);

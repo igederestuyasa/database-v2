@@ -70,12 +70,12 @@ const NAV_ITEMS: readonly SidebarNavItem[] = [
  * whatever the page itself wanted to say about the problem. `middleware.ts` is
  * the boundary; this only decides what the sidebar shows.
  *
- * NOTHING HERE MAY THROW, and that is not defensive habit — it is the rule for
- * a layout. Next does not route an error thrown by a layout to the `error.tsx`
- * of its own segment, and every `error.tsx` in this app sits *under* this file.
- * So a transient failure on the `profiles` select (which `requireUser()`
- * deliberately rethrows) would replace eight styled Indonesian error pages with
- * Next's built-in one, for a read whose only job is to print an email address.
+ * Nothing here throws, by choice. Next routes an error thrown by a layout to
+ * the *parent's* boundary — `app/error.tsx`, which exists — but that boundary
+ * replaces the whole shell, sidebar included, for a read whose only job is to
+ * print an email address. Rendering the shell without the account block is
+ * the kinder failure for a transient `profiles` hiccup; the page inside will
+ * hit the same cached `readVerifiedSession()` and report it properly.
  * A missing `.env.local` is the same story, hence the configured check.
  *
  * `null` means "render the shell without an account block" — never an error.

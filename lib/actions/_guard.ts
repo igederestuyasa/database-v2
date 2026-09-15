@@ -8,9 +8,16 @@
  * error, and an action check alone would be bypassed the moment anything talks
  * to the database another way.
  *
- * This module is NOT a `"use server"` file — it exports classes and types, and
- * a `"use server"` module may only export async functions. Import it from the
- * action files, which are.
+ * What lives where, since the refactor that split this file:
+ *
+ *   * `./errors.ts`   — `ActionError`, `UnauthenticatedError`,
+ *                       `ForbiddenError`, `ActionErrorCode`.
+ *   * `./result.ts`   — `ActionResult` and friends, `toActionFailure()`.
+ *   * `./pgErrors.ts` — `mapDbError()`, the one database-error translation.
+ *   * this file       — who is signed in. The only impure part.
+ *
+ * The three helpers are pure (no `next/*`) and unit-tested; this module
+ * re-exports them so an action still imports everything from one place:
  *
  *     "use server";
  *     export async function renameJabatan(input: JabatanRenameInput) {
@@ -20,21 +27,26 @@
  *         const { client } = await requireAdmin();
  *         …
  *       } catch (error) {
- *         return toActionFailure(error);
+ *         return toActionFailure(mapDbError(error, JABATAN_DB));
  *       }
  *     }
  *
- * See `lib/actions/_reference.ts` for the whole thing worked through.
+ * This module is NOT a `"use server"` file — it exports classes and types, and
+ * a `"use server"` module may only export async functions. Import it from the
+ * action files, which are. See `lib/actions/_reference.ts` for the whole thing
+ * worked through.
  */
 import { cache } from "react";
-import type { z } from "zod";
 
-import { DbError, type DbClient } from "@/lib/db/shared";
+import type { DbClient } from "@/lib/db/shared";
 import { createClient } from "@/lib/supabase/server";
-import { formatZodErrors } from "@/lib/validation/common";
-import { UI } from "@/lib/i18n/terms";
 
-import { classifyDatabaseError } from "./pgErrors";
+import { ActionError, ForbiddenError, UnauthenticatedError } from "./errors";
+
+export { ActionError, ForbiddenError, UnauthenticatedError } from "./errors";
+export type { ActionErrorCode } from "./errors";
+export { actionFail, actionInvalid, actionOk, toActionFailure } from "./result";
+export type { ActionFailure, ActionResult, ActionSuccess } from "./result";
 
 /** `profiles.role` (ARCHITECTURE.md §5). */
 export type AppRole = "admin" | "viewer";
@@ -51,133 +63,6 @@ export type GuardContext = {
   client: DbClient;
   user: SessionUser;
 };
-
-/** Nobody is signed in. */
-export class UnauthenticatedError extends Error {
-  constructor(message = "Anda belum login.") {
-    super(message);
-    this.name = "UnauthenticatedError";
-  }
-}
-
-/** Signed in, but not an admin. */
-export class ForbiddenError extends Error {
-  constructor(message: string = UI.hanyaAdmin) {
-    super(message);
-    this.name = "ForbiddenError";
-  }
-}
-
-/** Something the action refuses for a reason the user can act on. */
-export class ActionError extends Error {
-  readonly code: ActionErrorCode;
-  readonly fieldErrors: Record<string, string> | undefined;
-
-  constructor(
-    code: ActionErrorCode,
-    message: string,
-    fieldErrors?: Record<string, string>,
-  ) {
-    super(message);
-    this.name = "ActionError";
-    this.code = code;
-    this.fieldErrors = fieldErrors;
-  }
-}
-
-export type ActionErrorCode =
-  /** Not signed in. */
-  | "TIDAK_LOGIN"
-  /** Signed in as viewer, action needs admin. */
-  | "BUKAN_ADMIN"
-  /** zod rejected the input. */
-  | "VALIDASI"
-  /** The row does not exist (any more). */
-  | "TIDAK_DITEMUKAN"
-  /** A UNIQUE constraint, a Batch already reverted, a stale edit. */
-  | "KONFLIK"
-  /** Anything else. */
-  | "GAGAL";
-
-export type ActionSuccess<T> = { ok: true; data: T };
-
-export type ActionFailure = {
-  ok: false;
-  error: {
-    code: ActionErrorCode;
-    /** Indonesian, ready to show in a toast. */
-    message: string;
-    /** Per-field messages for react-hook-form, when the failure is validation. */
-    fieldErrors?: Record<string, string>;
-  };
-};
-
-/**
- * What every Server Action returns.
- *
- * A returned failure, not a thrown one: a Server Action that throws reaches
- * the client as an opaque digest, which tells staf HC nothing.
- */
-export type ActionResult<T> = ActionSuccess<T> | ActionFailure;
-
-export function actionOk<T>(data: T): ActionSuccess<T> {
-  return { ok: true, data };
-}
-
-export function actionFail(
-  code: ActionErrorCode,
-  message: string,
-  fieldErrors?: Record<string, string>,
-): ActionFailure {
-  return { ok: false, error: { code, message, ...(fieldErrors ? { fieldErrors } : {}) } };
-}
-
-/** Shorthand for a failed `safeParse`. */
-export function actionInvalid(error: z.ZodError): ActionFailure {
-  const { fieldErrors, messages } = formatZodErrors(error);
-  return actionFail(
-    "VALIDASI",
-    messages[0] ?? "Data yang dikirim tidak valid.",
-    fieldErrors,
-  );
-}
-
-/**
- * Turn anything thrown inside an action into a failure the UI can render.
- *
- * Unexpected errors are logged server-side and reported generically: a
- * PostgREST message ("duplicate key value violates unique constraint …") is
- * not something staf HC should have to read.
- *
- * A `DbError` an action did not translate itself falls back to the shared
- * defaults in `pgErrors.ts` rather than straight to the catch-all. An entity
- * that words `23505` better than "nilai ini sudah dipakai" still should, and
- * still does — it converts to an `ActionError` first and never reaches here.
- * This is the floor, not the ceiling: without it, forgetting one code turns an
- * RLS refusal into "coba lagi", which asks the user to retry a write that can
- * never succeed.
- */
-export function toActionFailure(error: unknown): ActionFailure {
-  if (error instanceof UnauthenticatedError) {
-    return actionFail("TIDAK_LOGIN", error.message);
-  }
-  if (error instanceof ForbiddenError) {
-    return actionFail("BUKAN_ADMIN", error.message);
-  }
-  if (error instanceof ActionError) {
-    return actionFail(error.code, error.message, error.fieldErrors);
-  }
-  if (error instanceof DbError) {
-    const known = classifyDatabaseError(error.code);
-    // Logged either way: a database error nobody translated is worth seeing in
-    // the server log even when the user gets a decent sentence.
-    console.error("[action]", error);
-    if (known) return actionFail(known.code, known.message);
-    return actionFail("GAGAL", "Gagal menyimpan perubahan. Coba lagi.");
-  }
-  console.error("[action]", error);
-  return actionFail("GAGAL", "Gagal menyimpan perubahan. Coba lagi.");
-}
 
 /**
  * Who is signed in, as far as this request knows — one of four states.
