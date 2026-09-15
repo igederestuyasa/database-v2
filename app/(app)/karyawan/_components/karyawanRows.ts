@@ -4,7 +4,7 @@
  * NO `"use client"` HERE, on purpose: `page.tsx` is a Server Component and it
  * calls this. A mapper exported from a client module becomes a client
  * reference on the server, and calling it throws in a production build only —
- * see the long note in `components/shared/entityOptions.ts`.
+ * see the long note in `lib/entityOptions.ts`.
  *
  * Mapping instead of handing `VEmployee` straight to the browser: the view has
  * seventy-odd columns and the table shows seven of them, so fifty full rows

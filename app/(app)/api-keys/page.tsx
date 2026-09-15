@@ -7,7 +7,7 @@ import { requirePageSession } from "@/lib/auth/session";
 import { listApiKeys } from "@/lib/db/apiKeys";
 import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
-import { ApiKeyTable, type ApiKeyRow } from "./ApiKeyTable";
+import { ApiKeyTable, type ApiKeyRow } from "./_components/ApiKeyTable";
 
 // Live data only — never prerendered at build time. See ADR-005 §6.
 export const dynamic = "force-dynamic";

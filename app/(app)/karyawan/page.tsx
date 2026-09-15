@@ -5,7 +5,7 @@ import {
   toLookupOptions,
   toOrgUnitOptions,
   type EntityOption,
-} from "@/components/shared/entityOptions";
+} from "@/lib/entityOptions";
 import { requirePageSession } from "@/lib/auth/session";
 import { listEmployees } from "@/lib/db/employees";
 import { listAllJabatan } from "@/lib/db/jabatan";

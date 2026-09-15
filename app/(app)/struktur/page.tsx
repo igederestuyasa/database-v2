@@ -4,7 +4,7 @@ import { StrukturClient } from "@/components/struktur/StrukturClient";
 import { requirePageSession } from "@/lib/auth/session";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 
-import { loadStrukturNodes } from "./strukturData";
+import { loadStrukturNodes } from "./_lib/strukturData";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";

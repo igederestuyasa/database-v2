@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { requirePageSession } from "@/lib/auth/session";
 import { NAV_LABELS } from "@/lib/i18n/terms";
 
-import BereskanClient from "./BereskanClient";
-import { loadBereskan } from "./data";
+import BereskanClient from "./_components/BereskanClient";
+import { loadBereskan } from "./_lib/data";
 
 // Live data only — never prerendered at build time. See ADR-005 §6.
 export const dynamic = "force-dynamic";

@@ -9,7 +9,7 @@
  * Reads only. Every write from this page goes through a Server Action
  * (`./actions.ts` for rename, `lib/actions/merge.ts` for Merge).
  */
-// From `entityOptions`, NOT from `EntityPicker`: this module runs on the
+// From `lib/entityOptions`, NOT from `EntityPicker`: this module runs on the
 // server, and every export of a `"use client"` module reaches the server as a
 // reference that throws when called. Same functions, same signatures.
 import {
@@ -17,7 +17,7 @@ import {
   toLookupOptions,
   toOrgUnitOptions,
   type EntityOption,
-} from "@/components/shared/entityOptions";
+} from "@/lib/entityOptions";
 import {
   findEmployeesMissingReference,
   findOrphanOrgUnits,

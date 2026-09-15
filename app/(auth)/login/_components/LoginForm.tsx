@@ -8,7 +8,7 @@
  * what creates a first-time account, which `on_auth_user_created` then either
  * refuses (not an office address) or accepts as a `viewer`.
  *
- * All the deciding happens in `app/(auth)/login/actions.ts`; this component
+ * All the deciding happens in `lib/actions/auth.ts`; this component
  * only collects the input, shows what came back, and never sees a raw
  * PostgREST or Supabase Auth message.
  */
@@ -32,7 +32,7 @@ import { toast } from "@/components/ui/sonner";
 import type { ActionFailure } from "@/lib/actions/_guard";
 import { isValidEmailShape, officeEmailPlaceholder } from "@/lib/auth/domain";
 
-import { requestMagicLink, signInWithPassword } from "./actions";
+import { requestMagicLink, signInWithPassword } from "@/lib/actions/auth";
 
 const loginFormSchema = z.object({
   email: z

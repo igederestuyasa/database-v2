@@ -27,7 +27,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getProfileById } from "@/lib/auth/profiles";
+import { getProfileById } from "@/lib/db/profiles";
 import { DbError } from "@/lib/db/shared";
 import { roleSchema } from "@/lib/validation/common";
 

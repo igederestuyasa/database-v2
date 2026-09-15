@@ -9,7 +9,7 @@ import { BATCH_TYPE_LABELS, NAV_LABELS, UI } from "@/lib/i18n/terms";
 import type { ReferenceLabels } from "@/lib/revisions/references";
 import { BATCH_JENIS, type BatchJenis } from "@/lib/revisions/tables";
 
-import BatchList, { type BatchRow } from "./BatchList";
+import BatchList, { type BatchRow } from "./_components/BatchList";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";

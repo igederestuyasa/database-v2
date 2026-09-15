@@ -15,12 +15,9 @@ import {
 } from "@/components/ui/card";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeePrivate, getEmployeeRowById } from "@/lib/db/employees";
+import { loadReferenceOptions } from "@/lib/db/referenceOptions";
 import { TERMS, UI } from "@/lib/i18n/terms";
 import { uuidField } from "@/lib/validation/common";
-
-// Modul ini duduk di folder `baru/` karena kedua halaman form — tambah dan
-// ubah — memakainya, dan keduanya milik unit yang sama.
-import { loadEmployeeFormOptions } from "../../baru/employeeFormOptions";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -74,7 +71,7 @@ export default async function Page({ params }: PageProps) {
   if (!employee) notFound();
 
   const [options, privateData] = await Promise.all([
-    loadEmployeeFormOptions(client),
+    loadReferenceOptions(client),
     getEmployeePrivate(client, id),
   ]);
 

@@ -4,9 +4,8 @@ import Link from "next/link";
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import { Button } from "@/components/ui/button";
 import { requirePageSession } from "@/lib/auth/session";
+import { loadReferenceOptions } from "@/lib/db/referenceOptions";
 import { TERMS, UI } from "@/lib/i18n/terms";
-
-import { loadEmployeeFormOptions } from "./employeeFormOptions";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -42,7 +41,7 @@ export default async function Page() {
     );
   }
 
-  const options = await loadEmployeeFormOptions(client);
+  const options = await loadReferenceOptions(client);
 
   return (
     <div className="space-y-6">

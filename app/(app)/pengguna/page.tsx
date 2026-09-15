@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { countAdmins, listProfiles } from "@/lib/auth/profiles";
 import { requirePageSession } from "@/lib/auth/session";
+import { countAdmins, listProfiles } from "@/lib/db/profiles";
 import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
-import { PenggunaTable, type PenggunaRow } from "./PenggunaTable";
+import { PenggunaTable, type PenggunaRow } from "./_components/PenggunaTable";
 
 // Live data only — never prerendered at build time. See ADR-005 §6.
 export const dynamic = "force-dynamic";

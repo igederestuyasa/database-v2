@@ -1,44 +1,41 @@
 /**
- * Semua pilihan yang dibutuhkan Form Karyawan, dibaca sekali di server.
+ * Semua pilihan Data Referensi yang dibutuhkan sebuah picker, dibaca sekali.
  *
  * ADR-002: setiap kolom referensi di `employees` adalah FK uuid, dan formnya
  * **tidak pernah** mengetik bebas — Unit Organisasi, Jabatan, dan sebelas
  * kolom Lookup semuanya dipilih dari daftar lewat `EntityPicker`. Daftar itu
- * harus datang dari server, jadi tempatnya di sini.
- *
- * Kenapa modul ini duduk di folder `baru/`: dua halaman yang memakainya —
- * `/karyawan/baru` dan `/karyawan/[id]/edit` — sama-sama milik unit Form
- * Karyawan, sedangkan `app/(app)/karyawan/_components/` milik unit daftar.
- * Halaman edit mengimpornya dari sini alih-alih menyalin tiga belas pemetaan
- * yang sama.
- *
- * **Tidak ada `"use client"` di file ini, dan itu bukan kebetulan.** Ketiga
- * pemetaan `toOrgUnitOptions`/`toJabatanOptions`/`toLookupOptions` diimpor dari
- * `components/shared/entityOptions` (modul tanpa direktif), bukan dari
- * `EntityPicker.tsx` yang ber-`"use client"`: memanggil export sebuah client
- * module dari server menghasilkan referensi yang melempar saat dipanggil — dan
- * hanya di production build, tidak di `next dev`. Itu persis cara `/bereskan`
- * pernah tumbang.
+ * harus datang dari server, dan empat halaman memintanya: daftar Karyawan
+ * (filter), form Tambah, form Ubah, dan (untuk kandidat Merge) Perlu
+ * Dibereskan. Sebelumnya loader ini hidup di `app/(app)/karyawan/baru/` dan
+ * halaman daftar menyalin tiga bacaannya sendiri; sekarang satu fungsi.
  *
  * Tiga bacaan, apa pun jumlah kolomnya: satu `org_units`, satu `jabatan`, satu
  * `lookups` untuk kesebelas tipe sekaligus.
+ *
+ * Mengikuti kontrak `lib/db/**`: baca saja, client dipasok pemanggil, error
+ * menjadi `DbError`. Pemetaan ke `EntityOption` diimpor dari
+ * `lib/entityOptions` (modul tanpa direktif), bukan dari `EntityPicker.tsx`
+ * yang ber-`"use client"`: memanggil export sebuah client module dari server
+ * menghasilkan referensi yang melempar saat dipanggil — dan hanya di
+ * production build, tidak di `next dev`.
  */
 import {
   toJabatanOptions,
   toLookupOptions,
   toOrgUnitOptions,
   type EntityOption,
-} from "@/components/shared/entityOptions";
-import { listAllJabatan } from "@/lib/db/jabatan";
-import { getLookupsGroupedByType } from "@/lib/db/lookups";
-import { flattenOrgUnitTree, getOrgUnitTree } from "@/lib/db/orgUnits";
-import type { DbClient } from "@/lib/db/shared";
+} from "@/lib/entityOptions";
 import { ORG_UNIT_TYPE_LABELS, TERMS } from "@/lib/i18n/terms";
 import {
   LOOKUP_TYPES,
   LOOKUP_TYPE_LABELS,
   type LookupType,
 } from "@/lib/validation/lookupTypes";
+
+import { listAllJabatan } from "./jabatan";
+import { getLookupsGroupedByType } from "./lookups";
+import { flattenOrgUnitTree, getOrgUnitTree } from "./orgUnits";
+import type { DbClient, StatusFilter } from "./shared";
 
 /**
  * Satu daftar yang terbaca tidak utuh.
@@ -48,7 +45,8 @@ import {
  * dan diam: Unit Organisasi yang sebenarnya ada tidak muncul di daftar, admin
  * tidak bisa memilihnya, dan tidak ada apa pun di layar yang menjelaskan
  * kenapa. Karena itu `truncated` dari `FullRead` diteruskan ke halaman, bukan
- * ditelan di sini (lihat `FullRead` di `lib/db/shared.ts`).
+ * ditelan di sini (lihat `FullRead` di `lib/db/shared.ts`), dan
+ * `components/shared/DaftarTerpotongAlert.tsx` yang menampilkannya.
  */
 export type DaftarTerpotong = {
   /** Nama daftarnya, siap ditulis di layar. */
@@ -58,6 +56,9 @@ export type DaftarTerpotong = {
   /** Berapa baris yang database bilang ada. */
   total: number;
 };
+
+/** Baris seadanya yang bisa dipetakan `toLookupOptions`. */
+type LookupLike = { id: string; kode: string; label: string; status: string };
 
 /**
  * Kesebelas tipe Lookup menjadi kesebelas daftar pilihan — selalu kesebelasnya.
@@ -74,9 +75,6 @@ export function petakanLookupOptions(
     LOOKUP_TYPES.map((tipe) => [tipe, toLookupOptions(byType[tipe] ?? [])]),
   ) as Record<LookupType, EntityOption[]>;
 }
-
-/** Baris seadanya yang bisa dipetakan `toLookupOptions`. */
-type LookupLike = { id: string; kode: string; label: string; status: string };
 
 /**
  * Bacaan mana saja yang pulang tidak utuh, siap ditulis di layar.
@@ -99,7 +97,7 @@ export function ringkasPemotongan(
     .map(({ nama, dibaca, total }) => ({ nama, dibaca, total }));
 }
 
-export type EmployeeFormOptions = {
+export type ReferenceOptions = {
   /** Seluruh hierarki, rata dan berindentasi. Karyawan menunjuk unit terendah. */
   orgUnit: EntityOption[];
   jabatan: EntityOption[];
@@ -110,24 +108,28 @@ export type EmployeeFormOptions = {
 };
 
 /**
- * Semua pilihan Form Karyawan.
+ * Semua pilihan Data Referensi untuk picker.
  *
- * `status: "semua"` di ketiga bacaan, dan itu keputusan yang disengaja: data
- * seed masuk kotor, jadi seorang Karyawan bisa saja sekarang menunjuk Unit
- * Organisasi atau Lookup yang sudah dinonaktifkan. Kalau baris itu tidak ikut
- * dimuat, `EntityPicker` tidak menemukan id yang tersimpan dan tombolnya
- * berubah menjadi "Pilih…" — form edit akan terlihat seolah-olah kolom itu
- * memang kosong, dan menyimpannya benar-benar mengosongkannya. `EntityPicker`
+ * Default `status: "semua"`, dan itu keputusan yang disengaja: data seed masuk
+ * kotor, jadi seorang Karyawan bisa saja sekarang menunjuk Unit Organisasi
+ * atau Lookup yang sudah dinonaktifkan. Kalau baris itu tidak ikut dimuat,
+ * `EntityPicker` tidak menemukan id yang tersimpan dan tombolnya berubah
+ * menjadi "Pilih…" — form edit akan terlihat seolah-olah kolom itu memang
+ * kosong, dan menyimpannya benar-benar mengosongkannya. Di halaman daftar,
+ * unit nonaktif masih punya Karyawan yang harus bisa ditemukan. `EntityPicker`
  * sudah menampilkan yang nonaktif dengan tanda coret, jadi pilihannya tetap
  * jujur tanpa menyembunyikan apa pun.
  */
-export async function loadEmployeeFormOptions(
+export async function loadReferenceOptions(
   client: DbClient,
-): Promise<EmployeeFormOptions> {
+  params?: { status?: StatusFilter },
+): Promise<ReferenceOptions> {
+  const status = params?.status ?? "semua";
+
   const [unitRead, jabatanRead, lookupRead] = await Promise.all([
-    getOrgUnitTree(client, { status: "semua", orderBy: "nama" }),
-    listAllJabatan(client, { status: "semua", orderBy: "nama" }),
-    getLookupsGroupedByType(client, { status: "semua" }),
+    getOrgUnitTree(client, { status, orderBy: "nama" }),
+    listAllJabatan(client, { status, orderBy: "nama" }),
+    getLookupsGroupedByType(client, { status }),
   ]);
 
   // Rata dari pohonnya, bukan dari baris mentah: `flattenOrgUnitTree()` yang

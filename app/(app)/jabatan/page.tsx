@@ -4,8 +4,8 @@ import { requirePageSession } from "@/lib/auth/session";
 import { listAllJabatan } from "@/lib/db/jabatan";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 
-import JabatanTable from "./JabatanTable";
-import { bacaStatusFilter } from "./statusFilter";
+import JabatanTable from "./_components/JabatanTable";
+import { bacaStatusFilter } from "./_components/statusFilter";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";

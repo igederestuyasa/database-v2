@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { SignOutButton } from "@/app/(auth)/login/SignOutButton";
 import { SidebarNav, type SidebarNavItem } from "@/components/SidebarNav";
+import { SignOutButton } from "@/components/SignOutButton";
 import { isSupabaseConfigured } from "@/lib/auth/env";
 import { readSession } from "@/lib/auth/session";
 import { NAV_LABELS, ROLE_LABELS } from "@/lib/i18n/terms";

@@ -17,8 +17,9 @@ import { readSession } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/i18n/terms";
 import { cn } from "@/lib/utils";
 
-import { LoginForm } from "./LoginForm";
-import { SignOutButton } from "./SignOutButton";
+import { SignOutButton } from "@/components/SignOutButton";
+
+import { LoginForm } from "./_components/LoginForm";
 
 export const dynamic = "force-dynamic";
 

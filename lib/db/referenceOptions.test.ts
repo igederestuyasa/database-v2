@@ -1,15 +1,5 @@
 /**
- * Bagian murni dari pembacaan pilihan Form Karyawan.
- *
- * CATATAN COLLECTION: `vitest.config.ts` hanya mengumpulkan `lib/**`,
- * `components/**`, `scripts/**`, dan `tests/**` — **bukan** `app/**` — dan
- * berkas itu beku selama gelombang ini. Jadi berkas ini belum ikut jalan pada
- * `npm test`; jalankan dengan
- *
- *     npx vitest run --include 'app/**' + '/*.test.ts'
- *
- * (lihat badan PR). Ia ditulis sekarang supaya aturannya tidak hilang sambil
- * menunggu daftar itu dilebarkan.
+ * Bagian murni dari pembacaan pilihan Data Referensi.
  *
  * Dua hal yang diuji, dan keduanya gagal dalam diam kalau salah:
  *
@@ -25,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import { LOOKUPS } from "@/fixtures";
 import { LOOKUP_TYPES } from "@/lib/validation/lookupTypes";
 
-import { petakanLookupOptions, ringkasPemotongan } from "./employeeFormOptions";
+import { petakanLookupOptions, ringkasPemotongan } from "./referenceOptions";
 
 describe("petakanLookupOptions", () => {
   it("selalu memuat kesebelas tipe, meski kosong", () => {

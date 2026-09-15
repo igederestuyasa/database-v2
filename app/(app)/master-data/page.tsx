@@ -11,8 +11,8 @@ import {
   type LookupType,
 } from "@/lib/validation/lookupTypes";
 
-import LookupTable, { type MasterDataRow } from "./LookupTable";
-import LookupTypeTabs from "./LookupTypeTabs";
+import LookupTable, { type MasterDataRow } from "./_components/LookupTable";
+import LookupTypeTabs from "./_components/LookupTypeTabs";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
