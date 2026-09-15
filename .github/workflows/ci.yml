@@ -90,6 +90,13 @@ jobs:
       - run: npm ci
 
       - name: Test kolom turunan terhadap v_employees sungguhan
+        # NO_COLOR: di runner, CI=true membuat vitest tetap mencetak kode warna
+        # ANSI meski di-pipe, dan run kedua workflow ini gagal hanya karena grep
+        # tidak menemukan "Tests  2 passed" di sela kode warna — testnya sendiri
+        # lulus. Warna dimatikan dan polanya dilonggarkan; "Test Files 1 passed"
+        # tidak ikut cocok.
+        env:
+          NO_COLOR: "1"
         run: |
           npx vitest run lib/derived/sql.test.ts 2>&1 | tee sql-test.log
-          grep -q "Tests  2 passed" sql-test.log
+          grep -qE "Tests.*2 passed.*\(2\)" sql-test.log
