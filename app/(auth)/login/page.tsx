@@ -10,15 +10,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { readAllowedEmailDomain, isSupabaseConfigured } from "@/lib/auth/env";
 import { loginNotice } from "@/lib/auth/errors";
 import { safeNextPath } from "@/lib/auth/redirect";
 import { readSession } from "@/lib/auth/session";
+import { isSupabaseConfigured, readAllowedEmailDomain } from "@/lib/env";
 import { ROLE_LABELS } from "@/lib/i18n/terms";
 import { cn } from "@/lib/utils";
 
-import { LoginForm } from "./LoginForm";
-import { SignOutButton } from "./SignOutButton";
+import { SignOutButton } from "@/components/SignOutButton";
+
+import { LoginForm } from "./_components/LoginForm";
 
 export const dynamic = "force-dynamic";
 

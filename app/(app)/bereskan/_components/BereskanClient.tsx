@@ -39,7 +39,7 @@ import type { NameDifference } from "@/lib/cleaning/normalize";
 import type { ReferenceKind, ReferenceRow } from "@/lib/cleaning/findSimilar";
 import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
-import type { BereskanData, Temuan, TemuanJenis } from "./data";
+import type { BereskanData, Temuan, TemuanJenis } from "../_lib/data";
 import { RenameDialog, type RenameTarget } from "./RenameDialog";
 
 type Props = BereskanData & {

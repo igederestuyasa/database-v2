@@ -43,13 +43,7 @@ import {
   getOrgUnitByKode,
   listAllOrgUnits,
 } from "@/lib/db/orgUnits";
-import {
-  DbError,
-  IncompleteReadError,
-  requireComplete,
-  type DbClient,
-} from "@/lib/db/shared";
-import { UI } from "@/lib/i18n/terms";
+import { DbError, requireComplete, type DbClient } from "@/lib/db/shared";
 import type { OrgUnit, TablesUpdate } from "@/lib/types/db";
 import { uuidField } from "@/lib/validation/common";
 import {
@@ -69,6 +63,7 @@ import {
   type ActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Input shapes
@@ -149,75 +144,38 @@ function toActionData(unit: OrgUnit): OrgUnitActionData {
 }
 
 /**
- * Translate a PostgREST failure into an `ActionError` with an Indonesian
- * message; hand anything else back untouched.
+ * Terjemahan penolakan database untuk Unit Organisasi (lihat `mapDbError`).
  *
- * Step 4 of the reference action: a toast must never read "duplicate key value
- * violates unique constraint org_units_kode_key". What this does not
- * recognise is returned as-is, so `toActionFailure()` logs it server-side and
- * shows the generic message.
+ * `kode` ikut dalam kalimat `23505` supaya toast menyebut kode yang bentrok.
+ * `23514` datang dari `org_units_prevent_cycle` (pesan Indonesia yang
+ * menyebut siklus) atau dari CHECK `tipe`/`status`. Akhiran untuk
+ * `IncompleteReadError` sengaja TIDAK menyebut db-max-rows sebagai obatnya:
+ * bacaan dibatasi oleh langit-langit mana pun yang lebih rendah, dan lewat
+ * `MAX_TREE_ROWS` batas client sendirilah yang menggigit.
  */
-function readableError(error: unknown, context: { kode?: string }): unknown {
-  if (error instanceof IncompleteReadError) {
-    // Nothing failed — the read came back short and the guard below it would
-    // have been decided on half the hierarchy. Refusing is the only honest
-    // answer, and it must not read as "coba lagi".
-    // Deliberately does NOT name db-max-rows as the fix: the read is capped by
-    // whichever ceiling is lower, and past MAX_TREE_ROWS the client's own limit
-    // is the one biting — raising db-max-rows would change nothing. Naming the
-    // wrong remedy is worse than naming none.
-    return new ActionError(
-      "GAGAL",
-      `${error.message} Hubungi admin HC Core — batas baca Unit Organisasi perlu dinaikkan atau dibuat berhalaman sebelum hierarki bisa diubah.`,
-    );
-  }
-  if (!(error instanceof DbError)) return error;
-
-  switch (error.code) {
-    case "23505":
-      return new ActionError(
-        "KONFLIK",
-        context.kode
-          ? `Kode Unit Organisasi "${context.kode}" sudah dipakai unit lain. Kode harus unik.`
-          : "Kode Unit Organisasi sudah dipakai unit lain. Kode harus unik.",
-        { kode: "Kode ini sudah dipakai." },
-      );
-    case "23503":
-      return new ActionError(
-        "KONFLIK",
-        "Induk yang dipilih sudah tidak ada. Muat ulang halaman, lalu pilih induk lain.",
-        { parent_id: "Induk tidak ditemukan." },
-      );
-    case "23514":
-      // `org_units_prevent_cycle` raises 23514 with an Indonesian message; so
-      // do the `tipe` and `status` CHECK constraints.
-      return new ActionError(
-        "KONFLIK",
-        /siklus|induk dirinya|terlalu dalam/i.test(error.message)
-          ? "Induk yang dipilih membuat siklus pada hierarki Unit Organisasi. Pilih induk lain."
-          : "Nilai yang dikirim ditolak aturan basis data. Periksa tipe dan status Unit Organisasi.",
-      );
-    case "42501":
-      // `with check (is_admin())` on INSERT really does raise
-      // insufficient_privilege. The Server Action checked the role too — both,
-      // not either (CLAUDE.md) — so reaching here means the role changed
-      // mid-request.
-      return new ActionError("BUKAN_ADMIN", UI.hanyaAdmin);
-    case "PGRST116":
-      // An UPDATE refused by RLS does NOT raise 42501. `org_units_update` is
-      // written `using (public.is_admin())`, and a USING clause *filters*: for
-      // a non-admin the UPDATE simply matches zero rows, and `.single()` then
-      // makes PostgREST answer PGRST116. Without this case the refusal would
-      // reach staf HC as the generic "coba lagi", which explains nothing.
-      // (The row itself cannot have been deleted — there is no DELETE
-      // anywhere, ADR-003 — so the remaining cause is a concurrent edit.)
-      return new ActionError(
-        "BUKAN_ADMIN",
-        `${UI.hanyaAdmin} Kalau Anda memang admin, Unit Organisasi ini baru saja diubah orang lain — muat ulang halaman lalu coba lagi.`,
-      );
-    default:
-      return error;
-  }
+function orgUnitDb(context: { kode?: string }): DbErrorContext {
+  return {
+    entitas: "Unit Organisasi",
+    aksi: "mengubah Unit Organisasi",
+    unikDefault: {
+      message: context.kode
+        ? `Kode Unit Organisasi "${context.kode}" sudah dipakai unit lain. Kode harus unik.`
+        : "Kode Unit Organisasi sudah dipakai unit lain. Kode harus unik.",
+      field: "kode",
+      fieldMessage: "Kode ini sudah dipakai.",
+    },
+    rujukan: {
+      message: "Induk yang dipilih sudah tidak ada. Muat ulang halaman, lalu pilih induk lain.",
+      field: "parent_id",
+      fieldMessage: "Induk tidak ditemukan.",
+    },
+    aturan: (pesan) =>
+      /siklus|induk dirinya|terlalu dalam/i.test(pesan)
+        ? "Induk yang dipilih membuat siklus pada hierarki Unit Organisasi. Pilih induk lain."
+        : "Nilai yang dikirim ditolak aturan basis data. Periksa tipe dan status Unit Organisasi.",
+    bacaTerpotong:
+      "Hubungi admin HC Core — batas baca Unit Organisasi perlu dinaikkan atau dibuat berhalaman sebelum hierarki bisa diubah.",
+  };
 }
 
 /**
@@ -225,7 +183,7 @@ function readableError(error: unknown, context: { kode?: string }): unknown {
  * drift apart in how they report a failure.
  */
 function failure(error: unknown, context: { kode?: string } = {}): ActionFailure {
-  return toActionFailure(readableError(error, context));
+  return toActionFailure(mapDbError(error, orgUnitDb(context)));
 }
 
 /** Load the row this action is about, or fail readably. */

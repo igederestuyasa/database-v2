@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
-import {
-  requireUser,
-  UnauthenticatedError,
-  type GuardContext,
-} from "@/lib/actions/_guard";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
+import { requirePageSession } from "@/lib/auth/session";
 import { getLookupsGroupedByType } from "@/lib/db/lookups";
+import { terpotongDari } from "@/lib/db/shared";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 import type { Lookup } from "@/lib/types/db";
 import {
@@ -16,8 +13,8 @@ import {
   type LookupType,
 } from "@/lib/validation/lookupTypes";
 
-import LookupTable, { type MasterDataRow } from "./LookupTable";
-import LookupTypeTabs from "./LookupTypeTabs";
+import LookupTable, { type MasterDataRow } from "./_components/LookupTable";
+import LookupTypeTabs from "./_components/LookupTypeTabs";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -44,20 +41,10 @@ export default async function Page({
   const diminta = Array.isArray(params.tipe) ? params.tipe[0] : params.tipe;
   const tipe: LookupType = isLookupType(diminta) ? diminta : LOOKUP_TYPES[0];
 
-  // No middleware yet (ADR-005 §11), so the page itself sends a signed-out
-  // visitor to /login rather than rendering an empty table. Only that one case
-  // redirects: `requireUser()` distinguishes "belum login" from "login tapi
-  // profil belum dibuat", and sending the second to a login form would be a
-  // dead end — signing in again cannot create the missing `profiles` row. That
-  // one falls through to `error.tsx`, which shows its "Hubungi admin" message.
-  let session: GuardContext;
-  try {
-    session = await requireUser();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) redirect("/login");
-    throw error;
-  }
-  const { client, user } = session;
+  // `middleware.ts` is the boundary; this is the second lock, for a session
+  // that expired between the two. "Belum login" and "profil belum dibuat" both
+  // land on /login with a notice saying which, and the login page renders both.
+  const { client, user } = await requirePageSession("/master-data");
 
   // `semua`: nonaktif rows must stay visible here — this is the one page where
   // a value is taken out of circulation and, if that was a mistake, put back.
@@ -83,20 +70,10 @@ export default async function Page({
         </p>
       </header>
 
-      {grouped.truncated ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar ini belum lengkap.</p>
-          <p className="mt-1 text-muted-foreground">
-            Baru {grouped.rows.length} dari {grouped.total} {TERMS.lookup} yang
-            berhasil dimuat, karena database membatasi jumlah baris per permintaan.
-            Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan
-            memakainya untuk memutuskan {TERMS.merge}.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={terpotongDari(TERMS.lookup, grouped)}
+        keterangan={`Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan memakainya untuk memutuskan ${TERMS.merge}.`}
+      />
 
       <LookupTypeTabs active={tipe} counts={counts} />
 

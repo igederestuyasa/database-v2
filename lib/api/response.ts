@@ -13,6 +13,8 @@
  * Plain `Response.json()` rather than `NextResponse`: these helpers are used by
  * Route Handlers but are pure enough to unit-test without a Next runtime.
  */
+import { logError } from "@/lib/log";
+
 import { toApiError, type ApiErrorBody } from "./errors";
 
 /** Pagination block, exactly as it appears on the wire. */
@@ -106,7 +108,7 @@ export function jsonCollection<T>(
 export function jsonError(error: unknown): Response {
   const apiError = toApiError(error);
   if (apiError.status >= 500) {
-    console.error("[api/v1]", apiError.message, apiError.cause ?? error);
+    logError("api/v1", apiError.cause ?? error, { code: apiError.code });
   }
   return Response.json(apiError.toBody(), {
     status: apiError.status,

@@ -67,6 +67,54 @@ import {
   toActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
+
+/**
+ * Terjemahan penolakan database untuk Karyawan (lihat `mapDbError`).
+ *
+ * Empat yang bisa sampai ke sini:
+ *
+ *   * `23505` — UNIQUE `personnel_number` atau `nip`. Kolomnya dibaca dari
+ *     nama constraint di pesan Postgres, supaya kesalahan menempel pada field
+ *     yang benar di form dan bukan sekadar muncul sebagai toast.
+ *   * `23503` — FK ke Unit Organisasi / Jabatan / Lookup yang barisnya sudah
+ *     tidak ada.
+ *   * `23514` — trigger `employees_validate_lookups`: sebuah `*_id` menunjuk
+ *     Lookup dari tipe yang salah. Di UI ini seharusnya mustahil (setiap
+ *     picker hanya diberi opsi satu tipe), jadi kalau muncul, yang salah
+ *     adalah datanya, bukan pemakainya.
+ *   * `PGRST116` / `42501` — penolakan RLS; kalimatnya dibentuk `mapDbError`
+ *     dari `aksi`.
+ */
+const KARYAWAN_DB: DbErrorContext = {
+  entitas: "Karyawan",
+  aksi: "mengubah data Karyawan",
+  unik: [
+    {
+      cocok: "personnel_number",
+      field: "personnel_number",
+      message:
+        "Personnel Number itu baru saja dipakai Karyawan lain. Muat ulang halaman, lalu pakai Personnel Number lain.",
+      fieldMessage: "Personnel Number ini sudah dipakai.",
+    },
+    {
+      cocok: "nip",
+      field: "nip",
+      message: "NIP itu baru saja dipakai Karyawan lain. Muat ulang halaman, lalu pakai NIP lain.",
+      fieldMessage: "NIP ini sudah dipakai.",
+    },
+  ],
+  unikDefault: {
+    message:
+      "Nilai yang harus unik itu sudah dipakai baris lain. Muat ulang halaman, lalu coba lagi.",
+  },
+  rujukan: {
+    message:
+      "Unit Organisasi, Jabatan, atau pilihan yang dirujuk sudah tidak ada. Muat ulang halaman, lalu pilih ulang dari daftar.",
+  },
+  aturan: () =>
+    "Salah satu pilihan berasal dari daftar yang tidak sesuai kolomnya, dan ditolak database. Muat ulang halaman, lalu pilih ulang dari daftar yang tersedia.",
+};
 
 /** Baris Karyawan seadanya yang dikembalikan ke UI setelah sebuah tulisan. */
 export type EmployeeRingkas = {
@@ -379,7 +427,7 @@ export async function createEmployee(
     revalidateEmployeePages(data.id);
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, KARYAWAN_DB));
   }
 }
 
@@ -439,7 +487,7 @@ export async function updateEmployee(
     revalidateEmployeePages(id);
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, KARYAWAN_DB));
   }
 }
 
@@ -494,7 +542,7 @@ export async function deactivateEmployee(
     revalidateEmployeePages(id);
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, KARYAWAN_DB));
   }
 }
 
@@ -544,7 +592,7 @@ export async function reactivateEmployee(
     revalidateEmployeePages(id);
     return actionOk(ringkas(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, KARYAWAN_DB));
   }
 }
 
@@ -626,12 +674,12 @@ export async function updateEmployeePrivate(
     revalidateEmployeePages(id);
     return actionOk(ringkasPrivate(data));
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, KARYAWAN_DB));
   }
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Penjaga & terjemahan error
+ * Penjaga kunci bisnis
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -640,7 +688,7 @@ export async function updateEmployeePrivate(
  *
  * Ini kenyamanan, bukan jaminan: dua admin yang menyimpan Personnel Number
  * yang sama dalam sekejap sama-sama lolos pengecekan ini, dan yang kedua
- * ditangkap UNIQUE di database (lihat `asActionError`). Karena itu keduanya
+ * ditangkap UNIQUE di database (lihat `KARYAWAN_DB`). Karena itu keduanya
  * ada, bukan salah satu.
  */
 async function guardKunciBisnis(
@@ -669,74 +717,4 @@ async function guardKunciBisnis(
       { nip: "NIP ini sudah dipakai." },
     );
   }
-}
-
-/**
- * Terjemahkan penolakan database menjadi kalimat yang bisa dibaca staf HC.
- *
- * Empat yang bisa sampai ke sini:
- *
- *   * `23505` — UNIQUE `personnel_number` atau `nip`. Kolomnya dibaca dari
- *     nama constraint di pesan Postgres, supaya kesalahan menempel pada field
- *     yang benar di form dan bukan sekadar muncul sebagai toast.
- *   * `23503` — FK ke Unit Organisasi / Jabatan / Lookup yang barisnya sudah
- *     tidak ada.
- *   * `23514` — trigger `employees_validate_lookups`: sebuah `*_id` menunjuk
- *     Lookup dari tipe yang salah. Di UI ini seharusnya mustahil (setiap
- *     picker hanya diberi opsi satu tipe), jadi kalau muncul, yang salah
- *     adalah datanya, bukan pemakainya.
- *   * `PGRST116` / `42501` — **penolakan RLS**, dan bentuknya menipu. Policy
- *     `employees_update` ditulis `using (is_admin())`, jadi UPDATE dari yang
- *     bukan admin tidak melempar `insufficient_privilege`; ia cocok dengan NOL
- *     baris, lalu `.single()` mengeluh "tidak ada baris". Barisnya jelas ada —
- *     baru saja dibaca — jadi nol baris berarti tulisannya yang ditolak.
- *     Tanpa terjemahan ini, tulisan yang ditolak terlihat seperti tersimpan.
- */
-function asActionError(error: unknown): unknown {
-  if (!(error instanceof DbError)) return error;
-
-  if (error.code === "23505") {
-    const detail = `${error.message} ${error.details ?? ""}`;
-    if (detail.includes("personnel_number")) {
-      return new ActionError(
-        "KONFLIK",
-        "Personnel Number itu baru saja dipakai Karyawan lain. Muat ulang halaman, lalu pakai Personnel Number lain.",
-        { personnel_number: "Personnel Number ini sudah dipakai." },
-      );
-    }
-    if (detail.includes("nip")) {
-      return new ActionError(
-        "KONFLIK",
-        "NIP itu baru saja dipakai Karyawan lain. Muat ulang halaman, lalu pakai NIP lain.",
-        { nip: "NIP ini sudah dipakai." },
-      );
-    }
-    return new ActionError(
-      "KONFLIK",
-      "Nilai yang harus unik itu sudah dipakai baris lain. Muat ulang halaman, lalu coba lagi.",
-    );
-  }
-
-  if (error.code === "23503") {
-    return new ActionError(
-      "KONFLIK",
-      "Unit Organisasi, Jabatan, atau pilihan yang dirujuk sudah tidak ada. Muat ulang halaman, lalu pilih ulang dari daftar.",
-    );
-  }
-
-  if (error.code === "23514") {
-    return new ActionError(
-      "KONFLIK",
-      "Salah satu pilihan berasal dari daftar yang tidak sesuai kolomnya, dan ditolak database. Muat ulang halaman, lalu pilih ulang dari daftar yang tersedia.",
-    );
-  }
-
-  if (error.code === "PGRST116" || error.code === "42501") {
-    return new ActionError(
-      "BUKAN_ADMIN",
-      "Perubahan ditolak database: akun Anda tidak berhak mengubah data Karyawan. Muat ulang halaman, lalu hubungi admin HC Core kalau masih ditolak.",
-    );
-  }
-
-  return error;
 }

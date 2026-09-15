@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import EmployeePrivateForm from "@/components/forms/EmployeePrivateForm";
 import EmployeeStatusDialog from "@/components/forms/EmployeeStatusDialog";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,12 +16,9 @@ import {
 } from "@/components/ui/card";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeePrivate, getEmployeeRowById } from "@/lib/db/employees";
+import { loadReferenceOptions } from "@/lib/db/referenceOptions";
 import { TERMS, UI } from "@/lib/i18n/terms";
 import { uuidField } from "@/lib/validation/common";
-
-// Modul ini duduk di folder `baru/` karena kedua halaman form — tambah dan
-// ubah — memakainya, dan keduanya milik unit yang sama.
-import { loadEmployeeFormOptions } from "../../baru/employeeFormOptions";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -70,13 +68,14 @@ export default async function Page({ params }: PageProps) {
     );
   }
 
-  const employee = await getEmployeeRowById(client, id);
-  if (!employee) notFound();
-
-  const [options, privateData] = await Promise.all([
-    loadEmployeeFormOptions(client),
+  // Three reads, one round trip: neither the picker lists nor Data Pribadi
+  // Sensitif depend on the Karyawan row itself.
+  const [employee, options, privateData] = await Promise.all([
+    getEmployeeRowById(client, id),
+    loadReferenceOptions(client),
     getEmployeePrivate(client, id),
   ]);
+  if (!employee) notFound();
 
   return (
     <div className="space-y-6">
@@ -96,28 +95,11 @@ export default async function Page({ params }: PageProps) {
         </p>
       </header>
 
-      {options.terpotong.length > 0 ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar pilihan belum lengkap.</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
-            {options.terpotong.map((daftar) => (
-              <li key={daftar.nama}>
-                {daftar.nama}: baru {daftar.dibaca} dari {daftar.total} baris
-                yang terbaca.
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-muted-foreground">
-            Database membatasi jumlah baris per permintaan, jadi ada pilihan
-            yang benar-benar ada tetapi tidak muncul di daftar — termasuk,
-            mungkin, yang sedang dipakai {TERMS.karyawan} ini. Periksa dulu
-            sebelum menyimpan.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={options.terpotong}
+        judul="Daftar pilihan belum lengkap."
+        keterangan={`Ada pilihan yang benar-benar ada tetapi tidak muncul di daftar — termasuk, mungkin, yang sedang dipakai ${TERMS.karyawan} ini. Periksa dulu sebelum menyimpan.`}
+      />
 
       <Card>
         <CardHeader>

@@ -59,7 +59,7 @@ export type RevisionPanelProps = {
   rowId: string;
   /**
    * Revisi already read on the server (`listRevisionsByRow`). When omitted the
-   * panel loads them itself from the browser client.
+   * panel loads them itself through the `loadRowRevisions` Server Action.
    */
   revisions?: readonly Revision[];
   /** Show the "Kembalikan" button. Pass the caller's admin check. */

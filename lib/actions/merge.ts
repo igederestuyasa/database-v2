@@ -35,9 +35,9 @@
  * them, not one of them (CLAUDE.md).
  */
 import { revalidatePath } from "next/cache";
-import type { PostgrestError } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { DbError } from "@/lib/db/shared";
 import { uuidField } from "@/lib/validation/common";
 
 import {
@@ -46,9 +46,9 @@ import {
   ActionError,
   requireAdmin,
   toActionFailure,
-  type ActionErrorCode,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
 
 /** Both ids are required and must differ. `keterangan` overrides the default. */
 export type MergeInput = {
@@ -90,58 +90,44 @@ const mergeSchema = z
   });
 
 /**
- * SQLSTATE → `ActionErrorCode`.
+ * Terjemahan penolakan database untuk Merge (lihat `mapDbError`).
  *
- * The migration raises with a deliberate errcode per refusal so the UI can
- * tell "kamu bukan admin" from "sudah pernah di-merge" without parsing
- * Indonesian prose. Every SQLSTATE listed here is one HC Core's own SQL raises
- * — `assert_admin()`, the merge guards, `org_units_prevent_cycle`,
+ * `sendiri`: the migration raises with a deliberate errcode per refusal so the
+ * UI can tell "kamu bukan admin" from "sudah pernah di-merge" without parsing
+ * Indonesian prose. Every SQLSTATE listed there is one HC Core's own SQL
+ * raises — `assert_admin()`, the merge guards, `org_units_prevent_cycle`,
  * `assert_lookup_tipe` — so the message really is the Indonesian sentence that
- * code wrote, and is safe to show verbatim.
- */
-const OWN_MESSAGE_BY_SQLSTATE: Record<string, ActionErrorCode> = {
-  // insufficient_privilege — assert_admin(), or RLS refusing the write
-  "42501": "BUKAN_ADMIN",
-  // no_data_found — source/target row missing
-  P0002: "TIDAK_DITEMUKAN",
-  // invalid_parameter_value — same id twice, cross-tipe Lookup, missing id
-  "22023": "VALIDASI",
-  // object_not_in_prerequisite_state — already merged
-  "55000": "KONFLIK",
-  // check_violation — target sits below source (cycle), wrong Lookup tipe
-  "23514": "KONFLIK",
-};
-
-/**
- * Constraint violations Postgres itself words, in English.
+ * code wrote. `mapDbError` still checks it does not read like Postgres prose
+ * before showing it: Postgres raises `42501` and `23514` in English too.
  *
- * The code is meaningful, the message is not: a real unique or foreign-key
- * violation reads `duplicate key value violates unique constraint "…"`, which
- * is exactly what `_guard.ts` says staf HC should never have to read. A merge
- * only ever writes `status`, `merged_into_id`, `parent_id` and FK uuids it has
- * just locked, so neither should be reachable — which is the other reason not
- * to show the raw text: it would mean something unexpected happened.
+ * `23505` / `23503`: a merge only ever writes `status`, `merged_into_id`,
+ * `parent_id` and FK uuids it has just locked, so neither should be reachable
+ * — which is why the raw text is never shown: it would mean something
+ * unexpected happened.
  */
-const CONSTRAINT_SQLSTATES: Record<string, string> = {
-  "23505": "Nilai ini sudah dipakai data lain, jadi Merge tidak bisa dilanjutkan.",
-  "23503": "Data yang dirujuk tidak ada lagi, jadi Merge tidak bisa dilanjutkan.",
+const MERGE_DB: DbErrorContext = {
+  entitas: "Data Referensi",
+  aksi: "menggabungkan Data Referensi",
+  sendiri: {
+    // insufficient_privilege — assert_admin(), or RLS refusing the write
+    "42501": "BUKAN_ADMIN",
+    // no_data_found — source/target row missing
+    P0002: "TIDAK_DITEMUKAN",
+    // invalid_parameter_value — same id twice, cross-tipe Lookup, missing id
+    "22023": "VALIDASI",
+    // object_not_in_prerequisite_state — already merged
+    "55000": "KONFLIK",
+    // check_violation — target sits below source (cycle), wrong Lookup tipe
+    "23514": "KONFLIK",
+  },
+  unikDefault: {
+    message: "Nilai ini sudah dipakai data lain, jadi Merge tidak bisa dilanjutkan.",
+  },
+  rujukan: {
+    message: "Data yang dirujuk tidak ada lagi, jadi Merge tidak bisa dilanjutkan.",
+  },
+  fallback: "Gagal menggabungkan data. Coba lagi.",
 };
-
-function actionErrorFromRpc(error: PostgrestError, fallback: string): ActionError {
-  const sqlstate = error.code ?? "";
-
-  const own = OWN_MESSAGE_BY_SQLSTATE[sqlstate];
-  if (own) return new ActionError(own, error.message);
-
-  const constraint = CONSTRAINT_SQLSTATES[sqlstate];
-  if (constraint) {
-    console.error("[merge]", error);
-    return new ActionError("KONFLIK", constraint);
-  }
-
-  console.error("[merge]", error);
-  return new ActionError("GAGAL", fallback);
-}
 
 function asCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -189,7 +175,7 @@ async function runMerge(
       p_target: targetId,
       p_keterangan: keterangan,
     });
-    if (error) throw actionErrorFromRpc(error, "Gagal menggabungkan data. Coba lagi.");
+    if (error) throw new DbError("Gagal menggabungkan data", error);
 
     const result = readMergeResult(data);
 
@@ -197,7 +183,7 @@ async function runMerge(
 
     return actionOk(result);
   } catch (error) {
-    return toActionFailure(error);
+    return toActionFailure(mapDbError(error, MERGE_DB));
   }
 }
 

@@ -2,8 +2,10 @@
 -- HC Core — 0001_init.sql
 -- Skema lengkap: tabel, view, trigger, RLS, dan RPC.
 --
--- This is the ONLY migration file in the project. Every table, view, trigger,
--- policy and grant HC Core needs lives here. See ARCHITECTURE.md §3 and §5.
+-- One of exactly TWO migration files (the other is 0002_batch_operations.sql,
+-- the Postgres functions behind Merge/Revert — ADR-006). Every table, view,
+-- trigger, policy and grant HC Core needs lives here. See ARCHITECTURE.md §3
+-- and §5. The directory is frozen at two: change these files in place.
 --
 -- Portability: plain PostgreSQL 15+. The only Supabase-specific dependency is
 -- the `auth` schema (`auth.users`, `auth.uid()`) and the three Supabase roles
@@ -85,8 +87,11 @@ comment on function public.current_actor_id() is
   'ID pengguna yang sedang login (auth.uid()), atau NULL untuk konteks service-role/script.';
 
 -- NOTE: `current_app_role()` and `is_admin()` read `public.profiles`, so they
--- are defined in section 3b, after the tables exist. They are plain SQL (not
--- plpgsql) so the planner can inline them into every RLS policy.
+-- are defined in section 3b, after the tables exist. They are SECURITY
+-- DEFINER, and the planner never inlines a SECURITY DEFINER function (nor one
+-- with a `set search_path`), so every RLS policy calls them as
+-- `(select public.is_admin())` — a scalar subquery the planner turns into an
+-- InitPlan evaluated once per query, instead of once per row. See section 9.
 
 -- ----------------------------------------------------------------------------
 -- 2. Generic triggers
@@ -164,6 +169,9 @@ comment on table public.batches is
 
 create index if not exists batches_created_at_idx on public.batches (created_at desc);
 create index if not exists batches_jenis_idx on public.batches (jenis);
+-- `/log?status=belum|sudah` filters on this FK (lib/db/revisions.ts:listBatches),
+-- and Postgres does not index a foreign key on its own.
+create index if not exists batches_reverted_by_idx on public.batches (reverted_by_batch_id);
 
 -- 3.2 revisions — satu baris per perubahan satu baris tabel (CONTEXT.md: Revisi)
 create table if not exists public.revisions (
@@ -1066,6 +1074,18 @@ comment on view public.v_employees_api is
 
 -- ----------------------------------------------------------------------------
 -- 9. Row Level Security (ARCHITECTURE.md §5)
+--
+-- Every `is_admin()` / `current_actor_id()` below is written as
+-- `(select public.is_admin())`, never bare. Both functions are SECURITY
+-- DEFINER (they must be, to read `profiles` without recursing into its own
+-- policy), and a SECURITY DEFINER function is never inlined by the planner —
+-- so a bare call in a policy is evaluated ONCE PER ROW the policy touches,
+-- each call doing its own `profiles` lookup. Wrapped in `(select …)` it is an
+-- InitPlan: evaluated once per query, the result reused for every row.
+-- Measured on the local harness over a seed Batch of 6.000 Revisi:
+-- `select count(*) from revisions where batch_id = …` went from ~100 ms
+-- (6.000 `is_admin()` calls) to ~4 ms. scripts/verify-schema.sql §20 fails
+-- if any policy goes back to the bare form.
 -- ----------------------------------------------------------------------------
 
 alter table public.employees        enable row level security;
@@ -1085,24 +1105,24 @@ create policy employees_select on public.employees
 
 drop policy if exists employees_insert on public.employees;
 create policy employees_insert on public.employees
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 drop policy if exists employees_update on public.employees;
 create policy employees_update on public.employees
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- 9.2 employee_private — admin saja, baca maupun tulis (PRD #22)
 drop policy if exists employee_private_select on public.employee_private;
 create policy employee_private_select on public.employee_private
-  for select to authenticated using (public.is_admin());
+  for select to authenticated using ((select public.is_admin()));
 
 drop policy if exists employee_private_insert on public.employee_private;
 create policy employee_private_insert on public.employee_private
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 drop policy if exists employee_private_update on public.employee_private;
 create policy employee_private_update on public.employee_private
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- 9.3 org_units
 drop policy if exists org_units_select on public.org_units;
@@ -1111,11 +1131,11 @@ create policy org_units_select on public.org_units
 
 drop policy if exists org_units_insert on public.org_units;
 create policy org_units_insert on public.org_units
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 drop policy if exists org_units_update on public.org_units;
 create policy org_units_update on public.org_units
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- 9.4 jabatan
 drop policy if exists jabatan_select on public.jabatan;
@@ -1124,11 +1144,11 @@ create policy jabatan_select on public.jabatan
 
 drop policy if exists jabatan_insert on public.jabatan;
 create policy jabatan_insert on public.jabatan
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 drop policy if exists jabatan_update on public.jabatan;
 create policy jabatan_update on public.jabatan
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- 9.5 lookups
 drop policy if exists lookups_select on public.lookups;
@@ -1137,24 +1157,24 @@ create policy lookups_select on public.lookups
 
 drop policy if exists lookups_insert on public.lookups;
 create policy lookups_insert on public.lookups
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 drop policy if exists lookups_update on public.lookups;
 create policy lookups_update on public.lookups
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- 9.6 api_keys — admin saja (berisi key_hash; viewer tidak boleh melihatnya)
 drop policy if exists api_keys_select on public.api_keys;
 create policy api_keys_select on public.api_keys
-  for select to authenticated using (public.is_admin());
+  for select to authenticated using ((select public.is_admin()));
 
 drop policy if exists api_keys_insert on public.api_keys;
 create policy api_keys_insert on public.api_keys
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 drop policy if exists api_keys_update on public.api_keys;
 create policy api_keys_update on public.api_keys
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- 9.7 batches & revisions — semua yang login boleh baca log (matriks §5);
 -- menulis hanya lewat trigger (SECURITY DEFINER) atau begin_batch().
@@ -1164,12 +1184,12 @@ create policy batches_select on public.batches
 
 drop policy if exists batches_insert on public.batches;
 create policy batches_insert on public.batches
-  for insert to authenticated with check (public.is_admin());
+  for insert to authenticated with check ((select public.is_admin()));
 
 -- Only `reverted_by_batch_id` can actually change (guard_batch_update trigger).
 drop policy if exists batches_update on public.batches;
 create policy batches_update on public.batches
-  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- `revisions.after` is a jsonb snapshot of the row that changed, so a blanket
 -- read policy here would hand a viewer everything RLS denies them elsewhere.
@@ -1191,10 +1211,10 @@ create policy revisions_select on public.revisions
   for select to authenticated
   using (
     case table_name
-      when 'employee_private' then public.is_admin()
-      when 'api_keys'         then public.is_admin()
-      when 'profiles'         then public.is_admin()
-                                   or row_id = public.current_actor_id()
+      when 'employee_private' then (select public.is_admin())
+      when 'api_keys'         then (select public.is_admin())
+      when 'profiles'         then (select public.is_admin())
+                                   or row_id = (select public.current_actor_id())
       else true
     end
   );
@@ -1203,12 +1223,12 @@ create policy revisions_select on public.revisions
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles
   for select to authenticated
-  using (id = public.current_actor_id() or public.is_admin());
+  using (id = (select public.current_actor_id()) or (select public.is_admin()));
 
 drop policy if exists profiles_update on public.profiles;
 create policy profiles_update on public.profiles
   for update to authenticated
-  using (public.is_admin()) with check (public.is_admin());
+  using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- ----------------------------------------------------------------------------
 -- 10. Grants

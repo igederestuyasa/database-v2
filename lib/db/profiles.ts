@@ -1,29 +1,28 @@
 /**
- * Reads of `profiles` — the Pengguna half of the read layer.
+ * Read layer for Pengguna (`profiles`).
  *
- * It follows the `lib/db/**` contract exactly (reads only; the caller supplies
- * the client as the first argument; errors become `DbError`), but lives here
- * rather than in `lib/db/` because `lib/db/**` is frozen and Pengguna is the
- * only page that reads this table.
+ * Reads only; the caller supplies the client as the first argument; errors
+ * become `DbError` — the three rules of `lib/db/shared.ts`. Writes live in
+ * `lib/actions/profiles.ts`.
  *
  * RLS does the narrowing: `profiles_select` lets a viewer see their own row and
  * an admin see everyone. So `listProfiles()` silently returns one row for a
  * viewer — the page checks the role itself before it renders a list.
  */
-import { DbError, type DbClient } from "@/lib/db/shared";
+import type { RoleValue } from "@/lib/validation/common";
 
-import type { AppRole } from "./session";
+import { DbError, type DbClient } from "./shared";
 
 export type ProfileRow = {
   id: string;
   email: string;
-  role: AppRole;
+  role: RoleValue;
   created_at: string;
   updated_at: string;
 };
 
 /** `profiles.role` is `text` in the generated types; narrow it once, here. */
-function toRole(value: string): AppRole {
+function toRole(value: string): RoleValue {
   return value === "admin" ? "admin" : "viewer";
 }
 

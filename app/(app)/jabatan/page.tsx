@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 
-import { isAdmin } from "@/lib/actions/_guard";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
+import { requirePageSession } from "@/lib/auth/session";
 import { listAllJabatan } from "@/lib/db/jabatan";
+import { terpotongDari } from "@/lib/db/shared";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
-import { createClient } from "@/lib/supabase/server";
 
-import JabatanTable from "./JabatanTable";
-import { bacaStatusFilter } from "./statusFilter";
+import JabatanTable from "./_components/JabatanTable";
+import { bacaStatusFilter } from "./_components/statusFilter";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -22,30 +23,17 @@ export default async function Page({ searchParams }: PageProps) {
   // bertahan setelah halaman dimuat ulang.
   const status = bacaStatusFilter((await searchParams).status);
 
-  const client = await createClient();
-  const [daftar, admin] = await Promise.all([
-    // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya
-    // ratusan, dan daftar utuh itu juga yang menjadi calon tujuan Merge —
-    // filter di layar tidak boleh membuat sebuah Jabatan hilang dari pilihan.
-    listAllJabatan(client, { status: "semua" }),
-    isAdmin(),
-  ]);
+  // Pintu yang sama dengan halaman lain. Dulu halaman ini tidak memeriksa sesi
+  // dan mengandalkan middleware plus RLS — yang untuk tamu berarti daftar
+  // kosong, bukan halaman login.
+  const { client, user } = await requirePageSession("/jabatan");
+  const admin = user.role === "admin";
 
-  /**
-   * Apakah daftar di atas utuh?
-   *
-   * PostgREST punya batas `db-max-rows` sendiri (bawaan 1000) yang berlaku
-   * SEBELUM `.limit()` milik pemanggil, dan pemotongannya **dilaporkan sebagai
-   * sukses** — daftarnya pendek, filternya pendek, dan yang paling berbahaya,
-   * daftar calon tujuan Merge ikut pendek tanpa ada yang tahu.
-   *
-   * Dulu halaman ini membandingkannya sendiri lewat satu query `count` kedua.
-   * Sekarang `listAllJabatan()` sudah meminta `count: "exact"` pada query yang
-   * sama dan mengembalikan `truncated` — satu permintaan, satu sumber angka,
-   * dan pemeriksaan yang sama berlaku untuk setiap pemanggil, bukan hanya
-   * halaman ini (lihat `FullRead` di `lib/db/shared.ts`).
-   */
-  const { rows, total: totalJabatan, truncated: terpotong } = daftar;
+  // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya
+  // ratusan, dan daftar utuh itu juga yang menjadi calon tujuan Merge —
+  // filter di layar tidak boleh membuat sebuah Jabatan hilang dari pilihan.
+  const daftar = await listAllJabatan(client, { status: "semua" });
+  const { rows } = daftar;
 
   return (
     <div className="space-y-6">
@@ -61,21 +49,13 @@ export default async function Page({ searchParams }: PageProps) {
         </p>
       </header>
 
-      {terpotong ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar ini belum lengkap.</p>
-          <p className="mt-1 text-muted-foreground">
-            Baru {rows.length} dari {totalJabatan} {TERMS.jabatan} yang berhasil
-            dimuat, karena database membatasi jumlah baris per permintaan.
-            Pencarian, filter, dan terutama daftar tujuan Gabungkan di halaman
-            ini ikut tidak lengkap — jangan memakainya untuk memutuskan Merge
-            sampai batas itu dinaikkan atau daftarnya dibuat berhalaman.
-          </p>
-        </div>
-      ) : null}
+      {/* `listAllJabatan()` asks for `count: "exact"` on the same query and
+          reports `truncated` from it — a daftar calon tujuan Merge that is
+          quietly short is the one thing this page must never present as whole. */}
+      <DaftarTerpotongAlert
+        daftar={terpotongDari(TERMS.jabatan, daftar)}
+        keterangan="Pencarian, filter, dan terutama daftar tujuan Gabungkan di halaman ini ikut tidak lengkap — jangan memakainya untuk memutuskan Merge sampai batas itu dinaikkan atau daftarnya dibuat berhalaman."
+      />
 
       <JabatanTable rows={rows} status={status} isAdmin={admin} />
     </div>

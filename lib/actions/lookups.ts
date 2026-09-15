@@ -29,7 +29,6 @@
  *    kind of Lookup — `lookupUpdateSchema` omits the field for that reason.
  */
 import { revalidatePath } from "next/cache";
-import type { PostgrestError } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import {
@@ -37,7 +36,7 @@ import {
   getLookupById,
   getLookupByKode,
 } from "@/lib/db/lookups";
-import type { DbClient } from "@/lib/db/shared";
+import { DbError, type DbClient } from "@/lib/db/shared";
 import type { TablesUpdate } from "@/lib/types/db";
 import { uuidField } from "@/lib/validation/common";
 import {
@@ -51,7 +50,6 @@ import {
   LOOKUP_TYPE_LABELS,
   type LookupType,
 } from "@/lib/validation/lookupTypes";
-import { UI } from "@/lib/i18n/terms";
 
 import {
   actionInvalid,
@@ -62,6 +60,23 @@ import {
   toActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
+
+/**
+ * Terjemahan penolakan database untuk Lookup (lihat `mapDbError`).
+ *
+ * Hanya satu UNIQUE di `lookups`: `(tipe, kode)`. Penolakan RLS (`PGRST116`,
+ * `42501`) dibentuk `mapDbError` dari `aksi`; kode yang tidak dikenal memakai
+ * `fallback` yang diberikan per action.
+ */
+const LOOKUP_DB: DbErrorContext = {
+  entitas: "Lookup",
+  aksi: "mengubah Lookup",
+  unikDefault: {
+    message: "Kode itu sudah dipakai Lookup lain di tipe yang sama.",
+    field: "kode",
+  },
+};
 
 /** What every action here hands back — enough for the table to re-render. */
 export type LookupSummary = {
@@ -106,42 +121,6 @@ function toSummary(row: LookupRowShape): LookupSummary {
     status: row.status === "nonaktif" ? "nonaktif" : "aktif",
     mergedIntoId: row.merged_into_id,
   };
-}
-
-/**
- * PostgREST error → `ActionError`.
- *
- * Only codes whose meaning is unambiguous get their own Indonesian sentence;
- * everything else is logged server-side and reported generically, because
- * `duplicate key value violates unique constraint "lookups_tipe_kode_key"` is
- * not something staf HC should have to read (`lib/actions/_guard.ts`).
- */
-function actionErrorFromDb(error: PostgrestError, fallback: string): ActionError {
-  // unique_violation — only one UNIQUE exists on `lookups`: (tipe, kode).
-  if (error.code === "23505") {
-    return new ActionError(
-      "KONFLIK",
-      "Kode itu sudah dipakai Lookup lain di tipe yang sama.",
-      { kode: "Kode itu sudah dipakai Lookup lain di tipe yang sama." },
-    );
-  }
-  // insufficient_privilege — an RLS `with check` refused the write. Reachable
-  // on INSERT; an UPDATE that RLS refuses matches zero rows instead (below).
-  if (error.code === "42501") {
-    return new ActionError("BUKAN_ADMIN", UI.hanyaAdmin);
-  }
-  // PostgREST: `.single()` got no row. `lookups_update` is `using (is_admin())`,
-  // so a caller who stopped being an admin between `requireAdmin()` and the
-  // UPDATE simply matches nothing — indistinguishable here from a row that is
-  // gone, hence one message covering both.
-  if (error.code === "PGRST116") {
-    return new ActionError(
-      "TIDAK_DITEMUKAN",
-      "Lookup tidak ditemukan, atau izin Anda berubah sehingga perubahan ditolak. Muat ulang halaman.",
-    );
-  }
-  console.error("[lookups]", error);
-  return new ActionError("GAGAL", fallback);
 }
 
 /** Refuse a kode that another Lookup of the same tipe already owns. */
@@ -197,12 +176,14 @@ export async function createLookup(
       .select(SELECT_SUMMARY)
       .single();
 
-    if (error) throw actionErrorFromDb(error, "Gagal menambah Lookup. Coba lagi.");
+    if (error) throw new DbError("Gagal menambah Lookup", error);
 
     revalidateLookupPages();
     return actionOk(toSummary(data));
   } catch (error) {
-    return toActionFailure(error);
+    return toActionFailure(
+      mapDbError(error, { ...LOOKUP_DB, fallback: "Gagal menambah Lookup. Coba lagi." }),
+    );
   }
 }
 
@@ -265,12 +246,14 @@ export async function updateLookup(
       .select(SELECT_SUMMARY)
       .single();
 
-    if (error) throw actionErrorFromDb(error, "Gagal menyimpan Lookup. Coba lagi.");
+    if (error) throw new DbError("Gagal menyimpan Lookup", error);
 
     revalidateLookupPages();
     return actionOk(toSummary(data));
   } catch (error) {
-    return toActionFailure(error);
+    return toActionFailure(
+      mapDbError(error, { ...LOOKUP_DB, fallback: "Gagal menyimpan Lookup. Coba lagi." }),
+    );
   }
 }
 

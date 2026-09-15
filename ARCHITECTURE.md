@@ -18,39 +18,40 @@ Tidak ada ORM. Akses database memakai `@supabase/supabase-js` dan SQL migration 
 
 ```
 hc-core/
-├── app/
-│   ├── (auth)/login/                # halaman login (Supabase Auth, email kantor)
+├── app/                             # HANYA file konvensi Next + _components/ + _lib/ per route
+│   ├── (auth)/login/                # halaman login (Supabase Auth, email kantor); _components/LoginForm
 │   ├── (app)/                       # semua halaman internal; layout dengan sidebar
-│   │   ├── _lib/                    # helper sisi server yang dipakai banyak page (riwayat.ts)
-│   │   ├── karyawan/                # daftar + filter
+│   │   ├── _lib/                    # helper sisi server yang dipakai banyak page (riwayat.ts, bacaAman.ts)
+│   │   ├── karyawan/                # daftar + filter (_components/)
 │   │   │   ├── baru/                # form tambah
 │   │   │   └── [id]/                # detail + form edit + riwayat revisi
-│   │   ├── struktur/                # pohon unit organisasi + CRUD + merge
+│   │   ├── struktur/                # pohon unit organisasi + CRUD + merge (_lib/strukturData)
 │   │   │   └── [id]/                # detail unit + riwayat revisi (baca saja)
-│   │   ├── jabatan/                 # daftar jabatan + CRUD + merge
+│   │   ├── jabatan/                 # daftar jabatan + CRUD + merge (_components/)
 │   │   │   └── [id]/                # detail jabatan + riwayat revisi (baca saja)
-│   │   ├── master-data/             # lookups, satu tab per tipe
+│   │   ├── master-data/             # lookups, satu tab per tipe (_components/)
 │   │   │   └── [id]/                # detail lookup + riwayat revisi (baca saja)
-│   │   ├── bereskan/                # halaman "Perlu Dibereskan"
-│   │   ├── log/                     # log global per batch + revert batch
-│   │   ├── api-keys/                # kelola konsumen & whitelist kolom
-│   │   └── pengguna/                # set role admin/viewer (admin only)
-│   └── api/v1/                      # REST untuk konsumen (Route Handlers)
+│   │   ├── bereskan/                # halaman "Perlu Dibereskan" (_components/, _lib/data)
+│   │   ├── log/                     # log global per batch + revert batch (_components/)
+│   │   ├── api-keys/                # kelola konsumen & whitelist kolom (_components/)
+│   │   └── pengguna/                # set role admin/viewer (admin only) (_components/)
+│   └── api/v1/                      # REST untuk konsumen (Route Handlers); logika di _lib/
 │       ├── employees/route.ts
 │       ├── employees/[personnelNumber]/route.ts
 │       ├── org-units/route.ts
 │       ├── jabatan/route.ts
 │       └── lookups/route.ts
-├── components/                      # komponen UI reusable (DataTable, EntityPicker, RevisionList, MergeDialog)
+├── components/                      # komponen UI reusable (DataTable, EntityPicker, RevisionPanel, MergeDialog, DaftarTerpotongAlert, SignOutButton)
 ├── lib/
-│   ├── supabase/                    # client.ts (browser), server.ts (server, cookie session), admin.ts (service role — HANYA untuk api/v1 & seed)
-│   ├── db/                          # satu file per entitas: employees.ts, orgUnits.ts, jabatan.ts, lookups.ts, revisions.ts, apiKeys.ts
-│   ├── actions/                     # Server Actions per entitas; SATU-SATUNYA jalur tulis dari UI
-│   ├── revisions/                   # batch.ts (label Batch + kenapa tidak ada withBatch), revert.ts (revert revisi & batch), seedBatch.ts (transaksi seed via pg — script saja)
+│   ├── supabase/                    # server.ts (server, cookie session), admin.ts (service role — HANYA untuk api/v1 & seed). Tidak ada browser client: Client Component membaca lewat Server Action
+│   ├── db/                          # lapisan baca, satu file per entitas: employees.ts, orgUnits.ts, jabatan.ts, lookups.ts, revisions.ts, apiKeys.ts, profiles.ts, labels.ts, referenceOptions.ts
+│   ├── actions/                     # SEMUA Server Action, termasuk auth.ts (login) dan bereskan.ts; SATU-SATUNYA jalur tulis dari UI. _guard.ts (sesi), errors.ts, result.ts, pgErrors.ts (mapDbError)
+│   ├── revisions/                   # batch.ts (label Batch + kenapa tidak ada withBatch), revert.ts (revert revisi & batch), references.ts (tipe rujukan), seedBatch.ts (transaksi seed via pg — script saja)
 │   ├── cleaning/                    # normalize.ts, findSimilar.ts, findOrphans.ts
 │   ├── api/                         # auth.ts (validasi key), fields.ts (whitelist), response.ts (envelope)
 │   ├── derived/                     # perhitungan usia, masa kerja (dipakai view & UI)
-│   └── validation/                  # skema zod per entitas
+│   ├── validation/                  # skema zod per entitas; uuid.ts (satu regex uuid)
+│   └── entityOptions.ts             # baris → opsi EntityPicker (murni; server boleh memanggil)
 ├── scripts/
 │   └── seed-from-excel.ts           # seed awal, dijalankan sekali
 ├── supabase/
@@ -305,4 +306,4 @@ Implementasi: RLS di setiap tabel (`select` untuk authenticated; `insert/update`
 - Tidak ada soft-lock/concurrent-edit detection; edit terakhir menang, dan keduanya tercatat sebagai revisi.
 - Tidak ada webhook/notifikasi ke konsumen saat data berubah — konsumen menarik saat butuh.
 - Tidak ada pagination di UI pohon struktur (≈ ratusan node, cukup dimuat sekaligus).
-- Tidak ada test end-to-end; test hanya untuk `lib/cleaning/normalize.ts`, `lib/revisions/revert.ts`, dan `lib/api/fields.ts` (logika yang salah diam-diam paling mahal).
+- Tidak ada test end-to-end dan tidak ada test render (tanpa jsdom, ADR-005 §1). Yang diuji adalah logika murni — `vitest.config.ts` mengumpulkan setiap `*.test.ts` dari `app/**`, `lib/**`, `components/**`, `scripts/**`, `tests/**` — plus invarian yang bisa dibaca dari file (`tests/migrationInvariants.test.ts`, `tests/batchDiscipline.test.ts`, `tests/serverOnlyBoundary.test.ts`) dan perilaku skema terhadap PostgreSQL lokal (`scripts/verify-schema.sql`).

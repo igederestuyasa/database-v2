@@ -20,15 +20,13 @@
 import type { StatusFilter } from "@/lib/db/shared";
 import { LOOKUP_TYPES, type LookupType } from "@/lib/validation/lookupTypes";
 import { ORG_UNIT_TYPES, type OrgUnitType } from "@/lib/validation/orgUnit";
+import { isUuid } from "@/lib/validation/uuid";
 
 import { ApiError, apiError } from "./errors";
 import { DEFAULT_PAGE, DEFAULT_PER_PAGE, MAX_PER_PAGE } from "./response";
 
 /** `status` values the API accepts, including "do not filter". */
 export const STATUS_FILTERS: readonly StatusFilter[] = ["aktif", "nonaktif", "semua"];
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const WHOLE_NUMBER_PATTERN = /^\d+$/;
 
@@ -142,7 +140,7 @@ export function parseUuidParam(
 ): string | null {
   const raw = readSingleParam(params, name);
   if (raw === null) return null;
-  if (!UUID_PATTERN.test(raw)) {
+  if (!isUuid(raw)) {
     throw apiError.invalidQuery(name, `Parameter '${name}' harus berupa uuid.`);
   }
   return raw.toLowerCase();

@@ -18,7 +18,7 @@
 import * as React from "react";
 
 import { EntityPicker } from "@/components/shared/EntityPicker";
-import type { EntityOption } from "@/components/shared/entityOptions";
+import type { EntityOption } from "@/lib/entityOptions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";

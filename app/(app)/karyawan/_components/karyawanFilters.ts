@@ -12,7 +12,7 @@
  * (Client Components) to write the next one. An export of a `"use client"`
  * module that a server module imports becomes a client *reference*: calling it
  * throws in a production build only, which is exactly how `toOrgUnitOptions()`
- * took down `/bereskan` (see `components/shared/entityOptions.ts`). So the
+ * took down `/bereskan` (see `lib/entityOptions.ts`). So the
  * parser and the href builder stay here, directive-free.
  *
  * Everything that reaches the database is validated here rather than trusted:
@@ -23,6 +23,7 @@
 import type { EmployeeOrderBy } from "@/lib/db/employees";
 import type { SortDirection, StatusFilter } from "@/lib/db/shared";
 import { LOOKUP_TYPES, type LookupType } from "@/lib/validation/lookupTypes";
+import { isUuid } from "@/lib/validation/uuid";
 
 /** One page of the Karyawan table. `lib/db/shared.ts` defaults to the same. */
 export const KARYAWAN_PER_PAGE = 50;
@@ -141,9 +142,6 @@ export function sortOption(value: SortValue): SortOption {
 
 /* ── parsing ─────────────────────────────────────────────────────────────── */
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** `?unit=a&unit=b` is a mistake, not a feature: take the first. */
 function one(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -153,7 +151,7 @@ function one(value: string | string[] | undefined): string | undefined {
 function parseIdFilter(value: string | string[] | undefined): IdFilter {
   const first = one(value);
   if (first === TANPA) return null;
-  return first && UUID_RE.test(first) ? first : undefined;
+  return isUuid(first) ? first : undefined;
 }
 
 function parseStatus(value: string | string[] | undefined): StatusFilter {

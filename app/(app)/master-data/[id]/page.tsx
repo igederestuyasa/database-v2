@@ -9,17 +9,16 @@ import DetailCard from "@/components/shared/DetailCard";
 import { Badge } from "@/components/ui/badge";
 import { requirePageSession } from "@/lib/auth/session";
 import { countEmployeesByLookup, getLookupById } from "@/lib/db/lookups";
-import type { DbClient } from "@/lib/db/shared";
 import { NAV_LABELS, STATUS_LABELS, TERMS } from "@/lib/i18n/terms";
-import type { Lookup } from "@/lib/types/db";
+import { isUuid } from "@/lib/validation/uuid";
 
+import { bacaAman } from "../../_lib/bacaAman";
 import { bacaRiwayat } from "../../_lib/riwayat";
 import {
   buildLookupFields,
   hrefTabMasterData,
   labelStatusLookup,
   labelTipeLookup,
-  type JumlahPemakai,
 } from "./_components/lookupDetail";
 
 // Live data only — never prerendered at build time. See ADR-005.
@@ -48,47 +47,6 @@ export const metadata: Metadata = { title: `Detail ${TERMS.lookup}` };
  * half of a Merge, names where its Karyawan went.
  */
 
-/** PostgREST rejects a malformed uuid with 22P02; this turns it into a 404. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Karyawan pointing at this Lookup, or `null` when counting failed.
- *
- * `countEmployeesByLookup` throws on a tipe outside the eleven — it refuses to
- * guess which `employees` column to count — so that is caught here rather than
- * taking down a page whose whole job is to show the Riwayat of the odd row.
- */
-async function hitungPemakai(
-  client: DbClient,
-  lookup: Pick<Lookup, "id" | "tipe">,
-): Promise<JumlahPemakai> {
-  try {
-    const [semua, aktif] = await Promise.all([
-      countEmployeesByLookup(client, lookup, { status: "semua" }),
-      countEmployeesByLookup(client, lookup, { status: "aktif" }),
-    ]);
-    return { semua, aktif };
-  } catch (error) {
-    console.error("[master-data/detail] gagal menghitung pemakai", error);
-    return null;
-  }
-}
-
-/** The Merge target's row, or `null` when it is unset or unreadable. */
-async function bacaTujuanMerge(
-  client: DbClient,
-  mergedIntoId: string | null,
-): Promise<Lookup | null> {
-  if (!mergedIntoId) return null;
-  try {
-    return await getLookupById(client, mergedIntoId);
-  } catch (error) {
-    console.error("[master-data/detail] gagal memuat Lookup tujuan Merge", error);
-    return null;
-  }
-}
-
 export default async function Page({
   params,
 }: {
@@ -100,7 +58,7 @@ export default async function Page({
   // runs, so the status line is already sent. Measured, deliberate, and
   // explained in docs/adr/ADR-007 — it is NOT caused by `force-dynamic`, and
   // removing that does not change it.
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
 
   const { client, user } = await requirePageSession(`/master-data/${id}`);
   const isAdmin = user.role === "admin";
@@ -110,16 +68,32 @@ export default async function Page({
   // ditemukan" for the person looking at the screen.
   if (!lookup) notFound();
 
-  const [jumlahPemakai, tujuanMerge, riwayat] = await Promise.all([
-    hitungPemakai(client, lookup),
-    bacaTujuanMerge(client, lookup.merged_into_id),
+  // Every side read goes through `bacaAman()`: the Lookup and its Riwayat are
+  // the point, the rest is context, and none of it may take the page down.
+  // `countEmployeesByLookup` also throws on a tipe outside the eleven — it
+  // refuses to guess which `employees` column to count — and that must not
+  // take down a page whose whole job is to show the Riwayat of the odd row.
+  const mergedIntoId = lookup.merged_into_id;
+  const [pemakai, tujuan, riwayat] = await Promise.all([
+    bacaAman("master-data/detail", "menghitung pemakai", async () => {
+      const [semua, aktif] = await Promise.all([
+        countEmployeesByLookup(client, lookup, { status: "semua" }),
+        countEmployeesByLookup(client, lookup, { status: "aktif" }),
+      ]);
+      return { semua, aktif };
+    }),
+    mergedIntoId
+      ? bacaAman("master-data/detail", "memuat Lookup tujuan Merge", () =>
+          getLookupById(client, mergedIntoId),
+        )
+      : Promise.resolve(null),
     bacaRiwayat(client, "lookups", id, "master-data/detail"),
   ]);
 
   const fields = buildLookupFields({
     lookup,
-    digabungkanKe: tujuanMerge,
-    jumlahPemakai,
+    digabungkanKe: tujuan ?? null,
+    jumlahPemakai: pemakai ?? null,
   });
 
   const tipeLabel = labelTipeLookup(lookup.tipe);

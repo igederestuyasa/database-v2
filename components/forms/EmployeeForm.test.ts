@@ -21,7 +21,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EMPLOYEES } from "@/fixtures";
-import type { EntityOption } from "@/components/shared/entityOptions";
+import type { EntityOption } from "@/lib/entityOptions";
 import { EMPLOYEES_COLUMNS } from "@/lib/schema/columns.generated";
 import type { Employee } from "@/lib/types/db";
 import {

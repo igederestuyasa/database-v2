@@ -21,7 +21,7 @@ import { ORG_UNIT_TYPE_LABELS } from "@/lib/i18n/terms";
 
 import { toJabatanOptions, toLookupOptions, toOrgUnitOptions } from "./entityOptions";
 
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 function walk(dir: string, out: string[] = []): string[] {
   let entries: string[];
@@ -44,7 +44,7 @@ const isClientModule = (source: string) =>
 
 describe("batas server/client", () => {
   it("entityOptions.ts tidak boleh menjadi modul client", () => {
-    const source = readFileSync(path.join(ROOT, "components/shared/entityOptions.ts"), "utf8");
+    const source = readFileSync(path.join(ROOT, "lib/entityOptions.ts"), "utf8");
     expect(isClientModule(source)).toBe(false);
   });
 

@@ -34,6 +34,7 @@ app/api/v1/{employees,org-units,jabatan,lookups}
 lib/{supabase,db,actions,revisions,cleaning,api,derived,validation}
 components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 ```
+Satu konvensi untuk `app/`: folder route hanya berisi file konvensi Next (`page`, `layout`, `loading`, `error`, `route`). Komponen dan helper murni yang dipakai satu route saja → `_components/` di route itu; helper sisi server satu route (yang mengimpor `lib/db`) → `_lib/` di route itu; yang dipakai dua route atau lebih → `components/` atau `lib/`. **Semua** Server Action di `lib/actions/`, termasuk login (`auth.ts`). `lib/` tidak pernah mengimpor dari `components/` atau `app/`; pemetaan baris → opsi picker ada di `lib/entityOptions.ts`, pilihan Data Referensi untuk picker di `lib/db/referenceOptions.ts`. `lib/db/**` boleh ditambah fungsi baca baru; tiga aturannya di `lib/db/shared.ts` tetap.
 
 ## Aturan
 - Semua tulisan ke DB dari UI lewat Server Action di `lib/actions/`. Tidak ada insert/update di Client Component. Satu Server Action = **satu statement**, ditulis langsung tanpa membuka Batch — trigger `log_revision` yang membuat Batch-nya, dan Batch itulah yang memuat Revisi-nya. **Tidak ada `withBatch()`**, dan jangan membuatnya lagi: Batch yang dibuka dari TypeScript selalu kosong (ADR-006). Contoh lengkapnya `lib/actions/_reference.ts`.
@@ -42,7 +43,7 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya: revisi `employee_private`/`api_keys` admin saja, revisi `profiles` admin atau pemiliknya, sisanya semua yang login.
 - Revert selalu membuat revisi baru. Jangan pernah `UPDATE`/`DELETE` tabel `revisions` atau `batches` selain mengisi `reverted_by_batch_id`.
 - Seed jalan lewat koneksi `pg` langsung + transaksi sungguhan (`lib/revisions/seedBatch.ts`), bukan supabase-js — supaya ±1.475 Karyawan jadi **satu** Batch `seed` (ADR-006). `lib/revisions/seedBatch.ts` hanya boleh di-import `scripts/**`.
-- `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`.
+- `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`. Tidak ada paket `server-only` (ADR-005 §1); gantinya `tests/serverOnlyBoundary.test.ts` menggagalkan `npm test` kalau Client Component mengimpor **nilai** dari `lib/supabase/{admin,server}`, `lib/db/**`, `lib/actions/_guard`, atau `lib/revisions/seedBatch` — `import type` boleh.
 - Route `api/v1` hanya membaca `v_employees_api`, `org_units`, `jabatan`, `lookups`. Tidak pernah `employee_private` / `v_employees_private`.
 - Kolom referensi di `employees` selalu FK (uuid) ke `org_units` / `jabatan` / `lookups`. Jangan tambah kolom teks bebas untuk hal yang punya daftar.
 - Kolom turunan (usia, masa kerja) dihitung di view atau `lib/derived/`; jangan disimpan.

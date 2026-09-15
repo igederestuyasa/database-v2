@@ -23,7 +23,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import type { EntityOption } from "@/components/shared/entityOptions";
+import type { EntityOption } from "@/lib/entityOptions";
 import type { LookupType } from "@/lib/validation/lookupTypes";
 
 import KaryawanFilterBar from "./KaryawanFilterBar";

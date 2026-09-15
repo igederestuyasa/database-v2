@@ -17,9 +17,13 @@ next-env.d.ts
 # typescript
 *.tsbuildinfo
 
-# env — never commit real keys
+# env — never commit real keys. `.env*.local` does not cover
+# `.env.development` / `.env.production` / `.env.test`, so they are listed.
 .env
 .env*.local
+.env.development
+.env.production
+.env.test
 
 # vercel
 .vercel

@@ -13,7 +13,7 @@ export default defineConfig({
      * `app/**` and `components/**` are in this list on purpose.
      *
      * Three units colocated their pure logic next to the page that uses it —
-     * `karyawanFilters.ts`, `employeeDetailFields.ts`, `employeeFormOptions.ts`
+     * `karyawanFilters.ts`, `employeeDetailFields.ts`, `revertableRevisions.ts`
      * — and wrote `*.test.ts` beside it. Those files were NOT collected while
      * this list started at `lib/**`, so ~52 tests passed only when someone ran
      * them by hand and would have gone on passing after the code beneath them

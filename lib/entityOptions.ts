@@ -14,14 +14,15 @@
  *     Attempted to call toOrgUnitOptions() from the server but
  *     toOrgUnitOptions is on the client.
  *
- * which is how `app/(app)/bereskan/data.ts` took down `/bereskan` — but only
- * once the page actually had a Temuan to build Merge candidates for, since the
- * call sits behind that condition. A page whose whole job is finding dirty data
- * worked perfectly until it found some.
+ * which is how `app/(app)/bereskan/_lib/data.ts` took down `/bereskan` — but
+ * only once the page actually had a Temuan to build Merge candidates for, since
+ * the call sits behind that condition. A page whose whole job is finding dirty
+ * data worked perfectly until it found some.
  *
- * So the mappers live here, with no directive, and `EntityPicker.tsx` re-exports
- * them unchanged: client components keep importing from either module, and
- * server code imports from this one.
+ * So the mappers live here in `lib/`, with no directive, and
+ * `components/shared/EntityPicker.tsx` re-exports them unchanged: client
+ * components keep importing from either module, and server code (pages,
+ * `lib/db/referenceOptions.ts`) imports from this one.
  *
  * Every mapper puts the kode in `keterangan`: two Unit Organisasi really can
  * share a nama, and the kode is the half that never changes (ADR-002).

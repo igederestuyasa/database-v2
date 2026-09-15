@@ -63,6 +63,23 @@ import {
   toActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
+
+/**
+ * Terjemahan penolakan database untuk API Key (lihat `mapDbError`).
+ *
+ * `23505` di sini adalah UNIQUE `api_keys.key_hash` — secara praktis mustahil
+ * (40 karakter acak dari 62), jadi kalau muncul, yang salah adalah sumber
+ * acaknya, bukan pemakainya; katakan begitu daripada "coba kode lain".
+ */
+const API_KEY_DB: DbErrorContext = {
+  entitas: "API Key",
+  aksi: "mengelola API Key",
+  unikDefault: {
+    message:
+      "Key yang dibuat kebetulan sama dengan key yang sudah ada. Coba buat sekali lagi; kalau terus terjadi, laporkan ke pengembang HC Core.",
+  },
+};
 
 /**
  * Kolom yang boleh dibaca balik setelah menulis — semuanya KECUALI `key_hash`.
@@ -149,7 +166,7 @@ export async function createApiKey(
 
     return actionOk({ apiKey: data, key });
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, API_KEY_DB));
   }
 }
 
@@ -206,7 +223,7 @@ export async function updateApiKey(
 
     return actionOk(data);
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, API_KEY_DB));
   }
 }
 
@@ -253,7 +270,7 @@ export async function setApiKeyStatus(
 
     return actionOk(data);
   } catch (error) {
-    return toActionFailure(asActionError(error));
+    return toActionFailure(mapDbError(error, API_KEY_DB));
   }
 }
 
@@ -263,44 +280,4 @@ function sameFields(a: readonly string[], b: readonly string[]): boolean {
   const kiri = [...a].sort();
   const kanan = [...b].sort();
   return kiri.every((field, index) => field === kanan[index]);
-}
-
-/**
- * Terjemahkan penolakan database menjadi kalimat yang bisa dibaca staf HC.
- *
- * Tiga yang bisa sampai ke sini:
- *
- *   * `23505` — UNIQUE `api_keys.key_hash`. Secara praktis mustahil (40
- *     karakter acak dari 62), jadi kalau muncul, yang salah adalah sumber
- *     acaknya, bukan pemakainya; katakan begitu daripada "coba kode lain".
- *   * `PGRST116` — **penolakan RLS pada UPDATE**, dan bentuknya menipu.
- *     Policy `api_keys_update` ditulis `using (is_admin())`, jadi tulisan dari
- *     yang bukan admin tidak melempar `insufficient_privilege`; ia hanya cocok
- *     dengan NOL baris, lalu `.single()` mengeluh "tidak ada baris". Di sini
- *     barisnya jelas ada — baru saja dibaca — jadi nol baris berarti
- *     tulisannya yang ditolak, bukan barisnya yang hilang.
- *   * `42501` — penolakan yang memang melempar: `with check` pada INSERT.
- *
- * `requireAdmin()` di setiap action seharusnya sudah menyaring semuanya; ini
- * lapis keduanya (CLAUDE.md: "Cek role di Server Action **dan** RLS"), untuk
- * saat role berubah di tengah request atau sesi habis setelah guard lewat.
- */
-function asActionError(error: unknown): unknown {
-  if (!(error instanceof DbError)) return error;
-
-  if (error.code === "23505") {
-    return new ActionError(
-      "KONFLIK",
-      "Key yang dibuat kebetulan sama dengan key yang sudah ada. Coba buat sekali lagi; kalau terus terjadi, laporkan ke pengembang HC Core.",
-    );
-  }
-
-  if (error.code === "PGRST116" || error.code === "42501") {
-    return new ActionError(
-      "BUKAN_ADMIN",
-      "Perubahan ditolak database: akun Anda tidak berhak mengelola API Key. Muat ulang halaman, lalu hubungi admin HC Core kalau masih ditolak.",
-    );
-  }
-
-  return error;
 }

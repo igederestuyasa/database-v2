@@ -35,7 +35,7 @@ import { renameJabatan } from "@/lib/actions/jabatan";
 import { renameOrgUnit } from "@/lib/actions/orgUnits";
 import { TERMS, UI } from "@/lib/i18n/terms";
 
-import { renameLookup } from "./actions";
+import { renameLookup } from "@/lib/actions/bereskan";
 
 /** Which Data Referensi is being renamed. */
 export type RenameKind = "org_unit" | "jabatan" | "lookup";

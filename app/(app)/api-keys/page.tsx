@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { formatWaktu } from "@/components/revisions/revisionDiff";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { Button } from "@/components/ui/button";
 import { requirePageSession } from "@/lib/auth/session";
 import { listApiKeys } from "@/lib/db/apiKeys";
 import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
-import { ApiKeyTable, type ApiKeyRow } from "./ApiKeyTable";
+import { ApiKeyTable, type ApiKeyRow } from "./_components/ApiKeyTable";
 
 // Live data only — never prerendered at build time. See ADR-005 §6.
 export const dynamic = "force-dynamic";
@@ -111,21 +112,10 @@ export default async function Page() {
         </p>
       </header>
 
-      {terpotong ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar ini belum lengkap.</p>
-          <p className="mt-1 text-muted-foreground">
-            Baru {rows.length} dari {total} {TERMS.apiKey} yang dimuat, karena
-            halaman ini mengambil paling banyak {PER_PAGE} baris sekali jalan
-            (dan database punya batasnya sendiri). Sisanya tidak bisa diubah
-            atau dinonaktifkan dari sini, dan jangan menyimpulkan sebuah key
-            sudah tidak ada karena tidak terlihat di daftar ini.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={terpotong ? [{ nama: TERMS.apiKey, dibaca: rows.length, total }] : []}
+        keterangan={`Halaman ini juga mengambil paling banyak ${PER_PAGE} baris sekali jalan. Sisanya tidak bisa diubah atau dinonaktifkan dari sini, dan jangan menyimpulkan sebuah key sudah tidak ada karena tidak terlihat di daftar ini.`}
+      />
 
       <ApiKeyTable rows={rows} />
 

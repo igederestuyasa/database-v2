@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import EmployeeForm from "@/components/forms/EmployeeForm";
+import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { Button } from "@/components/ui/button";
 import { requirePageSession } from "@/lib/auth/session";
+import { loadReferenceOptions } from "@/lib/db/referenceOptions";
 import { TERMS, UI } from "@/lib/i18n/terms";
-
-import { loadEmployeeFormOptions } from "./employeeFormOptions";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ export default async function Page() {
     );
   }
 
-  const options = await loadEmployeeFormOptions(client);
+  const options = await loadReferenceOptions(client);
 
   return (
     <div className="space-y-6">
@@ -58,28 +58,11 @@ export default async function Page() {
         </p>
       </header>
 
-      {options.terpotong.length > 0 ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">Daftar pilihan belum lengkap.</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
-            {options.terpotong.map((daftar) => (
-              <li key={daftar.nama}>
-                {daftar.nama}: baru {daftar.dibaca} dari {daftar.total} baris
-                yang terbaca.
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-muted-foreground">
-            Database membatasi jumlah baris per permintaan, jadi ada pilihan
-            yang benar-benar ada tetapi tidak muncul di daftar. Jangan
-            menyimpulkan sebuah nilai &laquo;belum ada&raquo; dari daftar ini
-            sampai batas itu dinaikkan.
-          </p>
-        </div>
-      ) : null}
+      <DaftarTerpotongAlert
+        daftar={options.terpotong}
+        judul="Daftar pilihan belum lengkap."
+        keterangan="Ada pilihan yang benar-benar ada tetapi tidak muncul di daftar. Jangan menyimpulkan sebuah nilai «belum ada» dari daftar ini sampai batas itu dinaikkan."
+      />
 
       <EmployeeForm
         mode="tambah"

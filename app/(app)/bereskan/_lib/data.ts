@@ -9,7 +9,7 @@
  * Reads only. Every write from this page goes through a Server Action
  * (`./actions.ts` for rename, `lib/actions/merge.ts` for Merge).
  */
-// From `entityOptions`, NOT from `EntityPicker`: this module runs on the
+// From `lib/entityOptions`, NOT from `EntityPicker`: this module runs on the
 // server, and every export of a `"use client"` module reaches the server as a
 // reference that throws when called. Same functions, same signatures.
 import {
@@ -17,7 +17,7 @@ import {
   toLookupOptions,
   toOrgUnitOptions,
   type EntityOption,
-} from "@/components/shared/entityOptions";
+} from "@/lib/entityOptions";
 import {
   findEmployeesMissingReference,
   findOrphanOrgUnits,
@@ -33,17 +33,22 @@ import {
   type ReferenceRow,
   type TemuanNamaMirip,
 } from "@/lib/cleaning/findSimilar";
-import { listEmployees, type EmployeeListParams } from "@/lib/db/employees";
+import {
+  countEmployeesByColumn,
+  listEmployees,
+  type EmployeeListParams,
+} from "@/lib/db/employees";
 import { listAllJabatan } from "@/lib/db/jabatan";
 import { listAllLookups } from "@/lib/db/lookups";
 import { listAllOrgUnits } from "@/lib/db/orgUnits";
-import { DbError, type DbClient } from "@/lib/db/shared";
+import type { DbClient } from "@/lib/db/shared";
 import type { VEmployee } from "@/lib/types/db";
 import { ORG_UNIT_TYPE_LABELS, TERMS } from "@/lib/i18n/terms";
 import {
   isLookupType,
   LOOKUP_TYPE_LABELS,
   LOOKUP_TYPE_TO_EMPLOYEE_COLUMN,
+  type LookupType,
 } from "@/lib/validation/lookupTypes";
 
 /** Everything the page can show. One discriminated union, one list. */
@@ -98,142 +103,33 @@ const MAX_KARYAWAN = 2000;
  */
 const PER_PAGE = 500;
 
-/** `in(...)` chunk size — keeps the PostgREST query string well under any URL cap. */
-const CHUNK = 100;
-
 /**
- * Ceiling on one tally read.
- *
- * There are ~1.500 Karyawan in total, so a chunk can never legitimately come
- * close. The limit exists so that a server-side row cap shows up as an error
- * instead of as a number that is quietly too small — see `assertLengkap()`.
- */
-const MAX_COUNT_ROWS = 5000;
-
-function chunked<T>(values: readonly T[], size = CHUNK): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size));
-  return out;
-}
-
-/**
- * Count Karyawan per FK value, for the ids given — paged, and verified.
- *
- * WHY IT PAGES
- * PostgREST applies `db-max-rows` (1000 by default) before any range we ask
- * for, and a capped answer is a short array with no error. One chunk of ids can
- * easily match more Karyawan than that, so a single read would tally only part
- * of them and report a number that is quietly too low — right where the user is
- * about to press Merge. So: read a window below the cap, keep going until the
- * exact `count` is accounted for, and throw if we ever stop short of it.
- *
- * WHY EVERY STATUS COUNTS
- * `merge_org_unit` / `merge_jabatan` / `merge_lookup` move rows with
- * `where <kolom> = p_source` and no status predicate
- * (`0002_batch_operations.sql`), so a tally that skipped nonaktif Karyawan
- * would promise to move fewer people than the Merge actually moves.
- *
- * Ids with no Karyawan are seeded to `0`, so "0 Karyawan" — the safest merge
- * there is — reads differently from "belum dihitung".
- *
- * `column` is never caller text: it is `org_unit_id`, `jabatan_id`, or the
- * column the frozen `LOOKUP_TYPE_TO_EMPLOYEE_COLUMN` map assigns to a tipe.
- */
-async function tallyByColumn(
-  client: DbClient,
-  column: string,
-  ids: readonly string[],
-  konteks: string,
-): Promise<Map<string, number>> {
-  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
-
-  for (const chunk of chunked(ids)) {
-    let dibaca = 0;
-    let total = 0;
-
-    for (;;) {
-      // hc-check-columns-ignore — `column` is an employees FK column chosen by
-      // the caller from a frozen list, never from user input.
-      const { data, count, error } = await client
-        .from("employees")
-        .select(column, { count: "exact" })
-        .in(column, chunk)
-        // Stable order, or a range-paged read can show one row twice and miss
-        // another as Postgres re-orders equal keys.
-        .order("id", { ascending: true })
-        .range(dibaca, dibaca + PER_PAGE - 1);
-      if (error) throw new DbError(konteks, error);
-
-      const rows = (data ?? []) as unknown as Record<string, string | null>[];
-      total = count ?? rows.length;
-      for (const row of rows) {
-        const id = row[column];
-        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-      }
-      dibaca += rows.length;
-
-      if (rows.length === 0) break;
-      if (dibaca >= total) break;
-      if (dibaca >= MAX_COUNT_ROWS) break;
-    }
-
-    if (dibaca < total) {
-      // Never show a number we know is short: this one is read immediately
-      // before a Merge that moves people (same reasoning as
-      // `getOrgUnitDescendantIds()` in `lib/db/orgUnits.ts`).
-      throw new Error(
-        `${konteks}: baru ${dibaca} dari ${total} baris yang terbaca, jadi hitungan "akan dipindahkan" tidak bisa dipercaya. Tambahkan pagination sebelum melanjutkan.`,
-      );
-    }
-  }
-
-  return counts;
-}
-
-/** Karyawan per `employees.org_unit_id`. */
-async function countByOrgUnit(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Map<string, number>> {
-  return tallyByColumn(
-    client,
-    "org_unit_id",
-    ids,
-    "Gagal menghitung Karyawan per Unit Organisasi",
-  );
-}
-
-/** Karyawan per `employees.jabatan_id`. */
-async function countByJabatan(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Map<string, number>> {
-  return tallyByColumn(client, "jabatan_id", ids, "Gagal menghitung Karyawan per Jabatan");
-}
-
-/**
- * Karyawan per Lookup, one tally per tipe involved.
+ * Karyawan per Lookup, one tally per tipe involved, all tipe in parallel.
  *
  * The `employees` column is chosen by tipe through the frozen
  * `LOOKUP_TYPE_TO_EMPLOYEE_COLUMN` map, so this can only ever reach the column
- * that tipe owns — the same rule `merge_lookup` follows in SQL.
+ * that tipe owns — the same rule `merge_lookup` follows in SQL. The tallies
+ * themselves live in `lib/db/employees.ts` (`countEmployeesByColumn`), which
+ * pages below `db-max-rows` and throws rather than report a short count.
  */
 async function countByLookup(
   client: DbClient,
   idsByTipe: Map<string, string[]>,
 ): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
+  const perTipe = await Promise.all(
+    [...idsByTipe]
+      .filter(([tipe, ids]) => isLookupType(tipe) && ids.length > 0)
+      .map(([tipe, ids]) =>
+        countEmployeesByColumn(
+          client,
+          LOOKUP_TYPE_TO_EMPLOYEE_COLUMN[tipe as LookupType],
+          ids,
+        ),
+      ),
+  );
 
-  for (const [tipe, ids] of idsByTipe) {
-    if (!isLookupType(tipe) || ids.length === 0) continue;
-    const perTipe = await tallyByColumn(
-      client,
-      LOOKUP_TYPE_TO_EMPLOYEE_COLUMN[tipe],
-      ids,
-      "Gagal menghitung Karyawan per Lookup",
-    );
-    for (const [id, jumlah] of perTipe) counts.set(id, jumlah);
-  }
+  const counts = new Map<string, number>();
+  for (const satu of perTipe) for (const [id, jumlah] of satu) counts.set(id, jumlah);
   return counts;
 }
 
@@ -453,8 +349,8 @@ export async function loadBereskan(client: DbClient): Promise<BereskanData> {
   }
 
   const [unitCounts, jabatanCounts, lookupCounts] = await Promise.all([
-    countByOrgUnit(client, [...unitIds]),
-    countByJabatan(client, [...jabatanIds]),
+    countEmployeesByColumn(client, "org_unit_id", [...unitIds]),
+    countEmployeesByColumn(client, "jabatan_id", [...jabatanIds]),
     countByLookup(client, lookupIdsByTipe),
   ]);
 

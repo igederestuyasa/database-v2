@@ -42,7 +42,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import type { ReferenceIds, ReferenceLabels } from "@/components/revisions/revisionDiff";
+import { resolveReferenceLabels } from "@/lib/db/labels";
 import {
   countRevisionsInBatch,
   getBatchById,
@@ -50,7 +50,9 @@ import {
   listRevisionsByBatch,
   listRevisionsByRow,
 } from "@/lib/db/revisions";
-import { DbError, type DbClient } from "@/lib/db/shared";
+import { DbError } from "@/lib/db/shared";
+import { logError } from "@/lib/log";
+import type { ReferenceIds, ReferenceLabels } from "@/lib/revisions/references";
 import { applyRevert, planRevert, revertBatch as revertBatchRpc } from "@/lib/revisions/revert";
 import type { RevertSkipped } from "@/lib/revisions/revert";
 import { LOGGED_TABLES, type LoggedTable } from "@/lib/revisions/tables";
@@ -65,10 +67,10 @@ import {
   requireAdmin,
   requireUser,
   toActionFailure,
-  type ActionErrorCode,
   type ActionFailure,
   type ActionResult,
 } from "./_guard";
+import { mapDbError, type DbErrorContext } from "./pgErrors";
 
 /**
  * Ceiling on one Riwayat Revisi read.
@@ -87,16 +89,6 @@ const MAX_ROW_REVISIONS = 200;
  * that happens in SQL, over the whole Batch, not over what is on screen.
  */
 const MAX_BATCH_REVISIONS = 100;
-
-/**
- * Ceiling on one `in (…)` list of ids to resolve.
- *
- * Applied by trimming, not by refusing: a request that somehow carries more
- * than this still gets names for what fits, which beats a page where every
- * reference reads "(tidak dikenal)". Unreachable in practice — one page of
- * Revisi cannot name this many distinct rows.
- */
-const MAX_IDS_PER_ENTITY = 2000;
 
 /** Pages that show data from each logged table, for `revalidatePath`. */
 const PATHS_BY_TABLE: Record<LoggedTable, readonly string[]> = {
@@ -181,69 +173,46 @@ function revalidate(paths: readonly string[]): void {
 // Error mapping
 // ---------------------------------------------------------------------------
 
+const SUDAH_DIKEMBALIKAN =
+  "Batch ini sudah pernah dikembalikan. Satu Batch hanya bisa dikembalikan sekali.";
+
+const TIDAK_DITEMUKAN_LAGI =
+  "Data yang akan dikembalikan tidak ditemukan lagi. Muat ulang halaman ini, lalu coba lagi.";
+
 /**
- * SQLSTATE → `ActionErrorCode`, for the errors our own SQL raises.
+ * Terjemahan penolakan database untuk Revert (lihat `mapDbError`).
  *
  * `42501` and `22023` carry sentences written by `0002_batch_operations.sql`
  * itself — "Hanya admin yang boleh mengembalikan Revisi.", "Tidak ada Revisi di
  * Batch ini yang bisa dikembalikan." — so they are shown verbatim. `55000`
- * (already reverted) and `P0002` (row or Batch gone) are re-worded below,
+ * (already reverted) and `P0002` (row or Batch gone) are re-worded (`ulang`),
  * because the database's version of those names a uuid and staf HC should never
  * have to read one.
  *
  * `22023` is `KONFLIK`, not `VALIDASI`: by the time an RPC sees these arguments
  * zod has already checked their shape, so the only way to reach it is a plan
  * with nothing revertable in it — which is a state, not a typo.
- */
-const CODE_BY_SQLSTATE: Record<string, ActionErrorCode> = {
-  "42501": "BUKAN_ADMIN",
-  "22023": "KONFLIK",
-  "55000": "KONFLIK",
-  P0002: "TIDAK_DITEMUKAN",
-  // PostgREST, not Postgres: a row the reader may not see behaves as absent.
-  PGRST116: "TIDAK_DITEMUKAN",
-};
-
-const REWORDED_BY_SQLSTATE: Record<string, string> = {
-  "55000":
-    "Batch ini sudah pernah dikembalikan. Satu Batch hanya bisa dikembalikan sekali.",
-  P0002:
-    "Data yang akan dikembalikan tidak ditemukan lagi. Muat ulang halaman ini, lalu coba lagi.",
-  PGRST116:
-    "Data yang akan dikembalikan tidak ditemukan lagi. Muat ulang halaman ini, lalu coba lagi.",
-};
-
-/**
- * Turn a failed revert into something a toast can say.
  *
- * `applyRevert()` / `revertBatch()` wrap PostgREST errors in `DbError`, which
- * keeps the SQLSTATE. Anything without one is unexpected: it is logged and
- * reported generically, exactly as `_guard.ts` asks.
+ * `fallback` is supplied per call ("Gagal mengembalikan Revisi." vs "… Batch."),
+ * and it also covers a rejection that is not a database error at all.
  */
-function revertFailure(error: unknown, fallback: string): ActionError {
-  if (!(error instanceof DbError)) {
-    console.error("[revisions]", error);
-    return new ActionError("GAGAL", fallback);
-  }
-
-  const sqlstate = error.code ?? "";
-  const code = CODE_BY_SQLSTATE[sqlstate];
-  if (!code) {
-    console.error("[revisions]", error);
-    return new ActionError("GAGAL", fallback);
-  }
-
-  const reworded = REWORDED_BY_SQLSTATE[sqlstate];
-  if (reworded) {
-    console.error("[revisions]", error);
-    return new ActionError(code, reworded);
-  }
-
-  // `DbError` prefixes its context ("Gagal mengembalikan Revisi: …"); the
-  // sentence our SQL wrote is what is worth showing.
-  const message = error.message.split(": ").slice(1).join(": ") || error.message;
-  return new ActionError(code, message);
-}
+const REVERT_DB: DbErrorContext = {
+  entitas: "Revisi",
+  aksi: "mengembalikan Revisi",
+  sendiri: {
+    "42501": "BUKAN_ADMIN",
+    "22023": "KONFLIK",
+    "55000": "KONFLIK",
+    P0002: "TIDAK_DITEMUKAN",
+    // PostgREST, not Postgres: a row the reader may not see behaves as absent.
+    PGRST116: "TIDAK_DITEMUKAN",
+  },
+  ulang: {
+    "55000": SUDAH_DIKEMBALIKAN,
+    P0002: TIDAK_DITEMUKAN_LAGI,
+    PGRST116: TIDAK_DITEMUKAN_LAGI,
+  },
+};
 
 /**
  * Wrap a read inside a write, so a failed database read says so.
@@ -257,7 +226,7 @@ async function reading<T>(pesan: string, promise: Promise<T>): Promise<T> {
     return await promise;
   } catch (error) {
     if (error instanceof DbError) {
-      console.error("[revisions]", error);
+      logError("revisions", error);
       throw new ActionError("GAGAL", pesan);
     }
     throw error;
@@ -267,7 +236,7 @@ async function reading<T>(pesan: string, promise: Promise<T>): Promise<T> {
 /** A read that failed is never the user's fault; say what did not load. */
 function readFailure(error: unknown, pesan: string): ActionFailure {
   if (error instanceof DbError) {
-    console.error("[revisions]", error);
+    logError("revisions", error);
     return actionFail("GAGAL", pesan);
   }
   return toActionFailure(error);
@@ -362,10 +331,11 @@ export async function loadBatchRevisions(
 }
 
 /**
- * No `.max()` here on purpose: the ceiling is applied by `capped()` when the
- * query is built, so an over-long list loses its tail instead of failing the
- * whole request and leaving every name on screen as "(tidak dikenal)". The
- * `z.uuid()` per element is what keeps the input a list of ids.
+ * No `.max()` here on purpose: the ceiling (`MAX_IDS_PER_ENTITY` in
+ * `lib/db/labels.ts`) is applied by trimming when the query is built, so an
+ * over-long list loses its tail instead of failing the whole request and
+ * leaving every name on screen as "(tidak dikenal)". The `z.uuid()` per element
+ * is what keeps the input a list of ids.
  */
 const idListSchema = z.array(z.uuid()).default([]);
 
@@ -385,9 +355,10 @@ export type ResolveRevisionLabelsInput = {
 /**
  * uuid → the name a human recognises, for every reference in a set of Revisi.
  *
- * This is what stands between staf HC and a diff that reads
- * `org_unit_id: 3f2a… → 9b1c…`. Five relations, one query each, only the ids
- * actually on screen.
+ * The reads live in `lib/db/labels.ts`, so a Server Component (the Log
+ * Perubahan page) can call them directly with the session client it already
+ * holds; this action is the door for the Client Components (`RevisionPanel`,
+ * `BatchList`) that resolve names after the page has rendered.
  *
  * Missing keys are normal and must not be treated as an error: `profiles` is
  * readable only by an admin or its owner, so a viewer cannot resolve a
@@ -403,106 +374,11 @@ export async function resolveRevisionLabels(
 
   try {
     const { client } = await requireUser();
-    const labels: Record<string, string> = {};
-
-    const [orgUnits, jabatan, lookups, employees, profiles] = await Promise.all([
-      readOrgUnitLabels(client, ids.org_units),
-      readJabatanLabels(client, ids.jabatan),
-      readLookupLabels(client, ids.lookups),
-      readEmployeeLabels(client, ids.employees),
-      readProfileLabels(client, ids.profiles),
-    ]);
-
-    for (const group of [orgUnits, jabatan, lookups, employees, profiles]) {
-      Object.assign(labels, group);
-    }
-
+    const labels = await resolveReferenceLabels(client, ids);
     return actionOk({ labels });
   } catch (error) {
     return readFailure(error, "Gagal memuat nama data referensi.");
   }
-}
-
-/** Cap one `in (…)` list; the UI never sends this many distinct references. */
-function capped(ids: readonly string[]): string[] {
-  return ids.slice(0, MAX_IDS_PER_ENTITY);
-}
-
-async function readOrgUnitLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const { data, error } = await client
-    .from("org_units")
-    .select("id, nama, kode")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Unit Organisasi", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.nama} (${row.kode})`]),
-  );
-}
-
-async function readJabatanLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const { data, error } = await client
-    .from("jabatan")
-    .select("id, nama, kode")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Jabatan", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.nama} (${row.kode})`]),
-  );
-}
-
-async function readLookupLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const { data, error } = await client
-    .from("lookups")
-    .select("id, label, kode")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Lookup", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.label} (${row.kode})`]),
-  );
-}
-
-async function readEmployeeLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  // `employees`, not `v_employees_private`: that view INNER JOINs
-  // `employee_private`, so a viewer would get zero rows (ADR-005 §10).
-  const { data, error } = await client
-    .from("employees")
-    .select("id, full_name, personnel_number")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Karyawan", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.full_name} · ${row.personnel_number}`]),
-  );
-}
-
-async function readProfileLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  // RLS: an admin sees everyone, a viewer only themselves. Fewer rows than ids
-  // is the normal case, not a failure.
-  const { data, error } = await client
-    .from("profiles")
-    .select("id, email")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Pengguna", error);
-  return Object.fromEntries((data ?? []).map((row) => [row.id, row.email]));
 }
 
 // ---------------------------------------------------------------------------
@@ -584,7 +460,10 @@ export async function revertRevision(
     try {
       result = await applyRevert(plan, client);
     } catch (error) {
-      throw revertFailure(error, "Gagal mengembalikan Revisi. Coba lagi.");
+      throw mapDbError(error, {
+        ...REVERT_DB,
+        fallback: "Gagal mengembalikan Revisi. Coba lagi.",
+      });
     }
 
     const operation = plan.operations[0];
@@ -647,17 +526,18 @@ export async function revertBatch(
       throw new ActionError("TIDAK_DITEMUKAN", "Batch ini tidak ditemukan.");
     }
     if (batch.reverted_by_batch_id) {
-      throw new ActionError(
-        "KONFLIK",
-        REWORDED_BY_SQLSTATE["55000"] ?? "Batch ini sudah pernah dikembalikan.",
-      );
+      throw new ActionError("KONFLIK", SUDAH_DIKEMBALIKAN);
     }
 
     let result;
     try {
       result = await revertBatchRpc(batchId, client);
     } catch (error) {
-      throw revertFailure(error, "Gagal mengembalikan Batch. Coba lagi.");
+      throw mapDbError(error, {
+        ...REVERT_DB,
+        aksi: "mengembalikan Batch",
+        fallback: "Gagal mengembalikan Batch. Coba lagi.",
+      });
     }
 
     revalidate(ALL_PATHS);

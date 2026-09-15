@@ -29,28 +29,27 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { EntityOption } from "@/lib/entityOptions";
 import { UI } from "@/lib/i18n/terms";
 import { cn } from "@/lib/utils";
-
-import type { EntityOption } from "./entityOptions";
 
 /**
  * The frozen surface, unchanged: `EntityOption` and the three mappers are still
  * importable from this module, because other units already import them here.
  *
- * They are DEFINED in `./entityOptions.ts`, which carries no `"use client"`, so
- * that a Server Component can actually call them — importing a client module's
- * export from the server yields a reference that throws when called, which is
- * what used to break `/bereskan` the moment it found a Temuan. Server code must
- * import from `./entityOptions` directly: re-exported here, they are client
- * references again.
+ * They are DEFINED in `lib/entityOptions.ts`, which carries no `"use client"`,
+ * so that a Server Component can actually call them — importing a client
+ * module's export from the server yields a reference that throws when called,
+ * which is what used to break `/bereskan` the moment it found a Temuan. Server
+ * code must import from `@/lib/entityOptions` directly: re-exported here, they
+ * are client references again.
  */
 export type { EntityOption };
 export {
   toJabatanOptions,
   toLookupOptions,
   toOrgUnitOptions,
-} from "./entityOptions";
+} from "@/lib/entityOptions";
 
 export type EntityPickerProps = {
   options: readonly EntityOption[];
