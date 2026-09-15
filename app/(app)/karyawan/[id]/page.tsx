@@ -122,6 +122,11 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // Renders the "tidak ditemukan" page, but with HTTP 200 rather than 404:
+  // `loading.tsx` here (and on `/karyawan`) flushes the shell before this runs,
+  // so the status line is already sent. Measured, deliberate, and explained in
+  // docs/adr/ADR-007 — it is NOT caused by `force-dynamic`, and removing that
+  // does not change it.
   if (!UUID_RE.test(id)) notFound();
 
   const { client, user } = await requirePageSession(`/karyawan/${id}`);

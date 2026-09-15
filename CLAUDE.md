@@ -9,7 +9,8 @@ Database central data karyawan PT Hutama Karya (±1.500 orang) dengan UI CRUD, l
 - `API-CONTRACT.md` — kontrak `/api/v1`; jangan ubah bentuk response v1.
 - `ROADMAP.md` — fase & exit criteria; kerjakan fase berurutan.
 - `CONTEXT.md` — glosarium; pakai istilah di sana di UI, nama file, dan diskusi.
-- `docs/adr/` — keputusan yang tidak boleh "diperbaiki" tanpa ADR baru.
+- `README-HC.md` — panduan pemakaian untuk staf HC non-teknis (ROADMAP Fase 5). Termasuk dua langkah sekali-jalan yang tidak ada di UI: menaikkan admin pertama lewat SQL, dan menjalankan Seed dengan `HC_SEED_DB_URL`.
+- `docs/adr/` — ADR-001..007; keputusan yang tidak boleh "diperbaiki" tanpa ADR baru.
 
 ## Stack
 Next.js 15 App Router + TypeScript · Supabase (Postgres, Auth, RLS) · Vercel · Tailwind + shadcn/ui · TanStack Table · react-hook-form + zod · SheetJS (seed saja). Tanpa ORM.
@@ -17,7 +18,7 @@ Next.js 15 App Router + TypeScript · Supabase (Postgres, Auth, RLS) · Vercel �
 ## Commands
 - `npm run dev` — dev server
 - `npm run lint` · `npm run typecheck` — wajib hijau sebelum commit
-- `npm test` — cek nama kolom (`check:columns`) + unit test (`lib/cleaning`, `lib/revisions/revert`, `lib/api/fields`)
+- `npm test` — cek nama kolom (`check:columns`) + seluruh unit test. `vitest.config.ts` mengumpulkan `*.test.ts` dari `app/**`, `lib/**`, `components/**`, `scripts/**`, dan `tests/**` — test yang dituliskan bersebelahan dengan `page.tsx` **ikut terkumpul**; jangan persempit daftarnya lagi.
 - `npm run db:local` — start Postgres lokal, pasang `db/local/00-shim.sql` + semua `supabase/migrations/*.sql`, jalankan `scripts/verify-schema.sql`
 - `npm run gen:types` — regenerate `lib/types/db.ts` & `lib/schema/columns.generated.ts` dari database lokal (menggantikan `supabase gen types`, yang tidak bisa jalan di sini — lihat ADR-005)
 - `npx tsx scripts/seed-from-excel.ts <file.xlsx>` — seed awal, sekali saja
@@ -53,6 +54,7 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Setiap `page.tsx` di `app/(app)/**` dan `route.ts` di `app/api/v1/**` wajib `export const dynamic = "force-dynamic"` (ADR-005 §6).
 - Daftar `tipe` lookup harus sama di `lib/validation/lookupTypes.ts` dan CHECK constraint migration.
 - Error API memakai satu envelope `{ error: { code, message, details } }` (lihat API-CONTRACT).
+- `hashApiKey()` hanya ada **satu**, di `lib/apiKeys/keygen.ts`; `lib/api/auth.ts` me-re-export-nya. Jangan menyalin ulang: sisi yang membuat key dan sisi yang memvalidasinya harus menghasilkan digest yang sama, dan kalau berbeda gejalanya cuma "key-nya salah". `lib/api/auth.test.ts` mematok digest satu key tetap sebagai penjaganya.
 - Cek role di Server Action **dan** RLS — keduanya, bukan salah satu.
 - Penamaan: tabel/kolom `snake_case`; file TS `camelCase.ts`; komponen `PascalCase.tsx`. Bahasa UI Indonesia.
 - Jangan pernah commit data karyawan sungguhan — fixture dan test pakai data dummy.
@@ -67,3 +69,4 @@ components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 - Excel sumber punya ±12 kolom rumus (No, Age, Range, Gen, semua "Masa", PG-JG, Keterangan Naik PG/JG) yang **diabaikan** saat seed; Jurusan & Teknik/Non Teknik adalah VLOOKUP dari sheet lain — diisi manual atau kosong.
 - Env wajib: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only), `ALLOWED_EMAIL_DOMAIN`.
 - Penyimpanan di Supabase bersifat sementara & perlu konfirmasi kebijakan; jaga skema tetap Postgres standar.
+- `notFound()` di `/karyawan/[id]` dan `/karyawan/[id]/edit` merender halaman "tidak ditemukan" yang benar tapi dengan **HTTP 200**, karena `loading.tsx` sudah mengalirkan kerangka halaman lebih dulu. Itu diukur dan dibiarkan — ADR-007. Penyebabnya **bukan** `force-dynamic`; jangan mencabut ADR-005 §6 untuk memperbaikinya.

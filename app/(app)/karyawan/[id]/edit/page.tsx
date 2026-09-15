@@ -47,6 +47,9 @@ export default async function Page({ params }: PageProps) {
   // Id yang bukan uuid tidak perlu sampai ke database: PostgREST akan
   // menjawabnya sebagai error sintaks, dan "22P02" bukan kalimat yang pantas
   // dibaca staf HC untuk sesuatu yang sebenarnya cuma "halaman tidak ada".
+  // Halaman "tidak ditemukan"-nya benar, status HTTP-nya 200 — `loading.tsx`
+  // sudah mengalirkan kerangka halaman sebelum baris ini jalan. Disengaja,
+  // diukur, dan dijelaskan di docs/adr/ADR-007.
   if (!uuidField("Karyawan").safeParse(id).success) notFound();
 
   if (user.role !== "admin") {

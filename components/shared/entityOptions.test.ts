@@ -65,7 +65,15 @@ describe("batas server/client", () => {
     // call toOrgUnitOptions() from the server"), dan hanya pada cabang kode
     // yang benar-benar punya data — jadi test, bukan review, yang menjaganya.
     const pelanggar: string[] = [];
-    for (const file of [...walk(path.join(ROOT, "app")), ...walk(path.join(ROOT, "lib"))]) {
+    // `components/` is walked too: `StrukturClient.tsx` lives there and calls
+    // `toOrgUnitOptions()`. It is a client module today, so it passes — but a
+    // helper added next to it that is not would be the same crash again.
+    const kandidat = [
+      ...walk(path.join(ROOT, "app")),
+      ...walk(path.join(ROOT, "lib")),
+      ...walk(path.join(ROOT, "components")),
+    ];
+    for (const file of kandidat) {
       const source = readFileSync(file, "utf8");
       if (isClientModule(source)) continue;
       if (!/from\s+["']@\/components\/shared\/EntityPicker["']/.test(source)) continue;

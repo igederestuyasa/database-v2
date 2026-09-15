@@ -29,24 +29,24 @@
  * cryptographic randomness, so it needs no work factor; a slow KDF here would
  * only tax every Konsumen request.
  *
- * ┌─ FOLLOW-UP, one line ─────────────────────────────────────────────────────┐
- * │ The canonical implementation is `hashApiKey()` in `lib/apiKeys/keygen.ts`,│
- * │ which the API Keys unit ships in PR #13. That module is not on `main` yet,│
- * │ so this file cannot import it without failing to build. `hashApiKey()`    │
- * │ below is deliberately byte-identical to it — same algorithm, same         │
- * │ encoding, same empty-key guard, same "no normalisation" rule — and        │
- * │ `auth.test.ts` pins the digest of a fixed key so the two cannot drift     │
- * │ unnoticed. Once PR #13 has landed, delete the body here and re-export:    │
- * │                                                                           │
- * │     export { hashApiKey } from "@/lib/apiKeys/keygen";                    │
- * │                                                                           │
- * │ A mismatch would not look like a bug: every freshly issued key would be   │
- * │ rejected as "wrong key", the Konsumen would re-copy it, the admin would   │
- * │ reissue it, and nobody would suspect two different digests.               │
- * └───────────────────────────────────────────────────────────────────────────┘
+ * That contract is now kept by there being **one** implementation:
+ * `hashApiKey()` lives in `lib/apiKeys/keygen.ts` (the module that issues keys)
+ * and is re-exported here for the side that validates them. An earlier copy in
+ * this file was byte-identical on purpose, because `keygen.ts` had not merged
+ * yet; both are on `main` now, so the copy is gone and the two sides cannot
+ * drift by construction.
+ *
+ * The pinned-digest test in `auth.test.ts` stays — it now guards the re-export
+ * rather than a second implementation. A mismatch between issuing and
+ * validating would not look like a bug: every freshly issued key would be
+ * rejected as "wrong key", the Konsumen would re-copy it, the admin would
+ * reissue it, and nobody would suspect two different digests.
  */
-import { createHash } from "node:crypto";
-
+import {
+  API_KEY_HASH_ALGORITHM,
+  API_KEY_HASH_LENGTH,
+  hashApiKey,
+} from "@/lib/apiKeys/keygen";
 import { findActiveApiKeyByHash, type ApiKeySummary } from "@/lib/db/apiKeys";
 import type { DbClient } from "@/lib/db/shared";
 import { API_KEY_PATTERN } from "@/lib/validation/apiKey";
@@ -56,30 +56,18 @@ import { apiError } from "./errors";
 /** The authenticated Konsumen. Never carries `key_hash` — see `lib/db/apiKeys.ts`. */
 export type AuthenticatedKey = ApiKeySummary;
 
-/** Spelled once so the two sides of the contract cannot differ by a typo. */
-export const API_KEY_HASH_ALGORITHM = "sha256";
-
-/** 32 bytes of SHA-256 rendered as hex. */
-export const API_KEY_HASH_LENGTH = 64;
-
 /**
  * `sha256(token)` as lowercase hex — the value stored in `api_keys.key_hash`.
  *
- * Computed over the key **exactly as issued**, `hck_` prefix included: no
- * trim, no lowercasing, no normalisation of any kind. Whitespace around the
- * header value is stripped by `extractBearerToken()` and the format is checked
- * by `requireBearerToken()` *before* this is called, so `"hck_… "` with a
- * trailing space cannot quietly become a different digest.
- *
- * An empty key is refused rather than hashed: `sha256("")` is a perfectly good
- * digest, and a row whose `key_hash` failed to save would match it.
+ * Re-exported from `lib/apiKeys/keygen.ts`, which is where a key is created;
+ * issuing and validating a key must compute the same digest, so there is
+ * exactly one function that computes it. Hashing is over the key **exactly as
+ * issued**, `hck_` prefix included: no trim, no lowercasing, no normalisation.
+ * Whitespace around the header value is stripped by `extractBearerToken()` and
+ * the format is checked by `requireBearerToken()` *before* this is called, so
+ * `"hck_… "` with a trailing space cannot quietly become a different digest.
  */
-export function hashApiKey(token: string): string {
-  if (token.length === 0) {
-    throw new Error("API Key kosong tidak bisa di-hash.");
-  }
-  return createHash(API_KEY_HASH_ALGORITHM).update(token, "utf8").digest("hex");
-}
+export { API_KEY_HASH_ALGORITHM, API_KEY_HASH_LENGTH, hashApiKey };
 
 /**
  * The bearer token from an `Authorization` header, or `null`.
