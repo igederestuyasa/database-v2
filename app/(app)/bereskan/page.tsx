@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
-import { getSessionUser } from "@/lib/actions/_guard";
-import { createClient } from "@/lib/supabase/server";
+import { requirePageSession } from "@/lib/auth/session";
 import { NAV_LABELS } from "@/lib/i18n/terms";
 
 import BereskanClient from "./BereskanClient";
@@ -27,10 +25,7 @@ export const metadata: Metadata = { title: NAV_LABELS.bereskan };
  * render without any state to keep in sync.
  */
 export default async function Page() {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-
-  const client = await createClient();
+  const { client, user } = await requirePageSession("/bereskan");
   const data = await loadBereskan(client);
 
   return <BereskanClient {...data} isAdmin={user.role === "admin"} />;

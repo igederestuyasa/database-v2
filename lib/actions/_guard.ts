@@ -26,6 +26,7 @@
  *
  * See `lib/actions/_reference.ts` for the whole thing worked through.
  */
+import { cache } from "react";
 import type { z } from "zod";
 
 import { DbError, type DbClient } from "@/lib/db/shared";
@@ -179,31 +180,64 @@ export function toActionFailure(error: unknown): ActionFailure {
 }
 
 /**
- * The signed-in user, or `null`.
+ * Who is signed in, as far as this request knows — one of four states.
  *
- * Uses `auth.getUser()`, which verifies the token with the Auth server, rather
- * than `getSession()`, which trusts whatever the cookie says.
+ * The middle two are real and must not be collapsed into "tamu": Supabase Auth
+ * knows the account but `profiles` has no row for it (created outside the
+ * `on_auth_user_created` trigger), or the `profiles` select itself failed.
+ * Sending either to the login form would loop; `requireUser()` and
+ * `lib/auth/session.ts` decide what each one means for a write and for a page.
  */
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const client = await createClient();
+export type VerifiedSession =
+  | { status: "tamu"; client: DbClient }
+  | { status: "tanpa-profil"; client: DbClient }
+  | { status: "profil-gagal"; client: DbClient }
+  | { status: "masuk"; client: DbClient; user: SessionUser };
 
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) return null;
+/**
+ * THE ONE PLACE identity is verified, memoised for the lifetime of a request.
+ *
+ * `auth.getUser()` (a round trip that verifies the token with the Auth server)
+ * rather than `getSession()` (which believes whatever the cookie says), then
+ * one select on `profiles` for the role.
+ *
+ * Wrapped in `React.cache()` because a single navigation used to pay for this
+ * three times over: `middleware.ts` verifies once, the sidebar in
+ * `app/(app)/layout.tsx` asked again, and the page asked a third time through
+ * `requireUser()` — each with its own `getUser()` and its own `profiles` read.
+ * `cache()` lives exactly as long as one request and nothing longer: it is not
+ * a session cache, and it cannot hand one visitor's session to another's
+ * request. Every guard below and every page helper in `lib/auth/session.ts`
+ * reads through here, so there is one answer per request, however many
+ * components ask.
+ */
+export const readVerifiedSession = cache(
+  async function readVerifiedSession(): Promise<VerifiedSession> {
+    const client = await createClient();
 
-  const profile = await client
-    .from("profiles")
-    .select("id, email, role")
-    .eq("id", data.user.id)
-    .maybeSingle();
+    const { data, error } = await client.auth.getUser();
+    if (error || !data.user) return { status: "tamu", client };
 
-  if (profile.error || !profile.data) return null;
+    const profile = await client
+      .from("profiles")
+      .select("id, email, role")
+      .eq("id", data.user.id)
+      .maybeSingle();
 
-  return {
-    id: profile.data.id,
-    email: profile.data.email,
-    role: profile.data.role === "admin" ? "admin" : "viewer",
-  };
-}
+    if (profile.error) return { status: "profil-gagal", client };
+    if (!profile.data) return { status: "tanpa-profil", client };
+
+    return {
+      status: "masuk",
+      client,
+      user: {
+        id: profile.data.id,
+        email: profile.data.email,
+        role: profile.data.role === "admin" ? "admin" : "viewer",
+      },
+    };
+  },
+);
 
 /**
  * Any signed-in user (admin or viewer). Throws `UnauthenticatedError`.
@@ -212,37 +246,22 @@ export async function getSessionUser(): Promise<SessionUser | null> {
  * about being the only thing standing between a stranger and the data.
  */
 export async function requireUser(): Promise<GuardContext> {
-  const client = await createClient();
-
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) throw new UnauthenticatedError();
-
-  const profile = await client
-    .from("profiles")
-    .select("id, email, role")
-    .eq("id", data.user.id)
-    .maybeSingle();
-
-  if (profile.error) {
-    throw new ActionError("GAGAL", "Gagal memeriksa profil pengguna.");
+  const session = await readVerifiedSession();
+  switch (session.status) {
+    case "tamu":
+      throw new UnauthenticatedError();
+    case "profil-gagal":
+      throw new ActionError("GAGAL", "Gagal memeriksa profil pengguna.");
+    case "tanpa-profil":
+      // The `handle_new_user` trigger creates the profile at first login, so a
+      // missing one means the account was made another way. Refuse rather than
+      // guess a role.
+      throw new ForbiddenError(
+        "Profil pengguna belum dibuat. Hubungi admin HC Core.",
+      );
+    case "masuk":
+      return { client: session.client, user: session.user };
   }
-  if (!profile.data) {
-    // The `handle_new_user` trigger creates the profile at first login, so a
-    // missing one means the account was made another way. Refuse rather than
-    // guess a role.
-    throw new ForbiddenError(
-      "Profil pengguna belum dibuat. Hubungi admin HC Core.",
-    );
-  }
-
-  return {
-    client,
-    user: {
-      id: profile.data.id,
-      email: profile.data.email,
-      role: profile.data.role === "admin" ? "admin" : "viewer",
-    },
-  };
 }
 
 /**
@@ -255,10 +274,4 @@ export async function requireAdmin(): Promise<GuardContext> {
   const context = await requireUser();
   if (context.user.role !== "admin") throw new ForbiddenError();
   return context;
-}
-
-/** Non-throwing variant, for deciding whether to render a button. */
-export async function isAdmin(): Promise<boolean> {
-  const user = await getSessionUser();
-  return user?.role === "admin";
 }

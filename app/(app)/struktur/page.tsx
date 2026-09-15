@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { StrukturClient } from "@/components/struktur/StrukturClient";
-import { getSessionUser } from "@/lib/actions/_guard";
+import { requirePageSession } from "@/lib/auth/session";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
-import { createClient } from "@/lib/supabase/server";
 
 import { loadStrukturNodes } from "./strukturData";
 
@@ -16,10 +14,7 @@ export const metadata: Metadata = { title: NAV_LABELS.struktur };
 export default async function Page() {
   // Both, not either (CLAUDE.md): this decides what the page offers, and RLS
   // decides what the database will actually do about it.
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-
-  const client = await createClient();
+  const { client, user } = await requirePageSession("/struktur");
   const { nodes, jumlahUnit, totalUnit, unitTerpotong } =
     await loadStrukturNodes(client);
 

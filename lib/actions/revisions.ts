@@ -42,7 +42,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import type { ReferenceIds, ReferenceLabels } from "@/components/revisions/revisionDiff";
+import { resolveReferenceLabels } from "@/lib/db/labels";
 import {
   countRevisionsInBatch,
   getBatchById,
@@ -50,7 +50,8 @@ import {
   listRevisionsByBatch,
   listRevisionsByRow,
 } from "@/lib/db/revisions";
-import { DbError, type DbClient } from "@/lib/db/shared";
+import { DbError } from "@/lib/db/shared";
+import type { ReferenceIds, ReferenceLabels } from "@/lib/revisions/references";
 import { applyRevert, planRevert, revertBatch as revertBatchRpc } from "@/lib/revisions/revert";
 import type { RevertSkipped } from "@/lib/revisions/revert";
 import { LOGGED_TABLES, type LoggedTable } from "@/lib/revisions/tables";
@@ -87,16 +88,6 @@ const MAX_ROW_REVISIONS = 200;
  * that happens in SQL, over the whole Batch, not over what is on screen.
  */
 const MAX_BATCH_REVISIONS = 100;
-
-/**
- * Ceiling on one `in (…)` list of ids to resolve.
- *
- * Applied by trimming, not by refusing: a request that somehow carries more
- * than this still gets names for what fits, which beats a page where every
- * reference reads "(tidak dikenal)". Unreachable in practice — one page of
- * Revisi cannot name this many distinct rows.
- */
-const MAX_IDS_PER_ENTITY = 2000;
 
 /** Pages that show data from each logged table, for `revalidatePath`. */
 const PATHS_BY_TABLE: Record<LoggedTable, readonly string[]> = {
@@ -362,10 +353,11 @@ export async function loadBatchRevisions(
 }
 
 /**
- * No `.max()` here on purpose: the ceiling is applied by `capped()` when the
- * query is built, so an over-long list loses its tail instead of failing the
- * whole request and leaving every name on screen as "(tidak dikenal)". The
- * `z.uuid()` per element is what keeps the input a list of ids.
+ * No `.max()` here on purpose: the ceiling (`MAX_IDS_PER_ENTITY` in
+ * `lib/db/labels.ts`) is applied by trimming when the query is built, so an
+ * over-long list loses its tail instead of failing the whole request and
+ * leaving every name on screen as "(tidak dikenal)". The `z.uuid()` per element
+ * is what keeps the input a list of ids.
  */
 const idListSchema = z.array(z.uuid()).default([]);
 
@@ -385,9 +377,10 @@ export type ResolveRevisionLabelsInput = {
 /**
  * uuid → the name a human recognises, for every reference in a set of Revisi.
  *
- * This is what stands between staf HC and a diff that reads
- * `org_unit_id: 3f2a… → 9b1c…`. Five relations, one query each, only the ids
- * actually on screen.
+ * The reads live in `lib/db/labels.ts`, so a Server Component (the Log
+ * Perubahan page) can call them directly with the session client it already
+ * holds; this action is the door for the Client Components (`RevisionPanel`,
+ * `BatchList`) that resolve names after the page has rendered.
  *
  * Missing keys are normal and must not be treated as an error: `profiles` is
  * readable only by an admin or its owner, so a viewer cannot resolve a
@@ -403,106 +396,11 @@ export async function resolveRevisionLabels(
 
   try {
     const { client } = await requireUser();
-    const labels: Record<string, string> = {};
-
-    const [orgUnits, jabatan, lookups, employees, profiles] = await Promise.all([
-      readOrgUnitLabels(client, ids.org_units),
-      readJabatanLabels(client, ids.jabatan),
-      readLookupLabels(client, ids.lookups),
-      readEmployeeLabels(client, ids.employees),
-      readProfileLabels(client, ids.profiles),
-    ]);
-
-    for (const group of [orgUnits, jabatan, lookups, employees, profiles]) {
-      Object.assign(labels, group);
-    }
-
+    const labels = await resolveReferenceLabels(client, ids);
     return actionOk({ labels });
   } catch (error) {
     return readFailure(error, "Gagal memuat nama data referensi.");
   }
-}
-
-/** Cap one `in (…)` list; the UI never sends this many distinct references. */
-function capped(ids: readonly string[]): string[] {
-  return ids.slice(0, MAX_IDS_PER_ENTITY);
-}
-
-async function readOrgUnitLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const { data, error } = await client
-    .from("org_units")
-    .select("id, nama, kode")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Unit Organisasi", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.nama} (${row.kode})`]),
-  );
-}
-
-async function readJabatanLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const { data, error } = await client
-    .from("jabatan")
-    .select("id, nama, kode")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Jabatan", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.nama} (${row.kode})`]),
-  );
-}
-
-async function readLookupLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const { data, error } = await client
-    .from("lookups")
-    .select("id, label, kode")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Lookup", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.label} (${row.kode})`]),
-  );
-}
-
-async function readEmployeeLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  // `employees`, not `v_employees_private`: that view INNER JOINs
-  // `employee_private`, so a viewer would get zero rows (ADR-005 §10).
-  const { data, error } = await client
-    .from("employees")
-    .select("id, full_name, personnel_number")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Karyawan", error);
-  return Object.fromEntries(
-    (data ?? []).map((row) => [row.id, `${row.full_name} · ${row.personnel_number}`]),
-  );
-}
-
-async function readProfileLabels(
-  client: DbClient,
-  ids: readonly string[],
-): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  // RLS: an admin sees everyone, a viewer only themselves. Fewer rows than ids
-  // is the normal case, not a failure.
-  const { data, error } = await client
-    .from("profiles")
-    .select("id, email")
-    .in("id", capped(ids));
-  if (error) throw new DbError("Gagal memuat nama Pengguna", error);
-  return Object.fromEntries((data ?? []).map((row) => [row.id, row.email]));
 }
 
 // ---------------------------------------------------------------------------

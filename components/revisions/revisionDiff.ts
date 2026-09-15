@@ -31,6 +31,14 @@
  * is the uuid → label map, and that is passed in.
  */
 import {
+  emptyReferenceIds,
+  isEmptyReferenceIds,
+  REFERENCE_ENTITIES,
+  type ReferenceEntity,
+  type ReferenceIds,
+  type ReferenceLabels,
+} from "@/lib/revisions/references";
+import {
   columnsOf,
   isLoggedTable,
   LOGGED_TABLE_LABELS,
@@ -63,27 +71,15 @@ const TIME_ZONE = "Asia/Jakarta";
 // References: which columns hold a uuid, and what it points at
 // ---------------------------------------------------------------------------
 
-/** The tables a Revisi can point into. `employees` is for `employee_private`. */
-export type ReferenceEntity =
-  | "org_units"
-  | "jabatan"
-  | "lookups"
-  | "employees"
-  | "profiles";
-
-export const REFERENCE_ENTITIES = [
-  "org_units",
-  "jabatan",
-  "lookups",
-  "employees",
-  "profiles",
-] as const satisfies readonly ReferenceEntity[];
-
-/** Ids to resolve, grouped by the table they live in. Unique and sorted. */
-export type ReferenceIds = Record<ReferenceEntity, string[]>;
-
-/** uuid → a name a human recognises. Missing keys are normal (see RLS). */
-export type ReferenceLabels = Readonly<Record<string, string>>;
+/**
+ * The reference vocabulary (`ReferenceEntity`, `ReferenceIds`,
+ * `ReferenceLabels`, the empty/merge helpers) lives in
+ * `lib/revisions/references.ts`, so `lib/db/labels.ts` can read the same shape
+ * without importing from `components/`. Re-exported here so `RevisionCard`,
+ * `useReferenceLabels` and the Log Perubahan page keep one import path.
+ */
+export { emptyReferenceIds, isEmptyReferenceIds, REFERENCE_ENTITIES };
+export type { ReferenceEntity, ReferenceIds, ReferenceLabels };
 
 /** The `employees` lookup columns, derived from the frozen tipe → kolom map. */
 const EMPLOYEE_LOOKUP_COLUMN_TO_TYPE: Record<string, LookupType> =
@@ -133,20 +129,6 @@ export const REFERENCE_COLUMNS: Record<
 const ROW_REFERENCE: Partial<Record<LoggedTable, ReferenceEntity>> = {
   employee_private: "employees",
 };
-
-export function emptyReferenceIds(): ReferenceIds {
-  return {
-    org_units: [],
-    jabatan: [],
-    lookups: [],
-    employees: [],
-    profiles: [],
-  };
-}
-
-export function isEmptyReferenceIds(ids: ReferenceIds): boolean {
-  return REFERENCE_ENTITIES.every((entity) => ids[entity].length === 0);
-}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

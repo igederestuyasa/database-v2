@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 
-import { isAdmin } from "@/lib/actions/_guard";
+import { requirePageSession } from "@/lib/auth/session";
 import { listAllJabatan } from "@/lib/db/jabatan";
 import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
-import { createClient } from "@/lib/supabase/server";
 
 import JabatanTable from "./JabatanTable";
 import { bacaStatusFilter } from "./statusFilter";
@@ -22,14 +21,16 @@ export default async function Page({ searchParams }: PageProps) {
   // bertahan setelah halaman dimuat ulang.
   const status = bacaStatusFilter((await searchParams).status);
 
-  const client = await createClient();
-  const [daftar, admin] = await Promise.all([
-    // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya
-    // ratusan, dan daftar utuh itu juga yang menjadi calon tujuan Merge —
-    // filter di layar tidak boleh membuat sebuah Jabatan hilang dari pilihan.
-    listAllJabatan(client, { status: "semua" }),
-    isAdmin(),
-  ]);
+  // Pintu yang sama dengan halaman lain. Dulu halaman ini tidak memeriksa sesi
+  // dan mengandalkan middleware plus RLS — yang untuk tamu berarti daftar
+  // kosong, bukan halaman login.
+  const { client, user } = await requirePageSession("/jabatan");
+  const admin = user.role === "admin";
+
+  // Semua baris sekaligus, aktif maupun nonaktif: jumlah Jabatan hanya
+  // ratusan, dan daftar utuh itu juga yang menjadi calon tujuan Merge —
+  // filter di layar tidak boleh membuat sebuah Jabatan hilang dari pilihan.
+  const daftar = await listAllJabatan(client, { status: "semua" });
 
   /**
    * Apakah daftar di atas utuh?

@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
-import {
-  requireUser,
-  UnauthenticatedError,
-  type GuardContext,
-} from "@/lib/actions/_guard";
 import {
   toJabatanOptions,
   toLookupOptions,
   toOrgUnitOptions,
   type EntityOption,
 } from "@/components/shared/entityOptions";
+import { requirePageSession } from "@/lib/auth/session";
 import { listEmployees } from "@/lib/db/employees";
 import { listAllJabatan } from "@/lib/db/jabatan";
 import { getLookupsGroupedByType } from "@/lib/db/lookups";
@@ -73,18 +68,10 @@ export default async function Page({ searchParams }: PageProps) {
 
   // `middleware.ts` is the boundary, and RLS is the wall; this is the door, so
   // that a session that expired between the two shows the login page instead of
-  // an empty table. Only "belum login" redirects — `requireUser()` also refuses
-  // a signed-in account whose `profiles` row is missing, and sending that one
-  // to a login form would be a dead end (signing in again cannot create it).
-  // That case falls through to `error.tsx` with its "Hubungi admin" message.
-  let session: GuardContext;
-  try {
-    session = await requireUser();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) redirect("/login");
-    throw error;
-  }
-  const { client, user } = session;
+  // an empty table. `requirePageSession()` sends "belum login" and "profil
+  // belum dibuat" to /login with a notice saying which; the login page renders
+  // both states itself, so neither is a dead end.
+  const { client, user } = await requirePageSession("/karyawan");
 
   // Four reads, one round trip: the Karyawan page does not depend on the three
   // picker lists, and awaiting it after them would add a full round trip to

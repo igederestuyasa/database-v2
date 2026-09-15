@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { requireUser, UnauthenticatedError } from "@/lib/actions/_guard";
-import { resolveRevisionLabels } from "@/lib/actions/revisions";
+import { requirePageSession } from "@/lib/auth/session";
+import { readProfileLabels } from "@/lib/db/labels";
 import { countRevisionsInBatch, getBatchById, listBatches } from "@/lib/db/revisions";
+import type { DbClient } from "@/lib/db/shared";
 import { BATCH_TYPE_LABELS, NAV_LABELS, UI } from "@/lib/i18n/terms";
+import type { ReferenceLabels } from "@/lib/revisions/references";
 import { BATCH_JENIS, type BatchJenis } from "@/lib/revisions/tables";
-import { createClient } from "@/lib/supabase/server";
 
 import BatchList, { type BatchRow } from "./BatchList";
 
@@ -83,21 +83,10 @@ export default async function Page({
   const params = await searchParams;
 
   // Anyone logged in may read the log; nobody else gets to see who changed
-  // what. `middleware.ts` does not exist yet (ADR-005 §11), so the page checks.
-  //
-  // `requireUser()` rather than `getSessionUser()`: the latter answers `null`
-  // both for "not signed in" and for "could not read the profile row", so a
-  // momentary database hiccup would bounce a signed-in admin to the login page
-  // with no explanation. Only the first case is a redirect; anything else
-  // belongs to `error.tsx`.
-  let session;
-  try {
-    session = (await requireUser()).user;
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) session = null;
-    else throw error;
-  }
-  if (!session) redirect("/login");
+  // what. `middleware.ts` is the boundary and this is the second lock. A
+  // momentary database hiccup on `profiles` is not "please sign in" — it
+  // throws through to `error.tsx` rather than bouncing an admin to /login.
+  const { client, user } = await requirePageSession("/log");
 
   const page = parsePage(one(params.page));
   const jenis = parseJenis(one(params.jenis));
@@ -107,8 +96,6 @@ export default async function Page({
   // `/log?batch=<id>` — the link another page hands an admin right after a
   // Merge, so that "undo this" lands on the Batch that undoes it.
   const batchId = parseBatchId(one(params.batch));
-
-  const client = await createClient();
 
   // One Batch by id, or a page of them. `listBatches` cannot filter by id, and
   // a deep link must resolve even when the Batch is pages deep by now.
@@ -138,6 +125,9 @@ export default async function Page({
   }));
 
   // Resolve pelaku once, on the server, so the first paint already says who.
+  // Read directly through `lib/db` with the session client this page already
+  // holds — going through the `resolveRevisionLabels` Server Action from here
+  // would verify the session a second time for nothing.
   const actorIds = [
     ...new Set(
       rows
@@ -145,8 +135,7 @@ export default async function Page({
         .filter((id): id is string => typeof id === "string"),
     ),
   ];
-  const labelResult = await resolveRevisionLabels({ ids: { profiles: actorIds } });
-  const initialLabels = labelResult.ok ? labelResult.data.labels : {};
+  const initialLabels = await bacaLabelPelaku(client, actorIds);
 
   function hrefFor(nextPage: number): string {
     const query = new URLSearchParams();
@@ -261,7 +250,7 @@ export default async function Page({
 
       <BatchList
         batches={rows}
-        canRevert={session.role === "admin"}
+        canRevert={user.role === "admin"}
         initialLabels={initialLabels}
         expandedBatchId={sorotan?.id}
       />
@@ -287,6 +276,27 @@ export default async function Page({
       )}
     </div>
   );
+}
+
+/**
+ * Emails of the Batch actors, or `{}` when that read failed.
+ *
+ * A name is a nicety on this page and the list is the point: a hiccup on
+ * `profiles` must not replace the whole Log Perubahan with `error.tsx`. RLS
+ * shortening the answer (a viewer cannot read colleagues' profiles) is not a
+ * failure at all — `actorLabel()` falls back to a short id.
+ */
+async function bacaLabelPelaku(
+  client: DbClient,
+  ids: readonly string[],
+): Promise<ReferenceLabels> {
+  if (ids.length === 0) return {};
+  try {
+    return await readProfileLabels(client, ids);
+  } catch (error) {
+    console.error("[log] gagal memuat nama pelaku", error);
+    return {};
+  }
 }
 
 function PagerLink({
