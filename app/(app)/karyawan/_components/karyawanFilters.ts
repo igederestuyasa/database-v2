@@ -261,6 +261,18 @@ export const FILTER_KOSONG: KaryawanFilters = {
 };
 
 /**
+ * What "Bersihkan N filter" produces.
+ *
+ * Everything the user narrowed the list with goes, and the order they chose
+ * stays. That is not a detail: `hitungFilterAktif()` deliberately does not
+ * count `sort`, so a button that promises to clear N filters must not quietly
+ * put the ordering back to A → Z as a side effect.
+ */
+export function bersihkanFilter(filters: KaryawanFilters): KaryawanFilters {
+  return { ...FILTER_KOSONG, sort: filters.sort };
+}
+
+/**
  * How many filters are narrowing the list right now — for "Bersihkan (3)".
  *
  * `status: "aktif"` is not counted: it is the default view, not something the

@@ -29,7 +29,7 @@ import type { LookupType } from "@/lib/validation/lookupTypes";
 import KaryawanFilterBar from "./KaryawanFilterBar";
 import KaryawanTable from "./KaryawanTable";
 import {
-  FILTER_KOSONG,
+  bersihkanFilter,
   karyawanHref,
   type KaryawanFilters,
 } from "./karyawanFilters";
@@ -86,12 +86,11 @@ export function KaryawanClient({
   const bersihkan = React.useCallback(() => {
     setTeks("");
     mulai(() => {
-      // Urutan bukan filter (`hitungFilterAktif` tidak menghitungnya), jadi
-      // tombol yang berjanji membersihkan N filter tidak boleh diam-diam
-      // mengembalikan urutan yang dipilih pemakainya.
-      router.push(karyawanHref({ ...FILTER_KOSONG, sort: filters.sort }));
+      // Urutan sengaja ikut terbawa, bukan ikut dibersihkan — lihat
+      // `bersihkanFilter()`.
+      router.push(karyawanHref(bersihkanFilter(filters)));
     });
-  }, [router, filters.sort]);
+  }, [router, filters]);
 
   const bukaDetail = React.useCallback(
     (id: string) => {
