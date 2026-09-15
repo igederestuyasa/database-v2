@@ -21,6 +21,7 @@
  *    behind `lib/actions/merge.ts`. This file only opens the shared dialog.
  */
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal } from "lucide-react";
@@ -267,7 +268,15 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
         header: "Label",
         cell: ({ row }) => (
           <div className="min-w-0">
-            <span className="font-medium">{row.original.label}</span>
+            <Link
+              href={`/master-data/${row.original.id}`}
+              // Barisnya sudah bisa diklik; tanpa ini satu klik pada tautan
+              // menjalankan dua navigasi ke alamat yang sama.
+              onClick={(event) => event.stopPropagation()}
+              className="font-medium underline-offset-2 hover:underline"
+            >
+              {row.original.label}
+            </Link>
             {row.original.mergedIntoId ? (
               <span className="block text-xs text-muted-foreground">
                 {row.original.mergedIntoLabel
@@ -318,7 +327,12 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
             baris.status === "nonaktif" && baris.mergedIntoId !== null;
 
           return (
-            <div className="text-right">
+            <div
+              className="text-right"
+              // Barisnya membuka halaman detail; tanpa ini membuka menu aksi
+              // juga ikut menavigasi ke sana.
+              onClick={(event) => event.stopPropagation()}
+            >
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -363,6 +377,10 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
         columns={columns}
         data={barisTampil}
         getRowId={(row) => row.id}
+        // Barisnya bisa diklik DAN labelnya tetap sebuah tautan sungguhan:
+        // klik baris nyaman untuk mouse, tautan di dalam sel itulah yang bisa
+        // di-Tab, dibuka di tab baru, dan dibacakan pembaca layar (PRD #14).
+        onRowClick={(row) => router.push(`/master-data/${row.id}`)}
         searchPlaceholder={`Cari kode atau label ${tipeLabel}…`}
         emptyMessage={
           statusFilter === "aktif"
@@ -576,6 +594,9 @@ function UrutanCell({
       aria-label={`Urutan ${row.label}`}
       value={nilai}
       disabled={menyimpan}
+      // Barisnya membuka halaman detail; tanpa ini mengklik kotak angka
+      // memindahkan halaman di tengah pengetikan.
+      onClick={(event) => event.stopPropagation()}
       onChange={(event) => setNilai(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") {

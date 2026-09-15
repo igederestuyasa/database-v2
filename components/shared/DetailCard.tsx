@@ -1,11 +1,21 @@
 /**
- * One group of Karyawan fields as a Card with a definition list.
+ * One group of fields as a Card with a definition list.
  *
  * A Server Component: it renders text that was already resolved on the server
  * and has no state, so it ships no JavaScript to the browser. Anything
- * interactive on this page (the Riwayat Revisi panel) is its own client
+ * interactive on a detail page (the Riwayat Revisi panel) is its own client
  * component.
+ *
+ * Shared by all four detail pages — Karyawan, Unit Organisasi, Jabatan and
+ * Lookup — rather than copied per segment, because a field list that reads
+ * differently on the Jabatan page than on the Karyawan page is exactly the
+ * drift that makes a handover harder. It lives in `components/shared/`
+ * alongside `DataTable` and `MergeDialog`, the other primitives more than one
+ * page renders.
  */
+import Link from "next/link";
+import type { ReactNode } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -15,7 +25,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import type { DetailField } from "./employeeDetailFields";
+/** One row of a definition list: a label, a value, and why it looks like that. */
+export type DetailField = {
+  /** Indonesian, Title Case — unique inside its section (it is the React key). */
+  label: string;
+  /** Already formatted. Never empty: an empty column reads as a dash. */
+  value: string;
+  /**
+   * When set, `value` is drawn as a link to that page.
+   *
+   * Only ever a **name** with a link behind it, never a uuid: a detail page
+   * that prints `parent_id: 3f2a…` has failed at the one job it has.
+   */
+  href?: string;
+  /** Small print under the value — the kode behind a nama, a nomor surat. */
+  catatan?: ReactNode;
+  /** PRD #6: computed, never stored, never editable. */
+  turunan?: boolean;
+  /** Free text that deserves the full width of the card. */
+  lebar?: boolean;
+};
 
 /**
  * A derived column is marked wherever it appears, because the first question
@@ -46,7 +75,16 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
             {field.turunan ? <TandaTurunan /> : null}
           </dt>
           <dd className="mt-1 whitespace-pre-wrap break-words text-sm">
-            {field.value}
+            {field.href ? (
+              <Link
+                href={field.href}
+                className="font-medium underline-offset-2 hover:underline"
+              >
+                {field.value}
+              </Link>
+            ) : (
+              field.value
+            )}
           </dd>
           {field.catatan ? (
             <dd className="mt-0.5 break-words text-xs text-muted-foreground">
@@ -64,7 +102,7 @@ export type DetailCardProps = {
   keterangan?: string;
   fields: readonly DetailField[];
   /** Rendered under the fields — an access note, an "belum diisi" line. */
-  catatan?: React.ReactNode;
+  catatan?: ReactNode;
 };
 
 export default function DetailCard({

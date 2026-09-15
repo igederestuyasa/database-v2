@@ -24,6 +24,7 @@
  *     change its name between the panel and the field it describes.
  */
 import { columnLabel, formatTanggal } from "@/components/revisions/revisionDiff";
+import type { DetailField } from "@/components/shared/DetailCard";
 import {
   computeMasaJg,
   computeMasaKerja,
@@ -39,19 +40,15 @@ import { ORG_UNIT_TYPE_LABELS, STATUS_LABELS } from "@/lib/i18n/terms";
 import type { EmployeePrivate, VEmployee } from "@/lib/types/db";
 import { LOOKUP_TYPE_LABELS, type LookupType } from "@/lib/validation/lookupTypes";
 
-/** One row of a definition list: a label, a value, and why it looks like that. */
-export type DetailField = {
-  /** Indonesian, Title Case — unique inside its section (it is the React key). */
-  label: string;
-  /** Already formatted. Never empty: an empty column reads as `KOSONG`. */
-  value: string;
-  /** Small print under the value — the kode behind a nama, a nomor surat. */
-  catatan?: string;
-  /** PRD #6: computed, never stored, never editable. */
-  turunan?: boolean;
-  /** Free text that deserves the full width of the card. */
-  lebar?: boolean;
-};
+/**
+ * One row of a definition list.
+ *
+ * Defined once, next to the card that renders it
+ * (`components/shared/DetailCard.tsx`), and re-exported here so the callers and
+ * the test that already import it from this module keep working. A type-only
+ * re-export, so nothing from a `.tsx` is pulled into this plain module.
+ */
+export type { DetailField };
 
 export type DetailSection = {
   /** Stable key for React and for anchor links. */

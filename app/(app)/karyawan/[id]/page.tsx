@@ -2,16 +2,16 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { formatWaktu } from "@/components/revisions/revisionDiff";
+import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
+import DetailCard from "@/components/shared/DetailCard";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeeById, getEmployeePrivate } from "@/lib/db/employees";
-import { listRevisionsByRow } from "@/lib/db/revisions";
 import type { DbClient } from "@/lib/db/shared";
 import { TERMS } from "@/lib/i18n/terms";
-import type { LoggedTable } from "@/lib/revisions/tables";
-import type { EmployeePrivate, Revision } from "@/lib/types/db";
+import type { EmployeePrivate } from "@/lib/types/db";
 
-import DetailCard from "./_components/DetailCard";
+import { bacaRiwayat } from "../../_lib/riwayat";
 import EmployeeHeader from "./_components/EmployeeHeader";
 import {
   buildEmployeeSections,
@@ -51,49 +51,12 @@ export const metadata: Metadata = { title: "Detail Karyawan" };
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** How many Revisi `RevisionPanel` draws before "Tampilkan semua". */
-const RIWAYAT_DITAMPILKAN = 10;
-
-/**
- * How many Revisi to hand `RevisionPanel` on the first paint.
- *
- * Five times what is drawn, which is exactly the margin the panel gives itself
- * when it fetches (`max(limit * 5, 50)`, capped at 200). Matching it matters
- * for honesty, not for symmetry: the panel prints "Menampilkan 50 Revisi
- * terbaru. Riwayat selengkapnya ada di Log Perubahan." precisely when the list
- * it holds reaches that ceiling, so a server read with a smaller ceiling would
- * make it claim a Karyawan's Riwayat is complete when it is not.
- *
- * The cost is the RSC payload: `before`/`after` are whole-row snapshots, so a
- * heavily edited Karyawan ships up to 50 of them per panel. Rows with that many
- * Revisi are the exception (seed insert, then a handful of edits), and the
- * alternative — letting the panel fetch — moves the same bytes over a second
- * round trip behind a spinner.
- */
-const RIWAYAT_LIMIT = RIWAYAT_DITAMPILKAN * 5;
-
-/**
- * Riwayat Revisi read on the server, or `undefined` if that read failed.
- *
- * Deliberately swallowed rather than thrown: the Riwayat is a side panel, and
- * letting a hiccup on `revisions` replace the whole Karyawan with `error.tsx`
- * would hide the data the visitor actually came for. `undefined` makes
- * `RevisionPanel` load the list itself, with its own retry button. An RLS
- * refusal is not a failure at all — it comes back as a shorter list, and the
- * panel already says so.
- */
-async function bacaRiwayat(
-  client: DbClient,
-  table: LoggedTable,
-  rowId: string,
-): Promise<Revision[] | undefined> {
-  try {
-    return await listRevisionsByRow(client, { table, rowId, limit: RIWAYAT_LIMIT });
-  } catch (error) {
-    console.error("[karyawan/detail] gagal memuat Riwayat Revisi", error);
-    return undefined;
-  }
-}
+// How many Revisi to draw (`RIWAYAT_DITAMPILKAN`) and how many to read for
+// them (`RIWAYAT_LIMIT`, used inside `bacaRiwayat`) both live in
+// `components/revisions/riwayat.ts`: the server read has to use the same
+// ceiling the panel would have used for itself, or its "Menampilkan N Revisi
+// terbaru" footnote lies about whether the Riwayat is complete. Four detail
+// pages depend on that, so the number and its reasoning are in one place.
 
 /**
  * Data Pribadi Sensitif, or `gagal` when the read itself broke.
@@ -144,9 +107,9 @@ export default async function Page({
     isAdmin
       ? bacaPribadi(client, id)
       : Promise.resolve({ row: null, gagal: false }),
-    bacaRiwayat(client, "employees", id),
+    bacaRiwayat(client, "employees", id, "karyawan/detail"),
     isAdmin
-      ? bacaRiwayat(client, "employee_private", id)
+      ? bacaRiwayat(client, "employee_private", id, "karyawan/detail")
       : Promise.resolve(undefined),
   ]);
 

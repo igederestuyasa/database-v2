@@ -49,6 +49,7 @@ import type { LoggedTable } from "@/lib/revisions/tables";
 import type { Revision } from "@/lib/types/db";
 
 import RevisionCard from "./RevisionCard";
+import { panelFetchLimit } from "./riwayat";
 import { useReferenceLabels } from "./useReferenceLabels";
 
 export type RevisionPanelProps = {
@@ -106,8 +107,10 @@ export function RevisionPanel(props: RevisionPanelProps): ReactElement {
 
   const controlled = revisions !== undefined;
   // Fetch a healthy margin over what is shown, so "Tampilkan semua" needs no
-  // second round trip; the Server Action caps this at 200 either way.
-  const fetchLimit = Math.min(Math.max(limit * 5, 50), 200);
+  // second round trip; the Server Action caps this at 200 either way. The
+  // expression lives in `riwayat.ts` because every detail page that reads the
+  // Riwayat on the server has to use the same ceiling — see the note there.
+  const fetchLimit = panelFetchLimit(limit);
 
   const [fetched, setFetched] = useState<Revision[] | null>(null);
   const [status, setStatus] = useState<Status>(controlled ? "siap" : "memuat");
