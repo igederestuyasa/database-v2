@@ -1,0 +1,102 @@
+# CI untuk HC Core.
+#
+# CLAUDE.md: `npm run lint` dan `npm run typecheck` wajib hijau sebelum commit,
+# dan `npm test` memuat penjaga yang memang ditulis untuk ditegakkan mesin —
+# tests/serverOnlyBoundary (service role bocor ke client), tests/migrationInvariants
+# (file migration ketiga, shim lokal bocor ke produksi), tests/batchDiscipline,
+# scripts/check-select-columns. Tanpa workflow ini semuanya bergantung pada
+# orang yang ingat menjalankannya.
+#
+# Tidak ada dependency baru (ADR-005 §1): semua perintah di bawah ada di
+# package.json. Tidak ada rahasia: `next build` memakai env placeholder karena
+# setiap halaman `force-dynamic` dan build tidak menyentuh database (ADR-005 §6).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cek:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key-for-build
+
+  skema:
+    # Skema diverifikasi terhadap PostgreSQL 16 biasa, bukan Supabase (ADR-005 §8):
+    # scripts/db-local.sh memasang db/local/00-shim.sql + kedua migration apa
+    # adanya, lalu menjalankan scripts/verify-schema.sql (RLS per role, trigger
+    # revisi, batch, InitPlan policy). Runner ubuntu-latest sudah membawa
+    # PostgreSQL 16 dalam keadaan berhenti; skrip memakai `sudo -u postgres`.
+    name: skema · PostgreSQL 16 lokal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start PostgreSQL yang sudah terpasang di runner
+        run: |
+          sudo systemctl start postgresql.service
+          for i in $(seq 1 20); do pg_isready -q && break; sleep 1; done
+          pg_isready
+
+      # db-local.sh menjalankan `sudo -u postgres psql -f <file di repo>`, jadi
+      # OS user `postgres` harus bisa MEMBACA file SQL di workspace. Di runner,
+      # /home/runner bermode 750, dan tanpa ini psql berhenti di
+      # "00-shim.sql: Permission denied" (run pertama workflow ini). Diberi
+      # izin lintas (o+x) ke setiap direktori induk dan baca (o+rX) ke workspace.
+      - name: Izinkan OS user postgres membaca file SQL di workspace
+        run: |
+          d="$GITHUB_WORKSPACE"
+          while [ "$d" != "/" ]; do sudo chmod o+x "$d"; d="$(dirname "$d")"; done
+          sudo chmod -R o+rX "$GITHUB_WORKSPACE"
+
+      - run: npm run db:local
+
+      # lib/derived/sql.test.ts membandingkan lib/derived dengan v_employees di
+      # database sungguhan, dan di `npm test` biasa ia melewati dirinya sendiri
+      # kalau tidak ada Postgres (job `cek` di atas). Di sini databasenya ada,
+      # dan db-local.sh sudah membuat role superuser untuk OS user pemanggil
+      # (`runner`), jadi test masuk lewat socket peer-auth tanpa konfigurasi.
+      # `grep "2 passed"` memastikan ia benar-benar jalan, bukan dilewati.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test kolom turunan terhadap v_employees sungguhan
+        # NO_COLOR: di runner, CI=true membuat vitest tetap mencetak kode warna
+        # ANSI meski di-pipe, dan run kedua workflow ini gagal hanya karena grep
+        # tidak menemukan "Tests  2 passed" di sela kode warna — testnya sendiri
+        # lulus. Warna dimatikan dan polanya dilonggarkan; "Test Files 1 passed"
+        # tidak ikut cocok.
+        env:
+          NO_COLOR: "1"
+        run: |
+          npx vitest run lib/derived/sql.test.ts 2>&1 | tee sql-test.log
+          grep -qE "Tests.*2 passed.*\(2\)" sql-test.log

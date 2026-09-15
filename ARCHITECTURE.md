@@ -266,7 +266,7 @@ meninggalkan separuh perusahaan di database (ADR-006).
 
 ## 5. Auth & Permission
 
-Login: Supabase Auth email + password (atau magic link), dibatasi domain email kantor di trigger `on_auth_user_created`. Role di `profiles.role`.
+Login: Supabase Auth email + password (atau magic link), dibatasi domain email kantor di trigger `on_auth_user_created`. Role di `profiles.role`. Pendaftaran sendiri **dimatikan** di dashboard Supabase (*Allow new users to sign up* off; README-HC §8a): akun dibuat lewat undangan admin, dan `handle_new_user()` tetap membuat baris `profiles` ber-role `viewer` untuk akun yang diundang.
 
 | Kemampuan | admin | viewer | konsumen (API key) |
 |---|---|---|---|
