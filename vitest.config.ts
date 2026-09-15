@@ -10,7 +10,16 @@ export default defineConfig({
   test: {
     environment: "node",
     /**
-     * `components/**` is in this list on purpose.
+     * `app/**` and `components/**` are in this list on purpose.
+     *
+     * Three units colocated their pure logic next to the page that uses it —
+     * `karyawanFilters.ts`, `employeeDetailFields.ts`, `employeeFormOptions.ts`
+     * — and wrote `*.test.ts` beside it. Those files were NOT collected while
+     * this list started at `lib/**`, so ~52 tests passed only when someone ran
+     * them by hand and would have gone on passing after the code beneath them
+     * broke. Collecting `app/**` costs nothing: only `*.test.ts` matches, so no
+     * `page.tsx` or `route.ts` is ever loaded, and `.next/**` is excluded below
+     * so a build output never gets swept in.
      *
      * Not every file under `components/` is a React component: `revisionDiff.ts`
      * and `strukturNodes.ts` are pure logic with no JSX, no hooks and no
@@ -26,6 +35,7 @@ export default defineConfig({
      * `tests/mergeDialog.test.ts` is the worked example.
      */
     include: [
+      "app/**/*.test.ts",
       "lib/**/*.test.ts",
       "components/**/*.test.ts",
       "scripts/**/*.test.ts",

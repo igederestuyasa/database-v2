@@ -167,6 +167,9 @@ function revalidateLookupPages(): void {
   // Karyawan and Perlu Dibereskan both render Lookup labels through the views.
   revalidatePath("/karyawan");
   revalidatePath("/bereskan");
+  // Every write here trips `log_revision`, so Log Perubahan gains a Batch —
+  // exactly as it does for Jabatan, Unit Organisasi, Karyawan and API Key.
+  revalidatePath("/log");
 }
 
 /**

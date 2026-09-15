@@ -100,7 +100,10 @@ const MAX_IDS_PER_ENTITY = 2000;
 
 /** Pages that show data from each logged table, for `revalidatePath`. */
 const PATHS_BY_TABLE: Record<LoggedTable, readonly string[]> = {
-  employees: ["/karyawan", "/bereskan"],
+  // `/struktur` is in this row because the tree prints Karyawan counts per
+  // Unit Organisasi: reverting a Revisi that moved someone moves two numbers
+  // there. It matches `revalidateEmployeePages()` in `lib/actions/employees.ts`.
+  employees: ["/karyawan", "/struktur", "/bereskan"],
   employee_private: ["/karyawan"],
   org_units: ["/struktur", "/karyawan", "/bereskan"],
   jabatan: ["/jabatan", "/karyawan", "/bereskan"],
