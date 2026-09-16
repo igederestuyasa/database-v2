@@ -33,6 +33,11 @@ export type KolomTemplate = {
  * bukan urutan kolom di workbook HC yang mana pun. Impor mencocokkan lewat
  * nama header, tidak pernah lewat posisi, jadi kolom boleh digeser, dibuang,
  * atau ditambahi sesuka pengisinya.
+ *
+ * `Email Kantor` tidak ada di workbook HC sumber — kolomnya lahir belakangan
+ * (PRD #25) — jadi template inilah ejaan bakunya. Ejaan lain yang wajar
+ * ("Email", "Work Email", "Email Perusahaan") tetap dikenali `HEADER_TARGETS`,
+ * supaya daftar yang dikirim IT bisa dipakai tanpa diganti judulnya dulu.
  */
 export const TEMPLATE_KOLOM: readonly KolomTemplate[] = [
   { header: "Personnel Number", contoh: "90000001", wajib: true },
@@ -104,9 +109,20 @@ export function buildTemplateRows(): unknown[][] {
     [
       "Kolom dicocokkan lewat NAMA header, bukan posisi — kolom boleh digeser, dibuang, atau ditambah. " +
         "Personnel Number adalah kuncinya: nomor yang sudah ada diperbarui, yang belum ada ditambah. " +
-        "Sel yang dikosongkan TIDAK menghapus isi yang sudah ada di database.",
+        "Sel yang dikosongkan TIDAK menghapus isi yang sudah ada di database. " +
+        // Satu-satunya aturan di berkas ini yang bisa MEMBATALKAN seluruh
+        // unggahan, jadi tempatnya di sini — bukan cuma di README yang belum
+        // tentu dibuka orang yang sedang mengisi kolomnya.
+        "Email Kantor boleh dikosongkan, tapi satu alamat hanya boleh milik satu orang: " +
+        "kalau ada alamat kembar, seluruh impor dibatalkan dan tidak ada yang tertulis. " +
+        "Isi email KANTOR, bukan email pribadi — kolom ini terbaca aplikasi lain lewat API.",
     ],
   ];
+  // Persis `HEADER_ROW - 1` baris judul: `buildTemplateRows` menaruh header di
+  // HEADER_ROW supaya template yang diisi terbaca jalur baca biasa, jadi baris
+  // judul keempat akan menggeser headernya dan membuat template ini tidak
+  // terbaca oleh kodenya sendiri. Tambahkan kalimat ke baris yang sudah ada,
+  // jangan tambah baris.
   while (rows.length < HEADER_ROW - 1) rows.push([]);
 
   rows.push(TEMPLATE_KOLOM.map((kolom) => kolom.header));
