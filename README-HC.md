@@ -241,6 +241,34 @@ menyebut kolom mana yang belum dicentang:
 Kolom Data Pribadi Sensitif tidak diminta dan memang tidak bisa diberikan.
 Key-nya dipasang admin EJS sebagai `HC_CORE_API_KEY` di aplikasi itu.
 
+### Key untuk Drafting Surat
+
+Aplikasi penyusun surat HC (Drafting Surat) menarik daftar Karyawan aktif dan
+seluruh Unit Organisasi dari sini untuk mengisi kotak cari Penanda Tangan dan
+unit di form suratnya. Ia menarik ulang sendiri di latar belakang setiap kali
+formnya dibuka dan datanya sudah lebih tua dari satu jam, dan Pengelola-nya
+bisa menekan "Sinkronkan sekarang" kapan saja. Hanya membaca; tidak ada yang
+ditulis balik ke HC Core.
+
+Saat membuat key-nya (nama Konsumen misalnya "Drafting Surat"), centang
+**persis** kolom berikut — kalau ada yang kurang, sinkronisasinya gagal dengan
+pesan yang menyebut kolom mana yang belum dicentang:
+
+- Identitas: `personnel_number`, `nip`, `full_name`
+- Posisi: `jabatan_nama`, `org_unit_kode`
+
+Dua hal yang perlu diketahui admin HC Core:
+
+- Kunci yang dipakai Drafting Surat adalah **NIP**, karena NIP-lah yang
+  tercetak di surat. Karyawan yang NIP-nya kosong di sini **tidak muncul** di
+  kotak cari surat sampai NIP-nya diisi; Drafting Surat melaporkan jumlahnya
+  setiap kali menyinkronkan.
+- Unit Organisasi diambil semuanya (aktif dan nonaktif) supaya induk unit bisa
+  diterjemahkan; yang dipakai di surat hanya yang aktif.
+
+Key-nya dipasang di Vercel Drafting Surat sebagai `HC_CORE_API_KEY`, bersama
+`HC_CORE_URL` yang berisi alamat aplikasi ini (tanpa `/api/v1`).
+
 ---
 
 ## 7. Halaman lain, sekilas
