@@ -84,13 +84,20 @@ export function KaryawanClient({
     });
   }, [router, filters]);
 
+  /**
+   * `?kembali=` membawa alamat daftar ini APA ADANYA — kata kunci, filter,
+   * urutan, halaman keberapa — supaya tombol kembali di halaman detail
+   * mendarat kembali di penyaringan yang sama. Tanpa itu, memeriksa sepuluh
+   * orang di satu divisi berarti menyusun ulang filternya sepuluh kali.
+   */
   const bukaDetail = React.useCallback(
     (id: string) => {
+      const kembali = karyawanHref(filters);
       mulai(() => {
-        router.push(`/karyawan/${id}`);
+        router.push(`/karyawan/${id}?kembali=${encodeURIComponent(kembali)}`);
       });
     },
-    [router],
+    [router, filters],
   );
 
   /**

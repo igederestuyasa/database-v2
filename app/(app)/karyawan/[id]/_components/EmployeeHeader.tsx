@@ -11,6 +11,11 @@ import { labelStatus, rantaiUnit } from "./employeeDetailFields";
 export type EmployeeHeaderProps = {
   employee: VEmployee;
   isAdmin: boolean;
+  /**
+   * Alamat daftar Karyawan BESERTA filternya, dititipkan halaman daftar lewat
+   * `?kembali=`. Sudah diperiksa `hrefKembali()`; `/karyawan` kalau tidak ada.
+   */
+  hrefDaftar: string;
 };
 
 function baris(employee: VEmployee): string {
@@ -33,6 +38,7 @@ function baris(employee: VEmployee): string {
 export default function EmployeeHeader({
   employee,
   isAdmin,
+  hrefDaftar,
 }: EmployeeHeaderProps) {
   const nonaktif = employee.status === "nonaktif";
   const tanggalKeluar = employee.tanggal_keluar
@@ -42,7 +48,7 @@ export default function EmployeeHeader({
   return (
     <header className="space-y-4 pt-6">
       <Link
-        href="/karyawan"
+        href={hrefDaftar}
         className="inline-block text-pendukung text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
         ← Kembali ke daftar {TERMS.karyawan}
@@ -58,7 +64,9 @@ export default function EmployeeHeader({
               {labelStatus(employee.status)}
             </StatusLabel>
           </div>
-          <p className="text-pendukung text-muted-foreground">{baris(employee)}</p>
+          <p className="text-pendukung text-muted-foreground">
+            {baris(employee)}
+          </p>
           <p className="text-pendukung text-muted-foreground">
             {rantaiUnit(employee)}
           </p>

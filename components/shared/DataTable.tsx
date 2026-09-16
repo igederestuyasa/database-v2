@@ -58,6 +58,23 @@ declare module "@tanstack/react-table" {
   interface ColumnMeta<TData extends RowData, TValue> {
     /** Rata kanan dan angkanya selebar sama. */
     angka?: boolean;
+    /**
+     * Kolom terakhir yang MENEMPEL di tepi kanan, mengambang di atas isi yang
+     * tergulir di bawahnya.
+     *
+     * Untuk kolom aksi. Tabel di dalam kartu memang bisa digulir mendatar, dan
+     * dengan nama unit sepanjang "Direktorat Human Capital & Legal › Divisi
+     * Human Capital" ia SELALU lebih lebar dari kartunya — di 1440px maupun di
+     * 390px. Kolom aksi di ujung kanan adalah yang pertama terdorong keluar,
+     * dan tombol yang separuh tertutup tepi kartu adalah tombol yang tidak
+     * jadi ditekan; orang membacanya sebagai rusak, bukan sebagai "gulir dulu".
+     *
+     * Menempel menyelesaikannya di setiap lebar sekaligus, tanpa membuang satu
+     * kolom pun. Latarnya `bg-inherit` supaya sorot baris dan penanda terpilih
+     * mengalir menembusnya — sel bertahan warna sendiri akan jadi kotak pucat
+     * yang menempel di baris yang sedang disorot.
+     */
+    lengket?: boolean;
   }
 }
 
@@ -152,7 +169,9 @@ export function DataTable<TData, TValue>({
   // Juga tidak saat kata kuncinya datang dari kolom cari di pembuka layar.
   const showSearch = serverMode || cariDariLuar ? false : (searchable ?? true);
 
-  const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
+  const [sorting, setSorting] = React.useState<SortingState>(
+    initialSorting ?? [],
+  );
   const [filterSendiri, setFilterSendiri] = React.useState("");
   const globalFilter = cariDariLuar ? cari : filterSendiri;
   const setGlobalFilter = cariDariLuar ? () => {} : setFilterSendiri;
@@ -172,7 +191,9 @@ export function DataTable<TData, TValue>({
     manualPagination: serverMode,
     manualFiltering: serverMode,
     getRowId,
-    initialState: serverMode ? undefined : { pagination: { pageSize: initialPageSize } },
+    initialState: serverMode
+      ? undefined
+      : { pagination: { pageSize: initialPageSize } },
   });
 
   const rows = table.getRowModel().rows;
@@ -183,7 +204,10 @@ export function DataTable<TData, TValue>({
   const pageInfo = serverMode
     ? {
         page: pagination.page,
-        pageCount: Math.max(1, Math.ceil(pagination.total / Math.max(1, pagination.perPage))),
+        pageCount: Math.max(
+          1,
+          Math.ceil(pagination.total / Math.max(1, pagination.perPage)),
+        ),
         total: pagination.total,
       }
     : {
@@ -232,6 +256,8 @@ export function DataTable<TData, TValue>({
                       className={cn(
                         "h-11 text-mikro",
                         header.column.columnDef.meta?.angka && "text-right",
+                        header.column.columnDef.meta?.lengket &&
+                          "sticky right-0 border-l border-border bg-card text-right",
                       )}
                     >
                       {header.isPlaceholder ? null : sortable ? (
@@ -244,12 +270,22 @@ export function DataTable<TData, TValue>({
                             header.column.columnDef.header,
                             header.getContext(),
                           )}
-                          <span aria-hidden="true" className="text-muted-foreground">
-                            {sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : "↕"}
+                          <span
+                            aria-hidden="true"
+                            className="text-muted-foreground"
+                          >
+                            {sorted === "asc"
+                              ? "▲"
+                              : sorted === "desc"
+                                ? "▼"
+                                : "↕"}
                           </span>
                         </button>
                       ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
+                        flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )
                       )}
                     </TableHead>
                   );
@@ -282,10 +318,16 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  onClick={
+                    onRowClick ? () => onRowClick(row.original) : undefined
+                  }
                   {...(propsBaris?.(row.original) ?? {})}
                   className={cn(
-                    "h-12 text-pendukung transition-colors duration-150 ease-standar hover:bg-muted",
+                    // `bg-card` sebagai dasar, bukan transparan: sel lengket
+                    // di kanan memakai `bg-inherit`, dan tanpa warna di
+                    // barisnya ia jadi tembus pandang persis pada saat ia
+                    // harus menutupi isi yang tergulir di bawahnya.
+                    "h-12 bg-card text-pendukung transition-colors duration-150 ease-standar hover:bg-muted",
                     "data-[terpilih]:bg-muted data-[terpilih]:font-semibold",
                     "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
                     onRowClick && "cursor-pointer",
@@ -296,10 +338,22 @@ export function DataTable<TData, TValue>({
                       key={cell.id}
                       className={cn(
                         "py-2",
-                        cell.column.columnDef.meta?.angka && "text-right tabular-nums",
+                        cell.column.columnDef.meta?.angka &&
+                          "text-right tabular-nums",
+                        cell.column.columnDef.meta?.lengket &&
+                          // `bg-inherit` mengambil warna baris — termasuk saat
+                          // disorot dan saat terpilih. Pembatasnya GARIS, bukan
+                          // bayangan: docs/DESIGN.md menyediakan tepat satu
+                          // elemen berbayangan per layar (kolom cari), dan lima
+                          // sel bertepi berbayangan melanggarnya lima kali
+                          // sekaligus.
+                          "sticky right-0 border-l border-border bg-inherit",
                       )}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -312,7 +366,8 @@ export function DataTable<TData, TValue>({
       {!hidePagination && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-pendukung text-muted-foreground">
           <span>
-            {pageInfo.total} baris · Halaman {pageInfo.page} dari {pageInfo.pageCount}
+            {pageInfo.total} baris · Halaman {pageInfo.page} dari{" "}
+            {pageInfo.pageCount}
           </span>
           <div className="flex gap-2">
             <Tombol

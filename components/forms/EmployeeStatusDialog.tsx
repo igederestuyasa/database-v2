@@ -51,7 +51,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
-import { deactivateEmployee, reactivateEmployee } from "@/lib/actions/employees";
+import {
+  deactivateEmployee,
+  reactivateEmployee,
+} from "@/lib/actions/employees";
 import { today } from "@/lib/derived";
 import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 import { formatZodErrors } from "@/lib/validation/common";
@@ -65,6 +68,21 @@ export type EmployeeStatusDialogProps = {
     tanggal_keluar: string | null;
     keterangan: string | null;
   };
+  /**
+   * `"blok"` — halaman Ubah: label status, tanggal keluar, tombol, dan satu
+   * paragraf yang menjelaskan bahwa Karyawan tidak pernah dihapus.
+   *
+   * `"ringkas"` — satu sel tabel di daftar Karyawan (PRD #5): tombolnya saja,
+   * seukuran aksi per baris. Status dan tanggalnya tidak diulang di sini
+   * karena tabelnya sudah punya kolom Status, dan paragraf penjelasnya ada di
+   * dialog konfirmasinya — tempat ia sungguh dibaca, yaitu tepat sebelum
+   * seseorang menekan tombolnya.
+   *
+   * Dialog konfirmasinya SAMA PERSIS di kedua bentuk. Yang berubah cuma apa
+   * yang terlihat sebelum dialognya terbuka; tidak ada jalan pintas yang
+   * melewati konfirmasi.
+   */
+  tampilan?: "blok" | "ringkas";
 };
 
 /** `YYYY-MM-DD` untuk hari ini menurut jam pengguna, bukan menurut UTC. */
@@ -82,7 +100,10 @@ function hariIni(): string {
  * yang ditolak tanpa penanganan.
  */
 function gagalMemanggil(error: unknown) {
-  console.error("[EmployeeStatusDialog] panggilan Server Action ditolak", error);
+  console.error(
+    "[EmployeeStatusDialog] panggilan Server Action ditolak",
+    error,
+  );
   return {
     ok: false as const,
     error: {
@@ -93,16 +114,26 @@ function gagalMemanggil(error: unknown) {
   };
 }
 
-export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
+export function EmployeeStatusDialog({
+  employee,
+  tampilan = "blok",
+}: EmployeeStatusDialogProps) {
   const router = useRouter();
   const nonaktif = employee.status === "nonaktif";
+  const ringkas = tampilan === "ringkas";
+  // Di daftar Karyawan komponen ini dirender sekali per baris. Id tetap
+  // ("tanggal-keluar") akan jadi lima puluh id yang sama di satu halaman,
+  // dan `htmlFor` label mana pun lalu menunjuk kolom milik orang lain.
+  const idTanggal = React.useId();
 
   const [dialogKeluar, setDialogKeluar] = React.useState(false);
   const [dialogAktif, setDialogAktif] = React.useState(false);
   const [sedangMenyimpan, setSedangMenyimpan] = React.useState(false);
 
   const [tanggalKeluar, setTanggalKeluar] = React.useState("");
-  const [pesanKesalahan, setPesanKesalahan] = React.useState<string | null>(null);
+  const [pesanKesalahan, setPesanKesalahan] = React.useState<string | null>(
+    null,
+  );
 
   const bukaDialogKeluar = () => {
     // Tanggal keluar yang sudah ada dipakai apa adanya supaya "perbaiki
@@ -181,54 +212,84 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
       return;
     }
 
-    toast.success(`${TERMS.karyawan} "${result.data.full_name}" diaktifkan kembali.`);
+    toast.success(
+      `${TERMS.karyawan} "${result.data.full_name}" diaktifkan kembali.`,
+    );
     setDialogAktif(false);
     router.refresh();
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
-          {STATUS_LABELS[nonaktif ? "nonaktif" : "aktif"]}
-        </StatusLabel>
-        {employee.tanggal_keluar ? (
-          <span className="text-pendukung text-muted-foreground">
-            Tanggal keluar: {employee.tanggal_keluar}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {nonaktif ? (
-          <>
-            <Tombol
-              type="button"
-              nada="sekunder"
-              onClick={() => {
-                setPesanKesalahan(null);
-                setDialogAktif(true);
-              }}
-            >
-              {UI.aktifkan} kembali
-            </Tombol>
+  const tombol = (
+    <div
+      className={
+        ringkas ? "flex flex-wrap justify-end gap-1" : "flex flex-wrap gap-2"
+      }
+    >
+      {nonaktif ? (
+        <>
+          <Tombol
+            type="button"
+            nada={ringkas ? "halus" : "sekunder"}
+            ukuran={ringkas ? "ringkas" : "biasa"}
+            onClick={() => {
+              setPesanKesalahan(null);
+              setDialogAktif(true);
+            }}
+          >
+            {UI.aktifkan}
+            {ringkas ? (
+              <span className="sr-only"> {employee.full_name}</span>
+            ) : (
+              " kembali"
+            )}
+          </Tombol>
+          {ringkas ? null : (
             <Tombol type="button" nada="halus" onClick={bukaDialogKeluar}>
               Perbaiki tanggal keluar
             </Tombol>
-          </>
-        ) : (
-          <Tombol type="button" nada="sekunder" onClick={bukaDialogKeluar}>
-            {UI.nonaktifkan}
-          </Tombol>
-        )}
-      </div>
+          )}
+        </>
+      ) : (
+        <Tombol
+          type="button"
+          nada={ringkas ? "halus" : "sekunder"}
+          ukuran={ringkas ? "ringkas" : "biasa"}
+          onClick={bukaDialogKeluar}
+        >
+          {UI.nonaktifkan}
+          {ringkas ? (
+            <span className="sr-only"> {employee.full_name}</span>
+          ) : null}
+        </Tombol>
+      )}
+    </div>
+  );
 
-      <p className="text-mikro font-normal text-muted-foreground">
-        {TERMS.karyawan} tidak pernah dihapus. Menonaktifkan hanya mengubah
-        status dan mengisi tanggal keluar; seluruh datanya, {TERMS.revisi}-nya,
-        dan id-nya tetap utuh — termasuk untuk {TERMS.konsumen} yang sudah
-        menyimpannya.
-      </p>
+  return (
+    <div className={ringkas ? undefined : "space-y-3"}>
+      {ringkas ? null : (
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
+            {STATUS_LABELS[nonaktif ? "nonaktif" : "aktif"]}
+          </StatusLabel>
+          {employee.tanggal_keluar ? (
+            <span className="text-pendukung text-muted-foreground">
+              Tanggal keluar: {employee.tanggal_keluar}
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {tombol}
+
+      {ringkas ? null : (
+        <p className="text-mikro font-normal text-muted-foreground">
+          {TERMS.karyawan} tidak pernah dihapus. Menonaktifkan hanya mengubah
+          status dan mengisi tanggal keluar; seluruh datanya, {TERMS.revisi}
+          -nya, dan id-nya tetap utuh — termasuk untuk {TERMS.konsumen} yang
+          sudah menyimpannya.
+        </p>
+      )}
 
       {/* Nonaktifkan / perbaiki tanggal keluar */}
       <AlertDialog
@@ -253,12 +314,15 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="tanggal-keluar">Tanggal Keluar</Label>
-              <Input className={KELAS_ISIAN}
-                id="tanggal-keluar"
+              <Label htmlFor={idTanggal}>Tanggal Keluar</Label>
+              <Input
+                className={KELAS_ISIAN}
+                id={idTanggal}
                 type="date"
                 value={tanggalKeluar}
-                onChange={(event) => setTanggalKeluar(event.currentTarget.value)}
+                onChange={(event) =>
+                  setTanggalKeluar(event.currentTarget.value)
+                }
               />
               <p className="text-mikro font-normal text-muted-foreground">
                 Wajib diisi lengkap. Tanpa tanggal keluar, {TERMS.karyawan}{" "}
@@ -274,14 +338,19 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
             </p>
 
             {pesanKesalahan ? (
-              <p role="alert" className="text-pendukung font-medium text-destructive">
+              <p
+                role="alert"
+                className="text-pendukung font-medium text-destructive"
+              >
                 {pesanKesalahan}
               </p>
             ) : null}
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={sedangMenyimpan}>{UI.batal}</AlertDialogCancel>
+            <AlertDialogCancel disabled={sedangMenyimpan}>
+              {UI.batal}
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={sedangMenyimpan}
               onClick={(event) => {
@@ -322,13 +391,18 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
           </AlertDialogHeader>
 
           {pesanKesalahan ? (
-            <p role="alert" className="text-pendukung font-medium text-destructive">
+            <p
+              role="alert"
+              className="text-pendukung font-medium text-destructive"
+            >
               {pesanKesalahan}
             </p>
           ) : null}
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={sedangMenyimpan}>{UI.batal}</AlertDialogCancel>
+            <AlertDialogCancel disabled={sedangMenyimpan}>
+              {UI.batal}
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={sedangMenyimpan}
               onClick={(event) => {

@@ -30,6 +30,19 @@ export type KaryawanRow = {
   personGrade: string | null;
   jobGrade: string | null;
   status: "aktif" | "nonaktif";
+  /**
+   * Dua kolom yang tidak ditampilkan tabel, tapi dibutuhkan dialog
+   * Nonaktifkan/Aktifkan di kolom aksinya (PRD #5).
+   *
+   * `tanggalKeluar` supaya dialog yang dibuka pada Karyawan yang SUDAH
+   * nonaktif memperlihatkan tanggal yang sekarang, bukan diam-diam
+   * menggantinya dengan hari ini. `keterangan` dikirim balik apa adanya:
+   * schema-nya menuntut kolom itu hadir, dan `null` di sana berarti
+   * "kosongkan" — tanpa membawanya, menonaktifkan seseorang akan menghapus
+   * catatan yang tidak ada hubungannya dengan kepergiannya.
+   */
+  tanggalKeluar: string | null;
+  keterangan: string | null;
 };
 
 /**
@@ -81,6 +94,8 @@ export function toKaryawanRow(row: VEmployee): KaryawanRow {
     // keeps it to two values, and anything else is shown as nonaktif rather
     // than printed raw.
     status: row.status === "aktif" ? "aktif" : "nonaktif",
+    tanggalKeluar: row.tanggal_keluar,
+    keterangan: row.keterangan,
   };
 }
 

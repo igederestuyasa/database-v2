@@ -22,12 +22,7 @@ import type { ReactNode } from "react";
 
 import Info from "@/components/hc/Info";
 import StatusLabel from "@/components/hc/StatusLabel";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /** One row of a definition list: a label, a value, and why it looks like that. */
 export type DetailField = {
@@ -46,8 +41,14 @@ export type DetailField = {
   catatan?: ReactNode;
   /** PENJELASAN kolomnya. Pindah ke balik penanda "i" di samping label. */
   info?: ReactNode;
-  /** PRD #6: computed, never stored, never editable. */
-  turunan?: boolean;
+  /**
+   * PRD #6: computed, never stored, never editable.
+   *
+   * `true` memakai kalimat bawaan (kolom yang dihitung dari tanggal). Sebuah
+   * string menggantinya — dipakai kolom yang turunannya bukan dari tanggal,
+   * misalnya jenjang Unit Organisasi yang diturunkan dari hierarki.
+   */
+  turunan?: boolean | string;
   /** Free text that deserves the full width of the card. */
   lebar?: boolean;
 };
@@ -56,9 +57,12 @@ export type DetailField = {
  * A derived column is marked wherever it appears, because the first question
  * staf HC ask about "Masa Kerja" is why they cannot edit it (PRD #6).
  */
-function TandaTurunan() {
+const TURUNAN_BAWAAN =
+  "Dihitung otomatis dari tanggal; tidak disimpan dan tidak bisa diubah.";
+
+function TandaTurunan({ penjelasan }: { penjelasan?: string }) {
   return (
-    <StatusLabel title="Dihitung otomatis dari tanggal; tidak disimpan dan tidak bisa diubah.">
+    <StatusLabel title={penjelasan ?? TURUNAN_BAWAAN}>
       dihitung otomatis
     </StatusLabel>
   );
@@ -74,8 +78,16 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
         >
           <dt className="flex flex-wrap items-center gap-1.5 text-pendukung text-muted-foreground">
             {field.label}
-            {field.info ? <Info label={`Keterangan ${field.label}`}>{field.info}</Info> : null}
-            {field.turunan ? <TandaTurunan /> : null}
+            {field.info ? (
+              <Info label={`Keterangan ${field.label}`}>{field.info}</Info>
+            ) : null}
+            {field.turunan ? (
+              <TandaTurunan
+                penjelasan={
+                  typeof field.turunan === "string" ? field.turunan : undefined
+                }
+              />
+            ) : null}
           </dt>
           <dd className="mt-1 whitespace-pre-wrap break-words text-isi">
             {field.href ? (
@@ -120,7 +132,9 @@ export default function DetailCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-judul-bagian">
           {judul}
-          {keterangan ? <Info label={`Keterangan ${judul}`}>{keterangan}</Info> : null}
+          {keterangan ? (
+            <Info label={`Keterangan ${judul}`}>{keterangan}</Info>
+          ) : null}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
