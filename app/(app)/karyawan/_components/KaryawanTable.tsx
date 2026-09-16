@@ -25,6 +25,8 @@ import * as React from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { EmployeeStatusDialog } from "@/components/forms/EmployeeStatusDialog";
+
 import StatusLabel from "@/components/hc/StatusLabel";
 import Tombol from "@/components/hc/Tombol";
 import type { DaftarDetail } from "@/components/hc/useDaftarDetail";
@@ -41,6 +43,7 @@ import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
 import {
   SORT_OPTIONS,
+  karyawanHref,
   ubahFilter,
   type KaryawanFilters,
   type SortValue,
@@ -119,7 +122,10 @@ export function KaryawanTable({
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            href={`/karyawan/${row.original.id}`}
+            // Membawa filter yang sedang aktif, sama seperti klik pada
+            // barisnya sendiri — dua jalan ke halaman yang sama tidak boleh
+            // berbeda soal apakah penyaringan ikut terbawa pulang.
+            href={`/karyawan/${row.original.id}?kembali=${encodeURIComponent(karyawanHref(filters))}`}
             // Barisnya sudah bisa diklik; tanpa ini satu klik pada tautan
             // menjalankan dua navigasi ke alamat yang sama.
             onClick={(event) => event.stopPropagation()}
@@ -136,7 +142,7 @@ export function KaryawanTable({
       {
         accessorKey: "nip",
         // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
-        id: "sekunder-" + 'nip',
+        id: "sekunder-" + "nip",
         header: TERMS.nip,
         enableSorting: false,
         meta: { angka: true },
@@ -162,7 +168,7 @@ export function KaryawanTable({
       {
         accessorKey: "jabatanNama",
         // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
-        id: "sekunder-" + 'jabatanNama',
+        id: "sekunder-" + "jabatanNama",
         header: TERMS.jabatan,
         enableSorting: false,
         cell: ({ row }) => teks(row.original.jabatanNama),
@@ -170,21 +176,25 @@ export function KaryawanTable({
       {
         accessorKey: "personGrade",
         // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
-        id: "sekunder-" + 'personGrade',
+        id: "sekunder-" + "personGrade",
         header: "Person Grade",
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="whitespace-nowrap">{teks(row.original.personGrade)}</span>
+          <span className="whitespace-nowrap">
+            {teks(row.original.personGrade)}
+          </span>
         ),
       },
       {
         accessorKey: "jobGrade",
         // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
-        id: "sekunder-" + 'jobGrade',
+        id: "sekunder-" + "jobGrade",
         header: "Job Grade",
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="whitespace-nowrap">{teks(row.original.jobGrade)}</span>
+          <span className="whitespace-nowrap">
+            {teks(row.original.jobGrade)}
+          </span>
         ),
       },
       {
@@ -192,17 +202,57 @@ export function KaryawanTable({
         header: "Status",
         enableSorting: false,
         cell: ({ row }) => (
-          <StatusLabel nada={row.original.status === "aktif" ? "sukses" : "netral"}>
+          <StatusLabel
+            nada={row.original.status === "aktif" ? "sukses" : "netral"}
+          >
             {STATUS_LABELS[row.original.status]}
           </StatusLabel>
         ),
       },
     ];
 
+    /*
+      Kolom aksi — mengubah status tanpa membuka orangnya satu per satu
+      (PRD #5).
+
+      Dialog konfirmasinya PERSIS yang dipakai halaman Ubah, termasuk isian
+      Tanggal Keluar yang wajib: tidak ada jalan pintas yang melewati
+      konfirmasi hanya karena tombolnya sekarang ada di tabel.
+
+      `stopPropagation` pada pembungkusnya karena barisnya sendiri membuka
+      halaman detail; tanpa itu setiap klik tombol juga menavigasi ke sana di
+      belakang dialog yang baru terbuka.
+
+      Hanya untuk admin. Viewer tidak melihat kolomnya sama sekali — dan kalau
+      pun ia melihatnya, `requireAdmin()` di Server Action dan RLS yang
+      memutuskan (CLAUDE.md: keduanya, bukan salah satu).
+    */
+    if (isAdmin) {
+      semua.push({
+        id: "aksi",
+        header: () => <span className="sr-only">Aksi</span>,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div onClick={(event) => event.stopPropagation()}>
+            <EmployeeStatusDialog
+              tampilan="ringkas"
+              employee={{
+                id: row.original.id,
+                full_name: row.original.nama,
+                status: row.original.status,
+                tanggal_keluar: row.original.tanggalKeluar,
+                keterangan: row.original.keterangan,
+              }}
+            />
+          </div>
+        ),
+      });
+    }
+
     return semua.filter(
       (kolom) => !(panelTerlihat && kolom.id?.startsWith("sekunder-")),
     );
-  }, [panelTerlihat]);
+  }, [panelTerlihat, isAdmin, filters]);
 
   return (
     <DataTable
@@ -211,7 +261,8 @@ export function KaryawanTable({
       getRowId={(row) => row.id}
       isLoading={pending}
       emptyMessage={
-        pesanKosong ?? `Tidak ada ${TERMS.karyawan} yang cocok dengan filter ini.`
+        pesanKosong ??
+        `Tidak ada ${TERMS.karyawan} yang cocok dengan filter ini.`
       }
       onRowClick={(row) => bukaDetail(row.id)}
       propsDaftar={daftarDetail.propsDaftar()}
@@ -231,7 +282,8 @@ export function KaryawanTable({
         page,
         perPage,
         total,
-        onPageChange: (halaman) => pindah(ubahFilter(filters, { page: halaman })),
+        onPageChange: (halaman) =>
+          pindah(ubahFilter(filters, { page: halaman })),
       }}
       toolbar={
         <>
@@ -242,7 +294,10 @@ export function KaryawanTable({
             }
             disabled={pending}
           >
-            <SelectTrigger className="h-11 w-[210px] text-isi" aria-label="Urutkan daftar">
+            <SelectTrigger
+              className="h-11 w-[210px] text-isi"
+              aria-label="Urutkan daftar"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -12,6 +12,7 @@ import { TERMS } from "@/lib/i18n/terms";
 import { isUuid } from "@/lib/validation/uuid";
 
 import { bacaAman } from "../../_lib/bacaAman";
+import { hrefKembali } from "./_components/kembali";
 import { bacaRiwayat } from "../../_lib/riwayat";
 import EmployeeHeader from "./_components/EmployeeHeader";
 import {
@@ -56,10 +57,16 @@ export const metadata: Metadata = { title: "Detail Karyawan" };
 
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  // Daftar Karyawan menitipkan alamatnya sendiri — beserta filternya — di
+  // `?kembali=`, supaya tombol kembali tidak membuang penyaringan yang baru
+  // saja disusun. Diperiksa dulu: nilainya datang dari alamat halaman.
+  const hrefDaftar = hrefKembali(query.kembali);
   // Renders the "tidak ditemukan" page, but with HTTP 200 rather than 404:
   // `loading.tsx` here (and on `/karyawan`) flushes the shell before this runs,
   // so the status line is already sent. Measured, deliberate, and explained in
@@ -101,7 +108,11 @@ export default async function Page({
 
   return (
     <div className="space-y-6">
-      <EmployeeHeader employee={karyawan} isAdmin={isAdmin} />
+      <EmployeeHeader
+        employee={karyawan}
+        isAdmin={isAdmin}
+        hrefDaftar={hrefDaftar}
+      />
 
       {/* 3/5 + 2/5 rather than 2/3 + 1/3: the Riwayat Revisi panel renders a
           before → after diff, which needs room for two values side by side. */}
