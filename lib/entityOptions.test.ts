@@ -19,7 +19,11 @@ import { describe, expect, it } from "vitest";
 import { JABATAN, LOOKUPS, ORG_UNITS, ORG_UNIT_ID } from "@/fixtures";
 import { ORG_UNIT_TYPE_LABELS } from "@/lib/i18n/terms";
 
-import { toJabatanOptions, toLookupOptions, toOrgUnitOptions } from "./entityOptions";
+import {
+  toJabatanOptions,
+  toLookupOptions,
+  toOrgUnitOptions,
+} from "./entityOptions";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -44,7 +48,10 @@ const isClientModule = (source: string) =>
 
 describe("batas server/client", () => {
   it("entityOptions.ts tidak boleh menjadi modul client", () => {
-    const source = readFileSync(path.join(ROOT, "lib/entityOptions.ts"), "utf8");
+    const source = readFileSync(
+      path.join(ROOT, "lib/entityOptions.ts"),
+      "utf8",
+    );
     expect(isClientModule(source)).toBe(false);
   });
 
@@ -55,7 +62,11 @@ describe("batas server/client", () => {
     );
     expect(isClientModule(source)).toBe(true);
     // Kontrak beku Wave 1: unit lain sudah mengimpor dari sini.
-    for (const nama of ["toOrgUnitOptions", "toJabatanOptions", "toLookupOptions"]) {
+    for (const nama of [
+      "toOrgUnitOptions",
+      "toJabatanOptions",
+      "toLookupOptions",
+    ]) {
       expect(source).toContain(nama);
     }
   });
@@ -76,7 +87,8 @@ describe("batas server/client", () => {
     for (const file of kandidat) {
       const source = readFileSync(file, "utf8");
       if (isClientModule(source)) continue;
-      if (!/from\s+["']@\/components\/shared\/EntityPicker["']/.test(source)) continue;
+      if (!/from\s+["']@\/components\/shared\/EntityPicker["']/.test(source))
+        continue;
       // Mengimpor tipe saja tidak apa-apa; memanggil fungsinya yang masalah.
       if (/\bto(OrgUnit|Jabatan|Lookup)Options\b/.test(source)) {
         pelanggar.push(path.relative(ROOT, file));
@@ -93,18 +105,97 @@ describe("toOrgUnitOptions", () => {
     expect(options).toHaveLength(ORG_UNITS.length);
   });
 
-  it("menampilkan nama sebagai label dan kode + tipe sebagai keterangan", () => {
+  it("nama jadi label, tingkatnya jadi keterangan", () => {
     const divisi = options.find((option) => option.id === ORG_UNIT_ID.divisi);
     const row = ORG_UNITS.find((unit) => unit.id === ORG_UNIT_ID.divisi);
     expect(divisi?.label).toBe(row?.nama);
-    expect(divisi?.keterangan).toBe(`${row?.kode} · Divisi`);
+    /*
+      Kodenya IKUT di sini, dan itu justru buktinya bekerja: fixture memang
+      memuat "Divisi Contoh" bersama "DIVISI CONTOH" — sepasang data kotor yang
+      persis seperti yang datang dari Excel. Dua baris yang terlihat identik di
+      sebuah picker berarti salah pilih menulis penempatan yang salah, jadi di
+      baris seperti inilah kodenya harus tetap ada.
+
+      Untuk nama yang benar-benar unik, keterangannya cuma tingkatnya — dijaga
+      test "tanpa peta label" dan "memunculkan kode hanya pada baris yang
+      namanya kembar" di bawah.
+    */
+    expect(divisi?.keterangan).toBe(`Divisi · ${row?.kode}`);
   });
 
   it("tanpa peta label, tipe mentah yang dipakai — bukan kosong", () => {
     const [option] = toOrgUnitOptions([
       { id: "x", kode: "KODE", nama: "Nama", tipe: "divisi", status: "aktif" },
     ]);
-    expect(option.keterangan).toBe("KODE · divisi");
+    expect(option.keterangan).toBe("divisi");
+  });
+
+  /**
+   * INI ALASAN KODENYA TIDAK DIHAPUS BEGITU SAJA.
+   *
+   * Data seed masuk apa adanya (ADR-002), jadi dua Unit Organisasi bernama
+   * sama betul-betul hidup berdampingan sampai ada yang me-Merge-nya. Di
+   * sebuah picker, dua baris yang identik berarti salah pilih menulis
+   * penempatan yang salah pada seseorang — bukan sekadar tampilan yang
+   * membingungkan.
+   */
+  it("memunculkan kode hanya pada baris yang namanya kembar", () => {
+    const hasil = toOrgUnitOptions(
+      [
+        {
+          id: "a",
+          kode: "OU-HC",
+          nama: "Divisi Human Capital",
+          tipe: "divisi",
+          status: "aktif",
+        },
+        {
+          id: "b",
+          kode: "OU-HC-2",
+          nama: "Divisi Human Capital",
+          tipe: "divisi",
+          status: "aktif",
+        },
+        {
+          id: "c",
+          kode: "OU-TEK",
+          nama: "Divisi Teknik",
+          tipe: "divisi",
+          status: "aktif",
+        },
+      ],
+      { divisi: "Divisi" },
+    );
+    expect(hasil[0].keterangan).toBe("Divisi · OU-HC");
+    expect(hasil[1].keterangan).toBe("Divisi · OU-HC-2");
+    // Yang namanya unik tetap bersih.
+    expect(hasil[2].keterangan).toBe("Divisi");
+  });
+
+  it("nama yang hanya beda spasi atau huruf besar juga dihitung kembar", () => {
+    // Justru pasangan seperti ini yang lahir dari Excel, dan mata tidak bisa
+    // membedakannya di daftar pilih.
+    const hasil = toOrgUnitOptions(
+      [
+        {
+          id: "a",
+          kode: "OU-Q",
+          nama: "Divisi QHSSE",
+          tipe: "divisi",
+          status: "aktif",
+        },
+        {
+          id: "b",
+          kode: "OU-Q2",
+          nama: "DIVISI  QHSSE ",
+          tipe: "divisi",
+          status: "aktif",
+        },
+      ],
+      { divisi: "Divisi" },
+    );
+    expect(hasil[0].keterangan).toBe("Divisi · OU-Q");
+    expect(hasil[1].keterangan).toBe("Divisi · OU-Q2");
   });
 
   it("status apa pun selain nonaktif dibaca sebagai aktif", () => {
@@ -118,7 +209,14 @@ describe("toOrgUnitOptions", () => {
 
   it("meneruskan depth supaya pohon yang diratakan tetap terbaca", () => {
     const [option] = toOrgUnitOptions([
-      { id: "a", kode: "A", nama: "A", tipe: "bagian", status: "aktif", depth: 3 },
+      {
+        id: "a",
+        kode: "A",
+        nama: "A",
+        tipe: "bagian",
+        status: "aktif",
+        depth: 3,
+      },
     ]);
     expect(option.depth).toBe(3);
   });
@@ -132,11 +230,30 @@ describe("toJabatanOptions & toLookupOptions", () => {
     expect(lookup.label).toBe(LOOKUPS[0].label);
   });
 
-  it("keduanya menaruh kode di keterangan", () => {
+  it("tanpa nama kembar, keduanya tidak menampilkan kode sama sekali", () => {
     const [jabatan] = toJabatanOptions(JABATAN.slice(0, 1));
     const [lookup] = toLookupOptions(LOOKUPS.slice(0, 1));
-    expect(jabatan.keterangan).toBe(JABATAN[0].kode);
-    expect(lookup.keterangan).toBe(LOOKUPS[0].kode);
+    expect(jabatan.keterangan).toBeUndefined();
+    expect(lookup.keterangan).toBeUndefined();
+  });
+
+  it("kode muncul lagi begitu ada label kembar", () => {
+    const jabatan = toJabatanOptions([
+      { id: "a", kode: "JBT-1", nama: "Manager", status: "aktif" },
+      { id: "b", kode: "JBT-2", nama: "Manager", status: "aktif" },
+      { id: "c", kode: "JBT-3", nama: "Officer", status: "aktif" },
+    ]);
+    expect(jabatan.map((o) => o.keterangan)).toEqual([
+      "JBT-1",
+      "JBT-2",
+      undefined,
+    ]);
+
+    const lookup = toLookupOptions([
+      { id: "a", kode: "L1", label: "Tetap", status: "aktif" },
+      { id: "b", kode: "L2", label: "tetap", status: "aktif" },
+    ]);
+    expect(lookup.map((o) => o.keterangan)).toEqual(["L1", "L2"]);
   });
 
   it("daftar kosong menghasilkan daftar kosong, bukan lemparan", () => {

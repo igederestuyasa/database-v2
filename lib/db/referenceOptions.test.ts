@@ -24,7 +24,7 @@ describe("petakanLookupOptions", () => {
     for (const tipe of LOOKUP_TYPES) expect(hasil[tipe]).toEqual([]);
   });
 
-  it("memetakan baris menjadi opsi berlabel dan berkode", () => {
+  it("memetakan baris menjadi opsi berlabel", () => {
     const gender = LOOKUPS.filter((row) => row.tipe === "gender");
     expect(gender.length).toBeGreaterThan(0);
 
@@ -33,8 +33,11 @@ describe("petakanLookupOptions", () => {
     expect(hasil.gender[0]).toMatchObject({
       id: gender[0].id,
       label: gender[0].label,
-      keterangan: gender[0].kode,
     });
+    // Kodenya TIDAK ikut selama labelnya unik: "FEMALE" di bawah "Female"
+    // cuma mengeja ulang baris di atasnya. Ia muncul lagi persis saat ada dua
+    // label yang sama — dijaga `lib/entityOptions.test.ts`.
+    expect(hasil.gender[0].keterangan).toBeUndefined();
     // Tipe lain tetap ada sebagai daftar kosong, bukan undefined.
     expect(hasil.job_grade).toEqual([]);
   });
