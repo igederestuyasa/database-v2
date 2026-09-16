@@ -21,7 +21,17 @@
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
+
+import DetailPanel from "@/components/hc/DetailPanel";
+import EmptyState from "@/components/hc/EmptyState";
+import FilterTabs from "@/components/hc/FilterTabs";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import SearchField from "@/components/hc/SearchField";
+import StatusLabel from "@/components/hc/StatusLabel";
+import TataLetakDaftarDetail from "@/components/hc/TataLetakDaftarDetail";
+import Tombol from "@/components/hc/Tombol";
+import useDaftarDetail from "@/components/hc/useDaftarDetail";
 
 import { OrgUnitForm } from "@/components/forms/OrgUnitForm";
 import { toOrgUnitOptions } from "@/components/shared/EntityPicker";
@@ -36,8 +46,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -45,11 +53,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { activateOrgUnit, deactivateOrgUnit } from "@/lib/actions/orgUnits";
-import { ORG_UNIT_TYPE_LABELS, STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
+import { NAV_LABELS, ORG_UNIT_TYPE_LABELS, STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 import { isOrgUnitType, type OrgUnitType } from "@/lib/validation/orgUnit";
 
 import { OrgUnitTree, type OrgUnitTreeAction } from "./OrgUnitTree";
@@ -59,7 +65,14 @@ export type StrukturClientProps = {
   /** The whole hierarchy, pre-order, every status. */
   nodes: readonly StrukturNode[];
   isAdmin: boolean;
+  /** Peringatan dari halaman — pohon yang terbaca tidak lengkap. */
+  peringatan?: React.ReactNode;
 };
+
+/** Nama tipe unit dalam Bahasa Indonesia; seed bisa membawa apa saja. */
+function labelTipe(tipe: string): string {
+  return ORG_UNIT_TYPE_LABELS[tipe as OrgUnitType] ?? tipe;
+}
 
 /** Which dialog is open, and about what. */
 type FormState =
@@ -88,7 +101,11 @@ const TIPE_DI_BAWAH: Record<OrgUnitType, OrgUnitType> = {
   proyek: "sub_bagian",
 };
 
-export function StrukturClient({ nodes, isAdmin }: StrukturClientProps) {
+export function StrukturClient({
+  nodes,
+  isAdmin,
+  peringatan,
+}: StrukturClientProps) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
@@ -101,6 +118,28 @@ export function StrukturClient({ nodes, isAdmin }: StrukturClientProps) {
   const terlihat = React.useMemo(
     () => filterStrukturNodes(nodes, { query, tampilkanNonaktif }),
     [nodes, query, tampilkanNonaktif],
+  );
+
+  /**
+   * Pola daftar-detail atas pohon yang SEDANG TERLIHAT.
+   *
+   * Pencarian di sini berjalan di browser, bukan di server, jadi hasil teratas
+   * sudah diketahui saat orang menekan Enter — Enter memang membuka unit
+   * teratas, persis seperti docs/DESIGN.md. (Di daftar Karyawan tidak begitu:
+   * di sana penyaringnya server.)
+   */
+  const dd = useDaftarDetail({
+    items: terlihat,
+    idDari: (node) => node.id,
+    kunciPencarian: query,
+  });
+  const terpilih = dd.terpilih;
+
+  const bukaUnit = React.useCallback(
+    (id: string) => {
+      startTransition(() => router.push(`/struktur/${id}`));
+    },
+    [router],
   );
 
   const jumlah = React.useMemo(() => {
@@ -203,72 +242,141 @@ export function StrukturClient({ nodes, isAdmin }: StrukturClientProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="cari-unit">{UI.cari}</Label>
-            <div className="relative">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
-              />
-              <Input
-                id="cari-unit"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Nama atau kode unit…"
-                className="w-72 pl-8"
-                autoComplete="off"
-              />
-            </div>
-          </div>
+    <TataLetakDaftarDetail
+      panelTerlihat={dd.panelTerlihat}
+      pembuka={
+        <PembukaLayar
+          salam="Database central HC"
+          judul={NAV_LABELS.struktur}
+          subjudul={`Hierarki ${TERMS.unitOrganisasi}: Direktorat → Divisi → Departemen → Bagian → Sub Bagian, plus Proyek di bawah Divisi.`}
+        >
+          <SearchField
+            id="cari-unit"
+            label={`${UI.cari} ${TERMS.unitOrganisasi}`}
+            nilai={query}
+            onNilaiChange={setQuery}
+            placeholder="Nama atau kode unit…"
+            onSubmit={() => {
+              if (dd.teratas) bukaUnit(dd.teratas.id);
+            }}
+            onPanahBawah={dd.fokusItemPertama}
+          />
+        </PembukaLayar>
+      }
+      panel={
+        <DetailPanel
+          entitas={TERMS.unitOrganisasi}
+          nama={terpilih?.nama ?? null}
+          kategori={terpilih ? labelTipe(terpilih.tipe) : null}
+          status={
+            terpilih ? (
+              <StatusLabel nada={terpilih.status === "aktif" ? "sukses" : "netral"}>
+                {STATUS_LABELS[terpilih.status === "aktif" ? "aktif" : "nonaktif"]}
+              </StatusLabel>
+            ) : null
+          }
+          deskripsi={
+            terpilih?.mergedIntoNama
+              ? `Digabung ke "${terpilih.mergedIntoNama}".`
+              : null
+          }
+          baris={
+            terpilih
+              ? [
+                  { label: "Kode", nilai: terpilih.kode },
+                  { label: "Tipe", nilai: labelTipe(terpilih.tipe) },
+                  { label: "Tingkat", nilai: String(terpilih.depth + 1) },
+                  {
+                    label: `${TERMS.karyawan} langsung`,
+                    nilai:
+                      terpilih.karyawanAktifLangsung === null
+                        ? null
+                        : String(terpilih.karyawanAktifLangsung),
+                  },
+                ]
+              : undefined
+          }
+          pesanKosong={`Tidak ada ${TERMS.unitOrganisasi} yang cocok. Ubah kata kunci, atau tampilkan unit nonaktif.`}
+          aksi={
+            terpilih ? (
+              <Tombol
+                ukuran="panel"
+                disabled={pending}
+                onClick={() => bukaUnit(terpilih.id)}
+              >
+                Buka detail {TERMS.unitOrganisasi}
+              </Tombol>
+            ) : null
+          }
+        />
+      }
+    >
+      <div className="space-y-6">
+        {peringatan}
 
-          <div className="flex items-center gap-2 pb-2.5">
-            <Checkbox
-              id="tampilkan-nonaktif"
-              checked={tampilkanNonaktif}
-              onCheckedChange={(checked) => setTampilkanNonaktif(checked === true)}
-            />
-            <Label htmlFor="tampilkan-nonaktif" className="font-normal">
-              Tampilkan unit {STATUS_LABELS.nonaktif.toLowerCase()}
-            </Label>
-          </div>
+        {/* Tab selebar penuh: garis dasarnya adalah garis bawah seluruh
+            kelompok, jadi berbagi baris dengan tombol akan memutusnya di
+            tengah. */}
+        <FilterTabs
+          label={`${UI.filter} status ${TERMS.unitOrganisasi}`}
+          aktif={tampilkanNonaktif ? "semua" : "aktif"}
+          items={[
+            {
+              nilai: "aktif",
+              label: `Hanya ${STATUS_LABELS.aktif.toLowerCase()}`,
+              jumlah: jumlah.aktif,
+            },
+            { nilai: "semua", label: "Semua status", jumlah: jumlah.total },
+          ]}
+          onPilih={(nilai) => setTampilkanNonaktif(nilai === "semua")}
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p role="status" className="text-pendukung text-muted-foreground">
+            {jumlah.total} {TERMS.unitOrganisasi} · {jumlah.aktif}{" "}
+            {STATUS_LABELS.aktif.toLowerCase()} · {jumlah.nonaktif}{" "}
+            {STATUS_LABELS.nonaktif.toLowerCase()}
+            {terlihat.length !== jumlah.total
+              ? ` · ${terlihat.length} ditampilkan`
+              : ""}
+          </p>
+
+          {isAdmin ? (
+            <Tombol onClick={() => setForm({ mode: "tambah", parentId: null })}>
+              <Plus aria-hidden="true" />
+              Tambah {TERMS.unitOrganisasi}
+            </Tombol>
+          ) : (
+            <span className="text-mikro font-normal text-muted-foreground">
+              {UI.hanyaAdmin}
+            </span>
+          )}
         </div>
 
-        {isAdmin ? (
-          <Button onClick={() => setForm({ mode: "tambah", parentId: null })}>
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            Tambah {TERMS.unitOrganisasi}
-          </Button>
-        ) : null}
+        {nodes.length === 0 ? (
+          <EmptyState
+            judul={`Belum ada ${TERMS.unitOrganisasi}`}
+            ajakan={`Tambahkan Direktorat pertama, atau jalankan ${TERMS.seed} awal dari Excel.`}
+            aksi={
+              isAdmin ? (
+                <Tombol onClick={() => setForm({ mode: "tambah", parentId: null })}>
+                  Tambah {TERMS.unitOrganisasi}
+                </Tombol>
+              ) : undefined
+            }
+          />
+        ) : (
+          <OrgUnitTree
+            nodes={terlihat}
+            isAdmin={isAdmin}
+            paksaTerbuka={query.trim().length > 0}
+            onAction={handleAction}
+            propsDaftar={dd.propsDaftar()}
+            propsItem={dd.propsItem}
+            onBuka={bukaUnit}
+          />
+        )}
       </div>
-
-      <p className="text-sm text-muted-foreground">
-        {jumlah.total} {TERMS.unitOrganisasi} · {jumlah.aktif}{" "}
-        {STATUS_LABELS.aktif.toLowerCase()} · {jumlah.nonaktif}{" "}
-        {STATUS_LABELS.nonaktif.toLowerCase()}
-        {terlihat.length !== jumlah.total ? ` · ${terlihat.length} ditampilkan` : ""}
-        {isAdmin ? "" : ` · ${UI.hanyaAdmin}`}
-      </p>
-
-      {nodes.length === 0 ? (
-        // "Tidak ada yang cocok" is the tree's empty state; "belum ada apa-apa
-        // sama sekali" is a different situation with a different next step, so
-        // it is answered here rather than letting the tree offer to widen a
-        // filter over an empty table.
-        <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Belum ada {TERMS.unitOrganisasi}. Tambahkan Direktorat pertama, atau jalankan{" "}
-          {TERMS.seed} awal dari Excel.
-        </p>
-      ) : (
-        <OrgUnitTree
-          nodes={terlihat}
-          isAdmin={isAdmin}
-          paksaTerbuka={query.trim().length > 0}
-          onAction={handleAction}
-        />
-      )}
 
       {/* Tambah / ubah */}
       <Dialog open={form !== null} onOpenChange={(open) => (open ? null : setForm(null))}>
@@ -423,7 +531,7 @@ export function StrukturClient({ nodes, isAdmin }: StrukturClientProps) {
           onMerged={() => router.refresh()}
         />
       ) : null}
-    </div>
+    </TataLetakDaftarDetail>
   );
 }
 

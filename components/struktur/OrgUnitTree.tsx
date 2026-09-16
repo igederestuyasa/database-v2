@@ -24,7 +24,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import StatusLabel from "@/components/hc/StatusLabel";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -58,6 +58,15 @@ export type OrgUnitTreeProps = {
   /** While the toolbar is filtering, collapsing would hide the matches. */
   paksaTerbuka?: boolean;
   onAction: (action: OrgUnitTreeAction, node: StrukturNode) => void;
+  /** Pola daftar-detail: panah, Home, dan End antarbaris pohon. */
+  propsDaftar?: {
+    ref: (el: HTMLElement | null) => void;
+    onKeyDown: (event: React.KeyboardEvent) => void;
+  };
+  /** Sorot baris dan penanda terpilih. */
+  propsItem?: (node: StrukturNode) => Record<string, unknown>;
+  /** Aksi utama item: buka halaman detail unit. */
+  onBuka?: (id: string) => void;
 };
 
 function labelTipe(tipe: string): string {
@@ -69,6 +78,9 @@ export function OrgUnitTree({
   isAdmin,
   paksaTerbuka = false,
   onAction,
+  propsDaftar,
+  propsItem,
+  onBuka,
 }: OrgUnitTreeProps) {
   const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(
     () => new Set<string>(),
@@ -108,7 +120,7 @@ export function OrgUnitTree({
 
   if (rows.length === 0) {
     return (
-      <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-kartu border border-dashed border-garis-putus p-8 text-center text-pendukung text-muted-foreground">
         {UI.tidakDitemukan} Ubah kata kunci, atau tampilkan unit nonaktif.
       </p>
     );
@@ -118,7 +130,11 @@ export function OrgUnitTree({
     // A plain list, not `role="tree"`: that role promises arrow-key navigation
     // and a selection model, and half-implementing it is worse for a screen
     // reader than not claiming it. The nesting is announced per row instead.
-    <ul aria-label={`Hierarki ${TERMS.unitOrganisasi}`} className="divide-y rounded-md border">
+    <ul
+      {...propsDaftar}
+      aria-label={`Hierarki ${TERMS.unitOrganisasi}`}
+      className="hc-permukaan divide-y divide-border overflow-hidden rounded-kartu border border-border bg-card"
+    >
       {rows.map((node) => {
         const punyaAnak = punyaAnakIds.has(node.id);
         const tertutup = !paksaTerbuka && collapsed.has(node.id);
@@ -130,7 +146,24 @@ export function OrgUnitTree({
         return (
           <li
             key={node.id}
-            className="flex items-center gap-2 px-2 py-2 hover:bg-muted/50"
+            {...(propsItem?.(node) ?? {})}
+            tabIndex={onBuka ? 0 : undefined}
+            onKeyDown={
+              onBuka
+                ? (event) => {
+                    // Hanya saat barisnya sendiri yang fokus: Enter di dalam
+                    // tautan atau menu baris punya arti lain.
+                    if (event.key !== "Enter" || event.target !== event.currentTarget) return;
+                    event.preventDefault();
+                    onBuka(node.id);
+                  }
+                : undefined
+            }
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 transition-colors duration-150 ease-standar",
+              "hover:bg-muted data-[terpilih]:bg-muted",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
+            )}
           >
             <span className="sr-only">Tingkat {node.depth + 1}.</span>
             <div
@@ -155,9 +188,7 @@ export function OrgUnitTree({
                 <span aria-hidden="true" className="inline-block h-5 w-5" />
               )}
 
-              <Badge variant="outline" className="shrink-0 font-normal">
-                {labelTipe(node.tipe)}
-              </Badge>
+              <StatusLabel className="shrink-0">{labelTipe(node.tipe)}</StatusLabel>
 
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -175,17 +206,17 @@ export function OrgUnitTree({
                   >
                     {node.nama}
                   </Link>
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  <span className="shrink-0 text-mikro font-normal tabular-nums text-muted-foreground">
                     {node.kode}
                   </span>
                   {nonaktif ? (
-                    <Badge variant="secondary" className="shrink-0 font-normal">
+                    <StatusLabel className="shrink-0">
                       {STATUS_LABELS.nonaktif}
-                    </Badge>
+                    </StatusLabel>
                   ) : null}
                   {isYatim(node) ? (
                     <span
-                      className="flex shrink-0 items-center gap-1 text-xs text-amber-700"
+                      className="flex shrink-0 items-center gap-1 text-mikro text-peringatan"
                       title={`Tanpa induk — muncul sebagai ${TERMS.temuan} di halaman ${TERMS.perluDibereskan}.`}
                     >
                       <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
