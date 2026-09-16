@@ -1,4 +1,14 @@
 import Link from "next/link";
+import {
+  BriefcaseBusiness,
+  History,
+  KeyRound,
+  ListTree,
+  Network,
+  TriangleAlert,
+  UserCog,
+  Users,
+} from "lucide-react";
 
 import BarAtas, { LewatiKeKonten } from "@/components/hc/BarAtas";
 import KakiHalaman from "@/components/hc/KakiHalaman";
@@ -22,46 +32,14 @@ export const dynamic = "force-dynamic";
  * two units ever edit the same nav markup.
  */
 const NAV_ITEMS: readonly SidebarNavItem[] = [
-  {
-    href: "/karyawan",
-    label: NAV_LABELS.karyawan,
-    keterangan: "Cari & kelola data Karyawan",
-  },
-  {
-    href: "/struktur",
-    label: NAV_LABELS.struktur,
-    keterangan: "Hierarki Unit Organisasi",
-  },
-  {
-    href: "/jabatan",
-    label: NAV_LABELS.jabatan,
-    keterangan: "Daftar nama pekerjaan",
-  },
-  {
-    href: "/master-data",
-    label: NAV_LABELS["master-data"],
-    keterangan: "Semua tipe Lookup",
-  },
-  {
-    href: "/bereskan",
-    label: NAV_LABELS.bereskan,
-    keterangan: "Temuan data kotor",
-  },
-  {
-    href: "/log",
-    label: NAV_LABELS.log,
-    keterangan: "Batch & Revisi, bisa dikembalikan",
-  },
-  {
-    href: "/api-keys",
-    label: NAV_LABELS["api-keys"],
-    keterangan: "Konsumen & whitelist kolom",
-  },
-  {
-    href: "/pengguna",
-    label: NAV_LABELS.pengguna,
-    keterangan: "Role admin / viewer",
-  },
+  { href: "/karyawan", label: NAV_LABELS.karyawan, ikon: Users },
+  { href: "/struktur", label: NAV_LABELS.struktur, ikon: Network },
+  { href: "/jabatan", label: NAV_LABELS.jabatan, ikon: BriefcaseBusiness },
+  { href: "/master-data", label: NAV_LABELS["master-data"], ikon: ListTree },
+  { href: "/bereskan", label: NAV_LABELS.bereskan, ikon: TriangleAlert },
+  { href: "/log", label: NAV_LABELS.log, ikon: History },
+  { href: "/api-keys", label: NAV_LABELS["api-keys"], ikon: KeyRound },
+  { href: "/pengguna", label: NAV_LABELS.pengguna, ikon: UserCog },
 ];
 
 /**

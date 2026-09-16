@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 export type SidebarNavItem = {
   href: string;
   label: string;
-  /** Short Indonesian hint shown under the label. */
-  keterangan: string;
+  /** Ikon tujuan. Bentuknya, bukan keterangannya, yang menandai tiap tujuan. */
+  ikon: LucideIcon;
 };
 
 /**
@@ -18,6 +19,11 @@ export type SidebarNavItem = {
  * `tegak` untuk sidebar mulai 1024px, `mendatar` untuk strip yang bisa digeser
  * di bawah bar atas pada layar sempit. Keduanya di sini supaya kedelapan tujuan
  * itu tidak pernah punya dua markup yang bisa berbeda diam-diam.
+ *
+ * SATU BARIS PER TUJUAN. Dulu tiap tujuan membawa satu baris keterangan redup
+ * di bawah namanya — delapan baris abu-abu yang menetap di layar sepanjang hari
+ * dan hanya benar-benar dibaca sekali. Yang menggantikannya ikon: ia menandai
+ * tujuan dengan bentuk, bukan dengan kalimat, dan tidak memakan baris kedua.
  *
  * Bukan `FilterTabs`: ini navigasi, bukan filter, jadi pembungkusnya `<nav>`
  * dan penanda halaman aktifnya `aria-current="page"`.
@@ -44,6 +50,7 @@ export function SidebarNav({
       {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const Ikon = item.ikon;
 
         return (
           <Link
@@ -51,24 +58,23 @@ export function SidebarNav({
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "transition-colors duration-150 ease-standar",
+              "flex h-11 shrink-0 items-center gap-3 whitespace-nowrap rounded-full px-3",
+              "text-pendukung transition-colors duration-150 ease-standar",
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
-              mendatar
-                ? "flex h-11 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-pendukung font-medium"
-                : "rounded-kartu px-3 py-2",
+              /*
+                `bg-card`, bukan `bg-muted`. Di HC Panel `muted` DAN
+                `background` sama-sama token latar, jadi pil ber-`bg-muted` di
+                atas kanvas halaman tidak terlihat sama sekali — yang
+                membedakan cuma tebal hurufnya. Kartu di atas kanvas adalah
+                beda permukaan yang memang dipakai sistem ini.
+              */
               active
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "border border-border bg-card font-bold text-foreground"
+                : "border border-transparent font-[650] text-muted-foreground hover:bg-card hover:text-foreground",
             )}
           >
-            <span className={cn("block", mendatar ? null : "text-pendukung font-semibold")}>
-              {item.label}
-            </span>
-            {mendatar ? null : (
-              <span className="mt-0.5 block text-mikro font-normal text-muted-foreground">
-                {item.keterangan}
-              </span>
-            )}
+            <Ikon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+            {item.label}
           </Link>
         );
       })}

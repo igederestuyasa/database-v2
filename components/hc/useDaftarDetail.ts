@@ -148,7 +148,21 @@ export function useDaftarDetail<T>({
     if (idTerpilih === null) sekarang.delete(param);
     else sekarang.set(param, idTerpilih);
     const sisa = sekarang.toString();
-    window.history.replaceState(null, "", sisa ? `${pathname}?${sisa}` : pathname);
+
+    /*
+      Menulis URL TIDAK BOLEH menjatuhkan halaman.
+      `replaceState` melempar untuk beberapa hal yang tidak ada urusannya dengan
+      daftar ini — dokumen ber-origin aneh, dan peramban yang membatasi laju
+      panggilan saat kursor menyapu banyak baris berturut-turut. Yang hilang
+      kalau gagal hanyalah kemampuan membagikan alamat item yang sedang
+      disorot; panel, daftar, dan seluruh halaman tetap berjalan. Melempar di
+      sini akan mematikan render seluruh pohon demi sesuatu yang sepele.
+    */
+    try {
+      window.history.replaceState(null, "", sisa ? `${pathname}?${sisa}` : pathname);
+    } catch {
+      // Sengaja diam: lihat alasannya di atas.
+    }
   }, [idTerpilih, param, pathname]);
 
   const batalSorot = React.useCallback(() => {
