@@ -23,7 +23,10 @@
  *     Riwayat Revisi panel right below uses for its diff. A column must not
  *     change its name between the panel and the field it describes.
  */
-import { columnLabel, formatTanggal } from "@/components/revisions/revisionDiff";
+import {
+  columnLabel,
+  formatTanggal,
+} from "@/components/revisions/revisionDiff";
 import type { DetailField } from "@/components/shared/DetailCard";
 import {
   computeMasaJg,
@@ -38,7 +41,10 @@ import {
 } from "@/lib/derived";
 import { ORG_UNIT_TYPE_LABELS, STATUS_LABELS } from "@/lib/i18n/terms";
 import type { EmployeePrivate, VEmployee } from "@/lib/types/db";
-import { LOOKUP_TYPE_LABELS, type LookupType } from "@/lib/validation/lookupTypes";
+import {
+  LOOKUP_TYPE_LABELS,
+  type LookupType,
+} from "@/lib/validation/lookupTypes";
 
 /**
  * One row of a definition list.
@@ -74,6 +80,15 @@ function teks(value: string | null | undefined): string {
 function tanggal(value: string | null | undefined): string {
   return value ? formatTanggal(value) : KOSONG;
 }
+
+/**
+ * Kalimat penanda untuk jenjang Unit Organisasi.
+ *
+ * Bukan kalimat bawaan penanda turunan, yang berbunyi "dihitung dari tanggal"
+ * — itu benar untuk usia dan masa kerja, dan salah untuk hierarki.
+ */
+const TURUNAN_HIERARKI =
+  "Diturunkan dari hierarki Unit Organisasi, bukan diisi di baris Karyawan. Untuk mengubahnya, pindahkan unitnya di halaman Struktur Organisasi — dan perubahannya berlaku untuk semua orang di bawahnya.";
 
 /** Label of an `employees` column, worded as the log words it. */
 function labelKolom(column: string): string {
@@ -115,7 +130,9 @@ function lookupField(employee: VEmployee, tipe: LookupType): DetailField {
 /** `org_units.tipe` → "Sub Bagian". An unknown value is shown as it is. */
 export function labelTipeUnit(tipe: string | null | undefined): string {
   if (!tipe) return KOSONG;
-  return ORG_UNIT_TYPE_LABELS[tipe as keyof typeof ORG_UNIT_TYPE_LABELS] ?? tipe;
+  return (
+    ORG_UNIT_TYPE_LABELS[tipe as keyof typeof ORG_UNIT_TYPE_LABELS] ?? tipe
+  );
 }
 
 /** `employees.status` → "Nonaktif". */
@@ -140,7 +157,9 @@ export function rantaiUnit(employee: VEmployee): string {
     employee.bagian_nama,
     employee.sub_bagian_nama,
     employee.proyek_nama,
-  ].filter((nama): nama is string => typeof nama === "string" && nama.trim() !== "");
+  ].filter(
+    (nama): nama is string => typeof nama === "string" && nama.trim() !== "",
+  );
   return chain.length > 0 ? chain.join(" › ") : KOSONG;
 }
 
@@ -202,12 +221,33 @@ export function buildEmployeeSections(
           label: labelKolom("jabatan_id"),
           value: teks(employee.jabatan_nama),
         },
-        { label: ORG_UNIT_TYPE_LABELS.direktorat, value: teks(employee.direktorat_nama) },
-        { label: ORG_UNIT_TYPE_LABELS.divisi, value: teks(employee.divisi_nama) },
-        { label: ORG_UNIT_TYPE_LABELS.departemen, value: teks(employee.departemen_nama) },
-        { label: ORG_UNIT_TYPE_LABELS.bagian, value: teks(employee.bagian_nama) },
-        { label: ORG_UNIT_TYPE_LABELS.sub_bagian, value: teks(employee.sub_bagian_nama) },
-        { label: ORG_UNIT_TYPE_LABELS.proyek, value: teks(employee.proyek_nama) },
+        /*
+          KEENAM JENJANG INI DITURUNKAN, BUKAN DIISI.
+
+          Karyawan menunjuk SATU Unit Organisasi terendah; Direktorat sampai
+          Proyek dibaca `v_employees` dari hierarki `org_units`
+          (ARCHITECTURE.md §3). Karena itu keenamnya tidak punya isian di form
+          Ubah — dan tanpa penanda, halaman ini memajang enam kolom yang
+          terlihat persis seperti kolom yang bisa diisi, lalu formnya cuma
+          punya satu. Pertanyaan "kenapa Departemen tidak ada isiannya?" lahir
+          di situ.
+
+          "—" pada Departemen juga bukan data yang hilang: unit orang itu
+          memang menggantung langsung di bawah Divisi, tanpa jenjang
+          Departemen di antaranya.
+        */
+        ...[
+          [ORG_UNIT_TYPE_LABELS.direktorat, employee.direktorat_nama],
+          [ORG_UNIT_TYPE_LABELS.divisi, employee.divisi_nama],
+          [ORG_UNIT_TYPE_LABELS.departemen, employee.departemen_nama],
+          [ORG_UNIT_TYPE_LABELS.bagian, employee.bagian_nama],
+          [ORG_UNIT_TYPE_LABELS.sub_bagian, employee.sub_bagian_nama],
+          [ORG_UNIT_TYPE_LABELS.proyek, employee.proyek_nama],
+        ].map(([label, nama]) => ({
+          label: label as string,
+          value: teks(nama as string | null),
+          turunan: TURUNAN_HIERARKI,
+        })),
       ],
     },
     {
@@ -265,7 +305,9 @@ export function buildEmployeeSections(
            * (0–11), never a total — the trap ADR-005 §10 warns about, sprung
            * here and nowhere else on the page.
            */
-          value: formatMasa(computeMasaKerja(employee.original_start_date, saatIni)),
+          value: formatMasa(
+            computeMasaKerja(employee.original_start_date, saatIni),
+          ),
           turunan: true,
         },
         {
@@ -288,7 +330,9 @@ export function buildEmployeeSections(
         },
         {
           label: "Masa Sejak Promosi PG",
-          value: formatMasa(computeMasaPg(employee.tanggal_promosi_pg, saatIni)),
+          value: formatMasa(
+            computeMasaPg(employee.tanggal_promosi_pg, saatIni),
+          ),
           turunan: true,
         },
         {
@@ -302,7 +346,9 @@ export function buildEmployeeSections(
         },
         {
           label: "Masa Sejak Promosi JG",
-          value: formatMasa(computeMasaJg(employee.tanggal_promosi_jg, saatIni)),
+          value: formatMasa(
+            computeMasaJg(employee.tanggal_promosi_jg, saatIni),
+          ),
           turunan: true,
         },
         {

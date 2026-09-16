@@ -109,6 +109,11 @@ export function KaryawanTable({
     const semua: ColumnDef<KaryawanRow>[] = [
       {
         accessorKey: "personnelNumber",
+        // Ikut pindah ke panel saat panelnya terlihat, alasan yang sama dengan
+        // kolom sekunder lain: panel sudah menampilkannya, dan headernya
+        // ("Personnel Number") melipat jadi dua baris sehingga kolom ini
+        // memakan lebih banyak lebar daripada isinya yang cuma delapan angka.
+        id: "sekunder-" + "personnelNumber",
         header: TERMS.personnelNumber,
         enableSorting: false,
         meta: { angka: true },
@@ -155,9 +160,22 @@ export function KaryawanTable({
         header: TERMS.unitOrganisasi,
         enableSorting: false,
         cell: ({ row }) => (
-          <div className="min-w-[10rem]">
+          <div className="min-w-[10rem] max-w-[18rem]">
             <span className="block">{teks(row.original.unitNama)}</span>
-            {row.original.unitInduk ? (
+            {/*
+              Rantai induknya ikut pindah ke panel saat panelnya terlihat,
+              alasan yang sama dengan kolom sekunder di atas: ia dipakai untuk
+              MEMBACA satu orang, bukan untuk memilih barisnya, dan panel di
+              sebelahnya sudah menampilkannya utuh.
+
+              Ini bukan kerapian. Rantai itu untaian terpanjang di seluruh
+              tabel — "Direktorat Human Capital & Legal › Divisi Human Capital"
+              sendirian memaksa tabel jadi 660px di dalam kartu selebar 638px,
+              dan yang terdorong keluar tepi kartu adalah kolom aksi di ujung
+              kanan. Tombol Nonaktifkan yang separuh tertutup adalah tombol
+              yang tidak jadi ditekan.
+            */}
+            {row.original.unitInduk && !panelTerlihat ? (
               <span className="block text-mikro font-normal text-muted-foreground">
                 {row.original.unitInduk}
               </span>
@@ -232,6 +250,7 @@ export function KaryawanTable({
         id: "aksi",
         header: () => <span className="sr-only">Aksi</span>,
         enableSorting: false,
+        meta: { lengket: true },
         cell: ({ row }) => (
           <div onClick={(event) => event.stopPropagation()}>
             <EmployeeStatusDialog

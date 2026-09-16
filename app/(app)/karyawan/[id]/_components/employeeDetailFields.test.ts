@@ -207,11 +207,40 @@ describe("buildEmployeeSections", () => {
     const fields = semuaField(karyawan());
     const turunan = fields.filter((field) => field.turunan).map((f) => f.label);
     expect(turunan).toEqual([
+      // Jenjang hierarki: diturunkan dari Unit Organisasi yang ditunjuk
+      // Karyawan, bukan diisi di barisnya. Ditandai supaya halaman ini tidak
+      // memajang enam kolom yang terlihat bisa diisi sementara form Ubah
+      // hanya punya satu.
+      "Direktorat",
+      "Divisi",
+      "Departemen",
+      "Bagian",
+      "Sub Bagian",
+      "Proyek",
+      // Dihitung dari tanggal.
       "Masa Kerja",
       "Masa Sejak Diangkat",
       "Masa Sejak Promosi PG",
       "Masa Sejak Promosi JG",
     ]);
+  });
+
+  /**
+   * Kalimat penandanya harus cocok dengan sebabnya. "Dihitung dari tanggal"
+   * benar untuk Masa Kerja dan salah untuk Direktorat — dan justru kalimat
+   * itulah yang dibaca orang yang bertanya "kenapa Departemen tidak ada
+   * isiannya?".
+   */
+  it("menjelaskan turunan hierarki dengan sebabnya sendiri, bukan kalimat tanggal", () => {
+    const fields = semuaField(karyawan());
+    const direktorat = fields.find((field) => field.label === "Direktorat");
+    expect(typeof direktorat?.turunan).toBe("string");
+    expect(String(direktorat?.turunan)).toMatch(/hierarki/i);
+    expect(String(direktorat?.turunan)).toMatch(/Struktur Organisasi/);
+    expect(String(direktorat?.turunan)).not.toMatch(/tanggal/i);
+
+    // Yang dihitung dari tanggal tetap memakai kalimat bawaannya.
+    expect(fields.find((field) => field.label === "Masa Kerja")?.turunan).toBe(true);
   });
 
   it("memakai sisa bulan, bukan total bulan (ADR-005 §10)", () => {
