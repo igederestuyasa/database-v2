@@ -24,19 +24,24 @@
  *     and read-only afterwards; the "ubah" submit does not even send it.
  */
 import * as React from "react";
+
+import {
+  KELAS_ISIAN,
+  BidangLabel,
+  BidangBantuan,
+  BidangPesan,
+} from "@/components/hc/Bidang";
+import Tombol from "@/components/hc/Tombol";
+import { cn } from "@/lib/utils";
 import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 import { AlertTriangle } from "lucide-react";
 
 import { EntityPicker, type EntityOption } from "@/components/shared/EntityPicker";
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -196,22 +201,22 @@ export function OrgUnitForm({
           name="kode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Kode</FormLabel>
+              <BidangLabel>Kode</BidangLabel>
               <FormControl>
                 <Input
                   {...field}
                   readOnly={mode === "ubah"}
                   autoComplete="off"
                   placeholder="mis. DIV-QHSSE"
-                  className={mode === "ubah" ? "bg-muted" : undefined}
+                  className={cn(KELAS_ISIAN, mode === "ubah" ? "bg-muted" : undefined)}
                 />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 {mode === "ubah"
                   ? "Kode tidak diubah setelah dibuat — Konsumen API bisa saja sudah memakainya."
                   : "Kode tetap dan unik. Nama boleh diganti kapan saja, kode tidak."}
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -221,15 +226,15 @@ export function OrgUnitForm({
           name="nama"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nama</FormLabel>
+              <BidangLabel>Nama</BidangLabel>
               <FormControl>
-                <Input {...field} autoComplete="off" placeholder="mis. Divisi QHSSE" />
+                <Input className={KELAS_ISIAN} {...field} autoComplete="off" placeholder="mis. Divisi QHSSE" />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 Mengganti nama di sini otomatis berlaku untuk semua {TERMS.karyawan} di
                 unit ini — tidak ada baris {TERMS.karyawan} yang ikut diubah.
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -239,10 +244,10 @@ export function OrgUnitForm({
           name="tipe"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tipe</FormLabel>
+              <BidangLabel>Tipe</BidangLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className={KELAS_ISIAN}>
                     <SelectValue placeholder="Pilih tipe…" />
                   </SelectTrigger>
                 </FormControl>
@@ -254,11 +259,11 @@ export function OrgUnitForm({
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>
+              <BidangBantuan>
                 Urutan hierarki: Direktorat → Divisi → Departemen → Bagian → Sub Bagian.
                 Proyek adalah tipe unit tersendiri, letaknya di bawah Divisi.
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -268,7 +273,7 @@ export function OrgUnitForm({
           name="parent_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Induk</FormLabel>
+              <BidangLabel>Induk</BidangLabel>
               <FormControl>
                 <EntityPicker
                   options={parentOptions}
@@ -282,12 +287,12 @@ export function OrgUnitForm({
                   invalid={Boolean(form.formState.errors.parent_id)}
                 />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 {isDirektorat
                   ? "Direktorat berada di puncak hierarki, jadi tidak punya induk."
                   : "Induk dipilih dari daftar, tidak diketik bebas."}
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -307,17 +312,17 @@ export function OrgUnitForm({
         ) : null}
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button
+          <Tombol
             type="button"
-            variant="outline"
+            nada="sekunder"
             onClick={onBatal}
             disabled={form.formState.isSubmitting}
           >
             {UI.batal}
-          </Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          </Tombol>
+          <Tombol type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Menyimpan…" : UI.simpan}
-          </Button>
+          </Tombol>
         </div>
       </form>
     </Form>

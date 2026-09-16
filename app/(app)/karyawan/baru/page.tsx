@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
-import { Button } from "@/components/ui/button";
+import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { loadReferenceOptions } from "@/lib/db/referenceOptions";
 import { TERMS, UI } from "@/lib/i18n/terms";
@@ -26,19 +25,11 @@ export default async function Page() {
 
   if (user.role !== "admin") {
     return (
-      <div className="mx-auto max-w-2xl py-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Tambah {TERMS.karyawan}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{UI.hanyaAdmin}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Anda masuk sebagai {TERMS.viewer}, jadi hanya bisa membaca data{" "}
-          {TERMS.karyawan}.
-        </p>
-        <Button asChild className="mt-6">
-          <Link href="/karyawan">Kembali ke daftar {TERMS.karyawan}</Link>
-        </Button>
-      </div>
+      <HanyaAdmin
+        judul={`${UI.tambah} ${TERMS.karyawan}`}
+        alasan={`Menambah ${TERMS.karyawan} hanya bisa dilakukan ${TERMS.admin}.`}
+        labelKembali={`Kembali ke daftar ${TERMS.karyawan}`}
+      />
     );
   }
 
@@ -46,11 +37,11 @@ export default async function Page() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <header className="space-y-3 pt-6">
+        <h1 className="text-balance text-judul-halaman text-foreground">
           Tambah {TERMS.karyawan}
         </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
+        <p className="max-w-subjudul text-subjudul text-muted-foreground">
           {TERMS.personnelNumber} wajib dan unik — itulah kunci bisnis yang
           dipakai {TERMS.konsumen} untuk merujuk seseorang. Kolom referensi
           dipilih dari daftar, tidak diketik bebas, dan {TERMS.karyawan}{" "}

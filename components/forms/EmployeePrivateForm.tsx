@@ -24,10 +24,17 @@
  * di `employees`, yang memang punya tabel daftarnya.
  */
 import * as React from "react";
+
+import {
+  KELAS_ISIAN,
+  BidangLabel,
+  BidangBantuan,
+  BidangPesan,
+} from "@/components/hc/Bidang";
+import Tombol from "@/components/hc/Tombol";
 import { useRouter } from "next/navigation";
 import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -38,11 +45,8 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -202,9 +206,9 @@ export function EmployeePrivateForm({
                 name="date_of_birth"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tanggal Lahir</FormLabel>
+                    <BidangLabel>Tanggal Lahir</BidangLabel>
                     <FormControl>
-                      <Input
+                      <Input className={KELAS_ISIAN}
                         {...field}
                         type="date"
                         aria-invalid={tanggalBelumLengkap || undefined}
@@ -220,14 +224,14 @@ export function EmployeePrivateForm({
                         }}
                       />
                     </FormControl>
-                    <FormDescription>Usia dihitung dari sini: {usia}.</FormDescription>
+                    <BidangBantuan>Usia dihitung dari sini: {usia}.</BidangBantuan>
                     {tanggalBelumLengkap ? (
                       <p className="text-sm font-medium text-destructive">
                         Tanggal belum lengkap. Lengkapi atau kosongkan — kalau
                         dibiarkan seperti ini, yang tersimpan adalah kosong.
                       </p>
                     ) : null}
-                    <FormMessage />
+                    <BidangPesan />
                   </FormItem>
                 )}
               />
@@ -237,11 +241,11 @@ export function EmployeePrivateForm({
                 name="place_of_birth"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tempat Lahir</FormLabel>
+                    <BidangLabel>Tempat Lahir</BidangLabel>
                     <FormControl>
-                      <Input {...field} autoComplete="off" placeholder="mis. Surabaya" />
+                      <Input className={KELAS_ISIAN} {...field} autoComplete="off" placeholder="mis. Surabaya" />
                     </FormControl>
-                    <FormMessage />
+                    <BidangPesan />
                   </FormItem>
                 )}
               />
@@ -251,14 +255,14 @@ export function EmployeePrivateForm({
                 name="religion"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Agama</FormLabel>
+                    <BidangLabel>Agama</BidangLabel>
                     <FormControl>
-                      <Input {...field} autoComplete="off" />
+                      <Input className={KELAS_ISIAN} {...field} autoComplete="off" />
                     </FormControl>
-                    <FormDescription>
+                    <BidangBantuan>
                       Ditulis apa adanya sesuai dokumen, bukan dipilih dari daftar.
-                    </FormDescription>
-                    <FormMessage />
+                    </BidangBantuan>
+                    <BidangPesan />
                   </FormItem>
                 )}
               />
@@ -268,25 +272,25 @@ export function EmployeePrivateForm({
                 name="marital_status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status Pernikahan</FormLabel>
+                    <BidangLabel>Status Pernikahan</BidangLabel>
                     <FormControl>
-                      <Input {...field} autoComplete="off" />
+                      <Input className={KELAS_ISIAN} {...field} autoComplete="off" />
                     </FormControl>
-                    <FormMessage />
+                    <BidangPesan />
                   </FormItem>
                 )}
               />
             </div>
 
             <div className="flex justify-end">
-              <Button
+              <Tombol
                 type="submit"
                 disabled={form.formState.isSubmitting || tanggalBelumLengkap}
               >
                 {form.formState.isSubmitting
                   ? "Menyimpan…"
                   : `${UI.simpan} ${TERMS.dataPribadiSensitif}`}
-              </Button>
+              </Tombol>
             </div>
           </form>
         </Form>

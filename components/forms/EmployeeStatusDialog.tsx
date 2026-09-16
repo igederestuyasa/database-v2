@@ -32,6 +32,10 @@
  * sana dari sini selalu nilai yang sekarang, jadi tidak pernah masuk patch.
  */
 import * as React from "react";
+
+import { KELAS_ISIAN } from "@/components/hc/Bidang";
+import StatusLabel from "@/components/hc/StatusLabel";
+import Tombol from "@/components/hc/Tombol";
 import { useRouter } from "next/navigation";
 
 import {
@@ -44,8 +48,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
@@ -187,9 +189,9 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={nonaktif ? "outline" : "secondary"}>
+        <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
           {STATUS_LABELS[nonaktif ? "nonaktif" : "aktif"]}
-        </Badge>
+        </StatusLabel>
         {employee.tanggal_keluar ? (
           <span className="text-sm text-muted-foreground">
             Tanggal keluar: {employee.tanggal_keluar}
@@ -200,24 +202,24 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
       <div className="flex flex-wrap gap-2">
         {nonaktif ? (
           <>
-            <Button
+            <Tombol
               type="button"
-              variant="outline"
+              nada="sekunder"
               onClick={() => {
                 setPesanKesalahan(null);
                 setDialogAktif(true);
               }}
             >
               {UI.aktifkan} kembali
-            </Button>
-            <Button type="button" variant="ghost" onClick={bukaDialogKeluar}>
+            </Tombol>
+            <Tombol type="button" nada="halus" onClick={bukaDialogKeluar}>
               Perbaiki tanggal keluar
-            </Button>
+            </Tombol>
           </>
         ) : (
-          <Button type="button" variant="outline" onClick={bukaDialogKeluar}>
+          <Tombol type="button" nada="sekunder" onClick={bukaDialogKeluar}>
             {UI.nonaktifkan}
-          </Button>
+          </Tombol>
         )}
       </div>
 
@@ -252,7 +254,7 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="tanggal-keluar">Tanggal Keluar</Label>
-              <Input
+              <Input className={KELAS_ISIAN}
                 id="tanggal-keluar"
                 type="date"
                 value={tanggalKeluar}

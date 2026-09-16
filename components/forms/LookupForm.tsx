@@ -21,17 +21,21 @@
  *    field values go into `safeParse` untouched.
  */
 import * as React from "react";
+
+import {
+  KELAS_ISIAN,
+  BidangLabel,
+  BidangBantuan,
+  BidangPesan,
+} from "@/components/hc/Bidang";
+import Tombol from "@/components/hc/Tombol";
 import { useForm } from "react-hook-form";
 
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { createLookup, updateLookup, type LookupSummary } from "@/lib/actions/lookups";
@@ -154,15 +158,15 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
           name="kode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Kode</FormLabel>
+              <BidangLabel>Kode</BidangLabel>
               <FormControl>
-                <Input {...field} autoComplete="off" placeholder="mis. JG-13" />
+                <Input className={KELAS_ISIAN} {...field} autoComplete="off" placeholder="mis. JG-13" />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 Kode adalah bagian yang tetap dan dipakai Konsumen lewat API —
                 ganti hanya kalau memang salah ketik. Harus unik di dalam tipe ini.
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -172,16 +176,16 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
           name="label"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Label</FormLabel>
+              <BidangLabel>Label</BidangLabel>
               <FormControl>
-                <Input {...field} autoComplete="off" placeholder="mis. Pratama III - 13" />
+                <Input className={KELAS_ISIAN} {...field} autoComplete="off" placeholder="mis. Pratama III - 13" />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 Tulisan yang dibaca staf HC di dropdown. Menggantinya langsung
                 berlaku untuk semua Karyawan yang memakai Lookup ini — tidak ada
                 data Karyawan yang ikut diubah.
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -191,9 +195,9 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
           name="urutan"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Urutan</FormLabel>
+              <BidangLabel>Urutan</BidangLabel>
               <FormControl>
-                <Input
+                <Input className={KELAS_ISIAN}
                   {...field}
                   // Deliberately `text`: `<input type="number">` hands back an
                   // empty string for content it cannot parse ("1e", "--"),
@@ -206,11 +210,11 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
                   placeholder="kosongkan kalau tidak diatur"
                 />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 Angka kecil tampil lebih dulu. Yang dikosongkan tampil paling
                 bawah, diurutkan menurut Label.
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -223,18 +227,18 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
 
         <div className="flex justify-end gap-2 pt-2">
           {onCancel ? (
-            <Button
+            <Tombol
               type="button"
-              variant="outline"
+              nada="sekunder"
               onClick={onCancel}
               disabled={form.formState.isSubmitting}
             >
               {UI.batal}
-            </Button>
+            </Tombol>
           ) : null}
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Tombol type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Menyimpan…" : isEdit ? UI.simpan : UI.tambah}
-          </Button>
+          </Tombol>
         </div>
       </form>
     </Form>

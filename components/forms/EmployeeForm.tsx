@@ -31,6 +31,15 @@
  * `EmployeePrivateForm`.
  */
 import * as React from "react";
+
+import {
+  KELAS_ISIAN,
+  KELAS_ISIAN_TUMBUH,
+  BidangLabel,
+  BidangBantuan,
+  BidangPesan,
+} from "@/components/hc/Bidang";
+import Tombol from "@/components/hc/Tombol";
 import { useRouter } from "next/navigation";
 import {
   useForm,
@@ -41,7 +50,6 @@ import {
 } from "react-hook-form";
 
 import { EntityPicker, type EntityOption } from "@/components/shared/EntityPicker";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -52,11 +60,8 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -394,15 +399,15 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
             diketik bebas. Nilai baru dibuat dulu di halaman {TERMS.masterData},{" "}
             {TERMS.jabatan}, atau Struktur Organisasi.
           </p>
-          <Button
+          <Tombol
             type="button"
-            variant="outline"
-            size="sm"
+            nada="sekunder"
+            ukuran="ringkas"
             disabled={sedangMuatUlang}
             onClick={() => mulaiMuatUlang(() => router.refresh())}
           >
             {sedangMuatUlang ? UI.sedangMemuat : "Muat ulang daftar pilihan"}
-          </Button>
+          </Tombol>
         </div>
 
         <Card>
@@ -420,9 +425,9 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="personnel_number"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{TERMS.personnelNumber}</FormLabel>
+                  <BidangLabel>{TERMS.personnelNumber}</BidangLabel>
                   <FormControl>
-                    <Input
+                    <Input className={KELAS_ISIAN}
                       {...field}
                       autoFocus={mode === "tambah"}
                       autoComplete="off"
@@ -430,12 +435,12 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
                       placeholder="mis. 10012345"
                     />
                   </FormControl>
-                  <FormDescription>
+                  <BidangBantuan>
                     {mode === "ubah"
                       ? `Wajib dan unik. ${TERMS.konsumen} merujuk ${TERMS.karyawan} lewat kode ini, jadi ubah hanya kalau memang salah ketik — aplikasi lain yang menyimpannya harus ikut menyesuaikan.`
                       : "Wajib dan unik. Dipakai selamanya untuk merujuk orang ini."}
-                  </FormDescription>
-                  <FormMessage />
+                  </BidangBantuan>
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -445,19 +450,19 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="nip"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{TERMS.nip}</FormLabel>
+                  <BidangLabel>{TERMS.nip}</BidangLabel>
                   <FormControl>
-                    <Input
+                    <Input className={KELAS_ISIAN}
                       {...field}
                       autoComplete="off"
                       spellCheck={false}
                       placeholder="boleh kosong"
                     />
                   </FormControl>
-                  <FormDescription>
+                  <BidangBantuan>
                     Boleh kosong, tapi kalau diisi harus unik.
-                  </FormDescription>
-                  <FormMessage />
+                  </BidangBantuan>
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -467,16 +472,16 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="full_name"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Nama Lengkap</FormLabel>
+                  <BidangLabel>Nama Lengkap</BidangLabel>
                   <FormControl>
-                    <Input
+                    <Input className={KELAS_ISIAN}
                       {...field}
                       autoFocus={mode === "ubah"}
                       autoComplete="off"
                       placeholder="mis. Budi Santoso"
                     />
                   </FormControl>
-                  <FormMessage />
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -495,15 +500,15 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="jurusan"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Jurusan</FormLabel>
+                  <BidangLabel>Jurusan</BidangLabel>
                   <FormControl>
-                    <Input {...field} autoComplete="off" placeholder="mis. Teknik Sipil" />
+                    <Input className={KELAS_ISIAN} {...field} autoComplete="off" placeholder="mis. Teknik Sipil" />
                   </FormControl>
-                  <FormDescription>
+                  <BidangBantuan>
                     Di Excel sumber kolom ini VLOOKUP dari sheet lain, jadi saat
                     Seed ia sengaja dibiarkan kosong dan diisi manual di sini.
-                  </FormDescription>
-                  <FormMessage />
+                  </BidangBantuan>
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -583,11 +588,11 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="keterangan_pj_plt"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Keterangan PJ / PLT</FormLabel>
+                  <BidangLabel>Keterangan PJ / PLT</BidangLabel>
                   <FormControl>
-                    <Input {...field} autoComplete="off" />
+                    <Input className={KELAS_ISIAN} {...field} autoComplete="off" />
                   </FormControl>
-                  <FormMessage />
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -602,15 +607,15 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="keterangan_rangkap_1"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Keterangan Rangkap 1</FormLabel>
+                  <BidangLabel>Keterangan Rangkap 1</BidangLabel>
                   <FormControl>
-                    <Input {...field} autoComplete="off" />
+                    <Input className={KELAS_ISIAN} {...field} autoComplete="off" />
                   </FormControl>
-                  <FormDescription>
+                  <BidangBantuan>
                     Kolom pertama dari dua kolom &laquo;Keterangan Rangkap&raquo;
                     di Excel sumber. Tidak digabung dengan yang kedua.
-                  </FormDescription>
-                  <FormMessage />
+                  </BidangBantuan>
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -620,14 +625,14 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="keterangan_rangkap_2"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Keterangan Rangkap 2</FormLabel>
+                  <BidangLabel>Keterangan Rangkap 2</BidangLabel>
                   <FormControl>
-                    <Input {...field} autoComplete="off" />
+                    <Input className={KELAS_ISIAN} {...field} autoComplete="off" />
                   </FormControl>
-                  <FormDescription>
+                  <BidangBantuan>
                     Kolom kedua, berdiri sendiri.
-                  </FormDescription>
-                  <FormMessage />
+                  </BidangBantuan>
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -733,11 +738,11 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="nomor_surat_pg"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nomor Surat PG</FormLabel>
+                  <BidangLabel>Nomor Surat PG</BidangLabel>
                   <FormControl>
-                    <Input {...field} autoComplete="off" spellCheck={false} />
+                    <Input className={KELAS_ISIAN} {...field} autoComplete="off" spellCheck={false} />
                   </FormControl>
-                  <FormMessage />
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -753,15 +758,15 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="nomor_surat_jg"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nomor Surat JG</FormLabel>
+                  <BidangLabel>Nomor Surat JG</BidangLabel>
                   <FormControl>
-                    <Input {...field} autoComplete="off" spellCheck={false} />
+                    <Input className={KELAS_ISIAN} {...field} autoComplete="off" spellCheck={false} />
                   </FormControl>
-                  <FormDescription>
+                  <BidangBantuan>
                     Nomor surat JG berdiri sendiri, tidak digabung dengan nomor
                     surat PG.
-                  </FormDescription>
-                  <FormMessage />
+                  </BidangBantuan>
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -778,11 +783,11 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               name="keterangan"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Keterangan</FormLabel>
+                  <BidangLabel>Keterangan</BidangLabel>
                   <FormControl>
-                    <Textarea {...field} rows={3} placeholder="Catatan bebas." />
+                    <Textarea className={KELAS_ISIAN_TUMBUH} {...field} rows={3} placeholder="Catatan bebas." />
                   </FormControl>
-                  <FormMessage />
+                  <BidangPesan />
                 </FormItem>
               )}
             />
@@ -803,17 +808,17 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
         ) : null}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <Button
+          <Tombol
             type="button"
-            variant="outline"
+            nada="sekunder"
             disabled={form.formState.isSubmitting}
             onClick={() =>
               router.push(employee ? `/karyawan/${employee.id}` : "/karyawan")
             }
           >
             {UI.batal}
-          </Button>
-          <Button
+          </Tombol>
+          <Tombol
             type="submit"
             disabled={form.formState.isSubmitting || adaTanggalBelumLengkap}
           >
@@ -822,7 +827,7 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
               : mode === "tambah"
                 ? `${UI.simpan} ${TERMS.karyawan}`
                 : UI.simpan}
-          </Button>
+          </Tombol>
         </div>
       </form>
     </Form>
@@ -884,7 +889,7 @@ function PickerField({
       name={name}
       render={({ field, fieldState }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <BidangLabel>{label}</BidangLabel>
           <FormControl>
             <EntityPicker
               options={pilihanYangBolehDipilih(options, field.value)}
@@ -899,8 +904,8 @@ function PickerField({
               invalid={Boolean(fieldState.error)}
             />
           </FormControl>
-          {description ? <FormDescription>{description}</FormDescription> : null}
-          <FormMessage />
+          {description ? <BidangBantuan>{description}</BidangBantuan> : null}
+          <BidangPesan />
         </FormItem>
       )}
     />
@@ -953,9 +958,9 @@ function TanggalField({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <BidangLabel>{label}</BidangLabel>
           <FormControl>
-            <Input
+            <Input className={KELAS_ISIAN}
               {...field}
               type="date"
               value={field.value}
@@ -970,14 +975,14 @@ function TanggalField({
               }}
             />
           </FormControl>
-          {description ? <FormDescription>{description}</FormDescription> : null}
+          {description ? <BidangBantuan>{description}</BidangBantuan> : null}
           {belumLengkap ? (
             <p className="text-sm font-medium text-destructive">
               Tanggal belum lengkap. Lengkapi atau kosongkan — kalau dibiarkan
               seperti ini, yang tersimpan adalah kosong.
             </p>
           ) : null}
-          <FormMessage />
+          <BidangPesan />
         </FormItem>
       )}
     />
