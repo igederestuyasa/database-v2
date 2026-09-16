@@ -74,6 +74,18 @@
     --ring: var(--tinta);
   }
 
+  /**
+   * `.dark` HARUS berada di elemen yang sama dengan `:root`, yaitu `<html>` —
+   * dan di situlah `next-themes` memasangnya.
+   *
+   * Alasannya cara CSS menghitung custom property: nilai `--background:
+   * var(--latar)` di atas sudah DISUBSTITUSI menjadi nilai terang pada `:root`,
+   * dan nilai hasil substitusi itulah yang diwariskan ke bawah. Jadi `.dark` di
+   * sebuah `<div>` di tengah halaman akan mengganti `--latar` tanpa mengubah
+   * `--background` sama sekali — pulau gelap di dalam halaman terang tidak bisa
+   * dibuat begini. Kalau suatu saat itu memang dibutuhkan, peran shadcn di
+   * bawah harus ikut ditulis ulang di dalam blok ini.
+   */
   .dark {
     --latar: 216 16.1% 6.1%; /* #0D0F12 */
     --kartu: 217.5 16% 9.8%; /* #15181D */

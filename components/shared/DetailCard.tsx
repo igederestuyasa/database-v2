@@ -16,7 +16,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import StatusLabel from "@/components/hc/StatusLabel";
 import {
   Card,
   CardContent,
@@ -52,13 +52,9 @@ export type DetailField = {
  */
 function TandaTurunan() {
   return (
-    <Badge
-      variant="outline"
-      className="shrink-0 font-normal normal-case tracking-normal"
-      title="Dihitung otomatis dari tanggal; tidak disimpan dan tidak bisa diubah."
-    >
+    <StatusLabel title="Dihitung otomatis dari tanggal; tidak disimpan dan tidak bisa diubah.">
       dihitung otomatis
-    </Badge>
+    </StatusLabel>
   );
 }
 
@@ -70,11 +66,11 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
           key={field.label}
           className={field.lebar ? "min-w-0 sm:col-span-2" : "min-w-0"}
         >
-          <dt className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <dt className="flex flex-wrap items-center gap-2 text-pendukung text-muted-foreground">
             {field.label}
             {field.turunan ? <TandaTurunan /> : null}
           </dt>
-          <dd className="mt-1 whitespace-pre-wrap break-words text-sm">
+          <dd className="mt-1 whitespace-pre-wrap break-words text-isi">
             {field.href ? (
               <Link
                 href={field.href}
@@ -87,7 +83,7 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
             )}
           </dd>
           {field.catatan ? (
-            <dd className="mt-0.5 break-words text-xs text-muted-foreground">
+            <dd className="mt-0.5 break-words text-pendukung text-muted-foreground">
               {field.catatan}
             </dd>
           ) : null}
@@ -112,15 +108,17 @@ export default function DetailCard({
   catatan,
 }: DetailCardProps) {
   return (
-    <Card>
-      <CardHeader className="space-y-1.5">
-        <CardTitle className="text-base">{judul}</CardTitle>
-        {keterangan ? <CardDescription>{keterangan}</CardDescription> : null}
+    <Card className="hc-permukaan rounded-kartu border-border shadow-none">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-judul-bagian">{judul}</CardTitle>
+        {keterangan ? (
+          <CardDescription className="text-pendukung">{keterangan}</CardDescription>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <FieldList fields={fields} />
         {catatan ? (
-          <p className="text-xs text-muted-foreground">{catatan}</p>
+          <p className="text-pendukung text-muted-foreground">{catatan}</p>
         ) : null}
       </CardContent>
     </Card>

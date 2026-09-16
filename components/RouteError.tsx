@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import { UI } from "@/lib/i18n/terms";
 
 export type RouteErrorProps = {
@@ -37,23 +37,23 @@ export default function RouteError({ error, reset, judul }: RouteErrorProps) {
 
   return (
     <div className="mx-auto max-w-lg py-16 text-center">
-      <h2 className="text-lg font-semibold">
+      <h2 className="text-judul-bagian text-foreground">
         {judul ? `Gagal memuat ${judul}` : UI.gagalMemuat}
       </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="mt-2 text-pendukung text-muted-foreground">
         Terjadi kesalahan saat mengambil data. Coba lagi; kalau tetap gagal,
         laporkan {kode ? "kode" : "keterangan"} di bawah ini ke admin HC Core.
       </p>
       {kode || TAMPILKAN_PESAN ? (
-        <pre className="mt-4 overflow-x-auto rounded-md bg-muted p-3 text-left text-xs text-muted-foreground">
+        <pre className="mt-4 overflow-x-auto rounded-bidang border border-border bg-muted p-3 text-left text-mikro font-normal text-muted-foreground">
           {TAMPILKAN_PESAN ? error.message : null}
           {TAMPILKAN_PESAN && kode ? "\n" : null}
           {kode}
         </pre>
       ) : null}
-      <Button className="mt-6" onClick={reset}>
+      <Tombol className="mt-6" onClick={reset}>
         {UI.cobaLagi}
-      </Button>
+      </Tombol>
     </div>
   );
 }

@@ -30,10 +30,11 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowData,
   type SortingState,
 } from "@tanstack/react-table";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -45,6 +46,20 @@ import {
 } from "@/components/ui/table";
 import { UI } from "@/lib/i18n/terms";
 import { cn } from "@/lib/utils";
+
+/**
+ * Kolom angka rata kanan dengan `tabular-nums` — docs/DESIGN.md §Komponen.
+ *
+ * Ditandai lewat `meta` pada definisi kolom, bukan lewat `className` di tiap
+ * sel, supaya header dan selnya tidak akan pernah rata ke arah yang berbeda.
+ */
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Rata kanan dan angkanya selebar sama. */
+    angka?: boolean;
+  }
+}
 
 /** Server-side paging. Supply all four to switch the table into server mode. */
 export type DataTableServerPagination = {
@@ -84,6 +99,21 @@ export type DataTableProps<TData, TValue> = {
   onRowClick?: (row: TData) => void;
   /** Stable row identity, e.g. `(row) => row.id`. */
   getRowId?: (row: TData, index: number) => string;
+  /**
+   * Pola daftar-detail (docs/DESIGN.md): hasil `propsDaftar()` dari
+   * `useDaftarDetail`, dipasang ke wadah tabel supaya panah, Home, dan End
+   * memindahkan fokus antarbaris.
+   */
+  propsDaftar?: {
+    ref: (el: HTMLElement | null) => void;
+    onKeyDown: (event: React.KeyboardEvent) => void;
+  };
+  /**
+   * Hasil `propsItem(row)` dari `useDaftarDetail`. Baris yang menerimanya jadi
+   * bisa difokus, dan `data-terpilih` yang dibawanya menyalakan penanda
+   * terpilih di CSS.
+   */
+  propsBaris?: (row: TData) => Record<string, unknown>;
   /** Extra classes on the outer wrapper. */
   className?: string;
 };
@@ -102,6 +132,8 @@ export function DataTable<TData, TValue>({
   isLoading = false,
   onRowClick,
   getRowId,
+  propsDaftar,
+  propsBaris,
   className,
 }: DataTableProps<TData, TValue>) {
   const serverMode = pagination !== undefined;
@@ -161,14 +193,17 @@ export function DataTable<TData, TValue>({
               onChange={(event) => setGlobalFilter(event.target.value)}
               placeholder={searchPlaceholder ?? `${UI.cari}…`}
               aria-label={UI.cari}
-              className="h-9 max-w-xs"
+              className="h-11 max-w-xs text-isi"
             />
           )}
           {toolbar}
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-md border">
+      <div
+        {...propsDaftar}
+        className="hc-permukaan overflow-x-auto rounded-kartu border border-border bg-card"
+      >
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -177,7 +212,14 @@ export function DataTable<TData, TValue>({
                   const sortable = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
                   return (
-                    <TableHead key={header.id} aria-sort={ariaSort(sorted)}>
+                    <TableHead
+                      key={header.id}
+                      aria-sort={ariaSort(sorted)}
+                      className={cn(
+                        "h-11 text-mikro",
+                        header.column.columnDef.meta?.angka && "text-right",
+                      )}
+                    >
                       {header.isPlaceholder ? null : sortable ? (
                         <button
                           type="button"
@@ -207,7 +249,7 @@ export function DataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={colSpan}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-24 text-center text-pendukung text-muted-foreground"
                 >
                   {UI.sedangMemuat}
                 </TableCell>
@@ -216,7 +258,7 @@ export function DataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={colSpan}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-24 text-center text-pendukung text-muted-foreground"
                 >
                   {emptyMessage ?? UI.tidakAdaData}
                 </TableCell>
@@ -227,10 +269,22 @@ export function DataTable<TData, TValue>({
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                  className={onRowClick ? "cursor-pointer" : undefined}
+                  {...(propsBaris?.(row.original) ?? {})}
+                  className={cn(
+                    "h-12 text-pendukung transition-colors duration-150 ease-standar hover:bg-muted",
+                    "data-[terpilih]:bg-muted data-[terpilih]:font-semibold",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
+                    onRowClick && "cursor-pointer",
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell
+                      key={cell.id}
+                      className={cn(
+                        "py-2",
+                        cell.column.columnDef.meta?.angka && "text-right tabular-nums",
+                      )}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -242,29 +296,27 @@ export function DataTable<TData, TValue>({
       </div>
 
       {!hidePagination && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-pendukung text-muted-foreground">
           <span>
             {pageInfo.total} baris · Halaman {pageInfo.page} dari {pageInfo.pageCount}
           </span>
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
+            <Tombol
+              nada="sekunder"
+              ukuran="ringkas"
               onClick={() => goTo(pageInfo.page - 1)}
               disabled={pageInfo.page <= 1}
             >
               Sebelumnya
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
+            </Tombol>
+            <Tombol
+              nada="sekunder"
+              ukuran="ringkas"
               onClick={() => goTo(pageInfo.page + 1)}
               disabled={pageInfo.page >= pageInfo.pageCount}
             >
               Berikutnya
-            </Button>
+            </Tombol>
           </div>
         </div>
       )}
