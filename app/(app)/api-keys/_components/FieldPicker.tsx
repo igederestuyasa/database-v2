@@ -155,7 +155,7 @@ export function FieldPicker({
           disabled={disabled}
         />
         <p
-          className="text-xs text-muted-foreground sm:ml-auto"
+          className="text-mikro font-normal text-muted-foreground sm:ml-auto"
           aria-live="polite"
         >
           {jumlahTerpilih} dari {TOTAL_API_FIELDS} kolom dipilih
@@ -176,7 +176,7 @@ export function FieldPicker({
         aria-describedby={ariaDescribedBy}
       >
         {grupTampil.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
+          <p className="py-6 text-center text-pendukung text-muted-foreground">
             Tidak ada kolom yang cocok dengan &laquo;{cari}&raquo;.
           </p>
         ) : null}
@@ -195,17 +195,17 @@ export function FieldPicker({
               className="space-y-2"
             >
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span id={judulId} className="text-sm font-medium">
+                <span id={judulId} className="text-pendukung font-medium">
                   {group.label}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-mikro font-normal text-muted-foreground">
                   {terpilihDiGrup} dari {group.fields.length} dipilih
                 </span>
                 <Tombol
                   type="button"
                   nada="halus"
                   ukuran="ringkas"
-                  className="ml-auto h-7 px-2 text-xs"
+                  className="ml-auto h-7 px-2 text-mikro font-normal"
                   disabled={disabled}
                   onClick={() => toggleGrup(fields, !semuaTampilTerpilih)}
                 >
@@ -214,7 +214,7 @@ export function FieldPicker({
                 </Tombol>
               </div>
 
-              <p className="text-xs text-muted-foreground">
+              <p className="text-mikro font-normal text-muted-foreground">
                 {group.keterangan}
               </p>
 
@@ -233,7 +233,7 @@ export function FieldPicker({
                       />
                       <Label
                         htmlFor={id}
-                        className="cursor-pointer font-mono text-xs font-normal"
+                        className="cursor-pointer font-mono text-mikro font-normal"
                       >
                         {field}
                       </Label>

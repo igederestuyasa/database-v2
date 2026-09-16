@@ -83,7 +83,7 @@ export function RevertRevisionButton({
 
   if (!operation) {
     return (
-      <span className="text-xs text-muted-foreground" role="note">
+      <span className="text-mikro font-normal text-muted-foreground" role="note">
         Tidak bisa dikembalikan. {alasanTidakBisa}
       </span>
     );
@@ -155,7 +155,7 @@ export function RevertRevisionButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Kembalikan ke versi sebelum Revisi ini?</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-pendukung text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">{rowTitle}</span> —
                 Revisi #{revision.id}.

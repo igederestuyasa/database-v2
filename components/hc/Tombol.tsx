@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * Tombol HC Panel — docs/DESIGN.md §Komponen.
  *
  * KENAPA BUKAN MEMBUNGKUS `components/ui/button.tsx`. Yang beku itu memulai
- * dari `rounded-md h-10 px-4 text-sm font-medium`; setiap tombol HC Panel harus
+ * dari `rounded-md h-10 px-4 text-pendukung font-medium`; setiap tombol HC Panel harus
  * mengalahkan kelima-limanya lewat twMerge, dan satu saja yang terlewat
  * hasilnya tombol yang hampir benar — paling sulit dilihat, paling mudah
  * menyebar. Jadi tombol ini berdiri sendiri di atas `<button>` biasa, dan

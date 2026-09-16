@@ -107,7 +107,7 @@ export function RevertBatchButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Kembalikan seluruh Batch ini?</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-pendukung text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">{judul}</span> —{" "}
                 {jumlahRevisi} Revisi.

@@ -394,7 +394,7 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
     <Form {...form}>
       <form onSubmit={submit} className="space-y-6" noValidate>
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-mikro font-normal text-muted-foreground">
             Kolom bertanda daftar dipilih dari {TERMS.dataReferensi}, tidak
             diketik bebas. Nilai baru dibuat dulu di halaman {TERMS.masterData},{" "}
             {TERMS.jabatan}, atau Struktur Organisasi.
@@ -799,7 +799,7 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
         {adaTanggalBelumLengkap ? (
           <p
             role="alert"
-            className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+            className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-pendukung"
           >
             Ada kolom tanggal yang belum lengkap. Lengkapi atau kosongkan dulu:
             kolom tanggal yang separuh terisi dibaca browser sebagai kosong, dan
@@ -977,7 +977,7 @@ function TanggalField({
           </FormControl>
           {description ? <BidangBantuan>{description}</BidangBantuan> : null}
           {belumLengkap ? (
-            <p className="text-sm font-medium text-destructive">
+            <p className="text-pendukung font-medium text-destructive">
               Tanggal belum lengkap. Lengkapi atau kosongkan — kalau dibiarkan
               seperti ini, yang tersimpan adalah kosong.
             </p>
@@ -1059,8 +1059,8 @@ function KolomTurunan({ form }: { form: UseFormReturn<EmployeeFormValues> }) {
         <dl className="grid gap-3 sm:grid-cols-2">
           {baris.map((item) => (
             <div key={item.label} className="rounded-md border bg-muted/30 px-3 py-2">
-              <dt className="text-xs text-muted-foreground">{item.label}</dt>
-              <dd className="text-sm font-medium">{item.nilai}</dd>
+              <dt className="text-mikro font-normal text-muted-foreground">{item.label}</dt>
+              <dd className="text-pendukung font-medium">{item.nilai}</dd>
             </div>
           ))}
         </dl>

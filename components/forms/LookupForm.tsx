@@ -144,10 +144,10 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
   return (
     <Form {...form}>
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+        <div className="rounded-md bg-muted/50 px-3 py-2 text-pendukung">
           <span className="text-muted-foreground">Tipe daftar: </span>
           <span className="font-medium">{LOOKUP_TYPE_LABELS[tipe]}</span>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-mikro font-normal text-muted-foreground">
             Tipe ditentukan tab yang sedang dibuka dan tidak bisa diubah di sini.
             Memindahkan satu nilai ke tipe lain dilakukan lewat Merge.
           </p>
@@ -220,7 +220,7 @@ export function LookupForm({ tipe, lookup, onSaved, onCancel }: LookupFormProps)
         />
 
         {pesanGagal ? (
-          <p role="alert" className="text-sm font-medium text-destructive">
+          <p role="alert" className="text-pendukung font-medium text-destructive">
             {pesanGagal}
           </p>
         ) : null}

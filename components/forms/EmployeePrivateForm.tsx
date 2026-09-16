@@ -226,7 +226,7 @@ export function EmployeePrivateForm({
                     </FormControl>
                     <BidangBantuan>Usia dihitung dari sini: {usia}.</BidangBantuan>
                     {tanggalBelumLengkap ? (
-                      <p className="text-sm font-medium text-destructive">
+                      <p className="text-pendukung font-medium text-destructive">
                         Tanggal belum lengkap. Lengkapi atau kosongkan — kalau
                         dibiarkan seperti ini, yang tersimpan adalah kosong.
                       </p>

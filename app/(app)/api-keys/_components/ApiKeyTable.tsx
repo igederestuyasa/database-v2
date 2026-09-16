@@ -149,15 +149,27 @@ export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
     [router],
   );
 
-  const columns = React.useMemo<ColumnDef<ApiKeyRow>[]>(
-    () => [
+  /**
+   * Enam kolom tidak muat berdampingan dengan panel detail: di pratinjau
+   * kolom aksi terpotong di balik tepi kartu, dan tabel yang terpotong
+   * diam-diam lebih buruk daripada tabel yang lebih ringkas.
+   *
+   * Yang pindah ke panel adalah tiga kolom yang memang sudah ditampilkan di
+   * sana — daftar kolom yang boleh diambil (di panel malah UTUH, tidak
+   * dipotong "+N lainnya"), terakhir dipakai, dan dibuat. Di bawah 1280px
+   * panelnya tidak ada dan keenam kolom kembali.
+   */
+  const panelTerlihat = dd.panelTerlihat;
+
+  const columns = React.useMemo<ColumnDef<ApiKeyRow>[]>(() => {
+    const semua: ColumnDef<ApiKeyRow>[] = [
       {
         accessorKey: "nama_konsumen",
         header: `Nama ${TERMS.konsumen}`,
         cell: ({ row }) => (
           <div className="space-y-0.5">
             <div className="font-medium">{row.original.nama_konsumen}</div>
-            <div className="font-mono text-xs text-muted-foreground">
+            <div className="font-mono text-mikro font-normal text-muted-foreground">
               {row.original.key_prefix ?? "—"}
               <span aria-hidden="true">…</span>
               <span className="sr-only">
@@ -169,19 +181,20 @@ export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
         ),
       },
       {
-        id: "kolom",
         accessorFn: (row) => row.allowed_fields.join(" "),
         header: "Kolom yang boleh diambil",
+        // Pindah ke panel detail saat panel terlihat.
+        id: "sekunder-kolom",
         cell: ({ row }) => {
           const fields = sortApiFields(row.original.allowed_fields);
           const cuplikan = fields.slice(0, 3);
           const sisa = fields.length - cuplikan.length;
           return (
             <div className="max-w-xs space-y-1">
-              <div className="text-xs">
+              <div className="text-mikro font-normal">
                 {fields.length} dari {TOTAL_API_FIELDS} kolom
               </div>
-              <div className="font-mono text-xs text-muted-foreground">
+              <div className="font-mono text-mikro font-normal text-muted-foreground">
                 {fields.length === 0
                   ? "belum ada kolom yang diizinkan"
                   : `${cuplikan.join(", ")}${sisa > 0 ? `, +${sisa} lainnya` : ""}`}
@@ -201,6 +214,8 @@ export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
       },
       {
         accessorKey: "terakhirDipakai",
+        // Pindah ke panel detail saat panel terlihat.
+        id: "sekunder-terakhir",
         header: "Terakhir dipakai",
         cell: ({ row }) => (
           <span className="text-mikro font-normal text-muted-foreground">
@@ -210,6 +225,8 @@ export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
       },
       {
         accessorKey: "dibuat",
+        // Pindah ke panel detail saat panel terlihat.
+        id: "sekunder-dibuat",
         header: "Dibuat",
         cell: ({ row }) => (
           <span className="text-mikro font-normal text-muted-foreground">
@@ -251,9 +268,12 @@ export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
           );
         },
       },
-    ],
-    [bukaUbah, sedangMenyimpan],
-  );
+    ];
+
+    return semua.filter(
+      (kolom) => !(panelTerlihat && kolom.id?.startsWith("sekunder-")),
+    );
+  }, [bukaUbah, sedangMenyimpan, panelTerlihat]);
 
   return (
     <>
@@ -540,14 +560,14 @@ function KeyBaruDialog({
               </p>
 
               <div className="space-y-2">
-                <code className="block select-all break-all rounded-md border bg-muted p-3 font-mono text-sm text-foreground">
+                <code className="block select-all break-all rounded-md border bg-muted p-3 font-mono text-pendukung text-foreground">
                   {hasil.key}
                 </code>
                 <div className="flex flex-wrap items-center gap-2">
                   <Tombol type="button" nada="sekunder" ukuran="ringkas" onClick={salin}>
                     {tersalin ? "Tersalin" : "Salin key"}
                   </Tombol>
-                  <span className="text-xs" aria-live="polite">
+                  <span className="text-mikro font-normal" aria-live="polite">
                     {tersalin
                       ? "Key sudah ada di papan klip. Tempel ke konfigurasi Konsumen sekarang."
                       : ""}
@@ -555,7 +575,7 @@ function KeyBaruDialog({
                 </div>
               </div>
 
-              <p className="text-xs">
+              <p className="text-mikro font-normal">
                 {TERMS.konsumen} memakainya sebagai header{" "}
                 <code>Authorization: Bearer {hasil.apiKey.key_prefix}…</code>.
                 Yang tetap bisa dilihat di daftar hanya delapan karakter

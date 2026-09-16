@@ -107,7 +107,7 @@ export default async function LoginPage({
               </Tombol>
             </div>
           ) : state.status === "tanpa-profil" ? (
-            <div className="space-y-3 text-sm text-muted-foreground">
+            <div className="space-y-3 text-pendukung text-muted-foreground">
               <p className="font-medium text-foreground">
                 Profil pengguna belum dibuat.
               </p>

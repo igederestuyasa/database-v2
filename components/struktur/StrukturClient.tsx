@@ -456,7 +456,7 @@ export function StrukturClient({
                 )}
 
                 {konfirmasi?.aksi === "nonaktifkan" && anakAktif > 0 ? (
-                  <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-900">
+                  <p className="rounded-bidang border border-peringatan/40 bg-peringatan/10 p-3 text-peringatan">
                     Unit ini masih punya {anakAktif} turunan aktif. Nonaktifkan atau
                     pindahkan turunannya lebih dulu — kalau tidak, penyimpanan akan
                     ditolak.
@@ -465,7 +465,7 @@ export function StrukturClient({
 
                 {konfirmasi?.aksi === "nonaktifkan" &&
                 (konfirmasi.node.karyawanAktifLangsung ?? 0) > 0 ? (
-                  <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-900">
+                  <p className="rounded-bidang border border-peringatan/40 bg-peringatan/10 p-3 text-peringatan">
                     {konfirmasi.node.karyawanAktifLangsung} {TERMS.karyawan} aktif masih
                     ditempatkan di sini. Pindahkan mereka dulu, atau pakai {TERMS.merge}{" "}
                     supaya semuanya ikut pindah sekaligus.

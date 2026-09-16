@@ -225,14 +225,14 @@ export function OrgUnitTree({
                   ) : null}
                 </span>
                 {node.mergedIntoNama ? (
-                  <span className="block truncate text-xs text-muted-foreground">
+                  <span className="block truncate text-mikro font-normal text-muted-foreground">
                     Sudah di-{TERMS.merge} ke &laquo;{node.mergedIntoNama}&raquo;
                   </span>
                 ) : null}
               </span>
             </div>
 
-            <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
+            <span className="hidden shrink-0 items-center gap-1 text-mikro font-normal text-muted-foreground sm:flex">
               <Users aria-hidden="true" className="h-3.5 w-3.5" />
               {node.karyawanAktifLangsung === null ? (
                 <span title="Jumlah Karyawan tidak dihitung di halaman ini.">—</span>

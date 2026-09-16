@@ -193,7 +193,7 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
           {STATUS_LABELS[nonaktif ? "nonaktif" : "aktif"]}
         </StatusLabel>
         {employee.tanggal_keluar ? (
-          <span className="text-sm text-muted-foreground">
+          <span className="text-pendukung text-muted-foreground">
             Tanggal keluar: {employee.tanggal_keluar}
           </span>
         ) : null}
@@ -223,7 +223,7 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
         )}
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-mikro font-normal text-muted-foreground">
         {TERMS.karyawan} tidak pernah dihapus. Menonaktifkan hanya mengubah
         status dan mengisi tanggal keluar; seluruh datanya, {TERMS.revisi}-nya,
         dan id-nya tetap utuh — termasuk untuk {TERMS.konsumen} yang sudah
@@ -260,13 +260,13 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
                 value={tanggalKeluar}
                 onChange={(event) => setTanggalKeluar(event.currentTarget.value)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-mikro font-normal text-muted-foreground">
                 Wajib diisi lengkap. Tanpa tanggal keluar, {TERMS.karyawan}{" "}
                 nonaktif tidak bisa dibedakan dari data yang belum dibereskan.
               </p>
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-mikro font-normal text-muted-foreground">
               Yang berubah hanya status dan tanggal keluar. Kalau alasannya
               perlu dicatat, tulis di kolom Keterangan pada form Ubah{" "}
               {TERMS.karyawan} di bawah — kolom itu milik form tersebut, supaya
@@ -274,7 +274,7 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
             </p>
 
             {pesanKesalahan ? (
-              <p role="alert" className="text-sm font-medium text-destructive">
+              <p role="alert" className="text-pendukung font-medium text-destructive">
                 {pesanKesalahan}
               </p>
             ) : null}
@@ -322,7 +322,7 @@ export function EmployeeStatusDialog({ employee }: EmployeeStatusDialogProps) {
           </AlertDialogHeader>
 
           {pesanKesalahan ? (
-            <p role="alert" className="text-sm font-medium text-destructive">
+            <p role="alert" className="text-pendukung font-medium text-destructive">
               {pesanKesalahan}
             </p>
           ) : null}

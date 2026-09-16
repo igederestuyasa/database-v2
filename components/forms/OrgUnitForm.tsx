@@ -300,7 +300,7 @@ export function OrgUnitForm({
         {yatimPiatu ? (
           <p
             role="status"
-            className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            className="flex items-start gap-2 rounded-bidang border border-peringatan/40 bg-peringatan/10 p-3 text-pendukung text-peringatan"
           >
             <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
             <span>

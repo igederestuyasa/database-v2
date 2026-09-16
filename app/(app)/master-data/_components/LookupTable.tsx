@@ -304,7 +304,7 @@ export function LookupTable({
               {row.original.label}
             </Link>
             {row.original.mergedIntoId ? (
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-mikro font-normal text-muted-foreground">
                 {row.original.mergedIntoLabel
                   ? `Digabungkan ke "${row.original.mergedIntoLabel}"`
                   : "Digabungkan ke Lookup lain"}
@@ -548,7 +548,7 @@ export function LookupTable({
       </TataLetakDaftarDetail>
 
       {isAdmin ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-mikro font-normal text-muted-foreground">
           Urutan diketik langsung di tabel: angka kecil tampil lebih dulu di
           dropdown, yang dikosongkan tampil paling bawah menurut Label. Satu
           angka yang disimpan = satu {TERMS.revisi} yang bisa dikembalikan.

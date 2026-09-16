@@ -321,7 +321,7 @@ function EntityCard({
         <>
           <p className="mt-1 break-words font-medium leading-snug">{option.label}</p>
           {/* A <div>, not a <p>: Badge renders a <div>, and components/ui is frozen. */}
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-mikro font-normal text-muted-foreground">
             {option.keterangan ? <span className="break-words">{option.keterangan}</span> : null}
             {option.status === "nonaktif" ? (
               <StatusLabel>{STATUS_LABELS.nonaktif}</StatusLabel>
@@ -329,7 +329,7 @@ function EntityCard({
           </div>
         </>
       ) : (
-        <p className="mt-1 text-sm text-muted-foreground">Belum dipilih</p>
+        <p className="mt-1 text-pendukung text-muted-foreground">Belum dipilih</p>
       )}
     </div>
   );
@@ -492,7 +492,7 @@ export function MergeDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-2 text-pendukung">
               {mergeResultLines(
                 kind,
                 source.label,
@@ -520,7 +520,7 @@ export function MergeDialog({
               </p>
               <Link
                 href={`/log?batch=${encodeURIComponent(result.batchId)}`}
-                className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+                className="mt-2 inline-block text-pendukung font-medium text-primary underline-offset-4 hover:underline"
               >
                 Buka {NAV_LABELS.log}
               </Link>
@@ -594,15 +594,15 @@ export function MergeDialog({
                   : "border-destructive/40 bg-destructive/5 text-destructive",
               )}
             >
-              <p className="flex items-center gap-2 text-sm font-medium">
+              <p className="flex items-center gap-2 text-pendukung font-medium">
                 <Users aria-hidden="true" className="h-4 w-4 shrink-0" />
-                <span className="text-lg font-semibold leading-none">
+                <span className="text-subjudul font-semibold leading-none">
                   {jumlahKaryawanText(jumlah)}
                 </span>
               </p>
               <p
                 className={cn(
-                  "mt-1 text-sm",
+                  "mt-1 text-pendukung",
                   jumlah === 0 ? "text-muted-foreground" : "text-destructive/90",
                 )}
               >
@@ -614,7 +614,7 @@ export function MergeDialog({
 
             {step === "konfirmasi" && target ? (
               <>
-                <ul className="space-y-2 text-sm">
+                <ul className="space-y-2 text-pendukung">
                   {impact.map((line) => (
                     <li key={line} className="flex gap-2">
                       <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-foreground" />
