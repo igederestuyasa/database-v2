@@ -50,7 +50,9 @@ export default async function LoginPage({
   const state = configured ? await readSession() : { status: "tamu" as const };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-5 py-12">
+    // Pita merek yang sama seperti bar atas (docs/DESIGN.md §Komponen): layar
+    // pertama yang dilihat orang luar juga harus langsung terbaca sebagai HK.
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 border-t-4 border-t-brand bg-background px-5 py-12">
       <Logo ukuran={48} />
 
       <Card className="hc-permukaan w-full max-w-sm rounded-panel border-border shadow-none">

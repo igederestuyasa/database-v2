@@ -8,6 +8,12 @@ import { cn } from "@/lib/utils";
  *
  * Tiga elemen: salam, judul, kontrol utama.
  *
+ * SALAM ADALAH BARIS MEREK. Warnanya merah HK, bukan redup: satu baris pendek
+ * di atas judul adalah tempat paling murah untuk menaruh warna merek — ia ada
+ * di setiap layar, tidak pernah dibaca dua kali, dan tidak bersaing dengan
+ * apa pun. Kontrasnya 5,5:1 di mode terang dan 5,2:1 di gelap, jadi ia tetap
+ * teks biasa yang bisa dibaca, bukan hiasan.
+ *
  * KETERANGAN HALAMAN TIDAK LAGI JADI PARAGRAF. Kalimat yang dulu berdiri
  * sebagai subjudul abu-abu di bawah judul kini tinggal di balik penanda "i" di
  * samping judulnya: isinya sama, tapi hanya muncul kalau dicari. Kalimat
@@ -24,7 +30,7 @@ export function PembukaLayar({
   children,
   className,
 }: {
-  /** Baris pembuka opsional, mis. "Database central HC". */
+  /** Baris merek opsional di atas judul, mis. "Database central HC". */
   salam?: React.ReactNode;
   judul: React.ReactNode;
   /** Keterangan halaman; tampil di balik penanda "i" di samping judul. */
@@ -37,7 +43,7 @@ export function PembukaLayar({
     <header className={cn("min-w-0", className)}>
       {salam ? (
         <p
-          className="animate-naik-muncul text-isi font-medium text-muted-foreground"
+          className="animate-naik-muncul text-isi font-medium text-brand"
           style={{ animationDelay: "0ms" }}
         >
           {salam}

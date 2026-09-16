@@ -286,6 +286,15 @@ export function DataTable<TData, TValue>({
                   {...(propsBaris?.(row.original) ?? {})}
                   className={cn(
                     "h-12 text-pendukung transition-colors duration-150 ease-standar hover:bg-muted",
+                    /*
+                      Baris terpilih — yang isinya sedang tampil di panel detail
+                      — dapat penanda kiri 2px merah HK. Border kirinya dipasang
+                      di SETIAP baris dan cuma berganti warna, jadi tidak ada
+                      baris yang bergeser 2px saat pilihan berpindah.
+                      Latar dan tebal huruf tetap ikut menandai, jadi merah di
+                      sini menguatkan, bukan satu-satunya petunjuk.
+                    */
+                    "border-l-2 border-l-transparent data-[terpilih]:border-l-brand",
                     "data-[terpilih]:bg-muted data-[terpilih]:font-semibold",
                     "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
                     onRowClick && "cursor-pointer",

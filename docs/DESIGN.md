@@ -2,7 +2,7 @@
 
 ## Prinsip
 - Satu elevasi: hanya kontrol utama layar (biasanya kolom cari) yang diberi bayangan.
-- Netral dengan satu aksen: semua warna abu-abu netral, merah HK sebagai aksen merek.
+- Netral dengan satu aksen: semua warna abu-abu netral, merah HK sebagai aksen merek. Merahnya punya tempat tetap — pita di tepi atas layar, baris merek di atas judul, tujuan aktif di navigasi, tab aktif, baris terpilih, dan umpan balik hover — dan tidak dipakai di luar daftar itu. Di mana pun ia muncul sebagai penanda keadaan, selalu ada penanda kedua (teks, tebal huruf, `aria-current`) yang bekerja tanpa warna.
 - Daftar-detail: daftar di kiri, panel detail menempel di kanan (desktop).
 - Putus-putus berarti belum tersedia.
 - Gerak menjelaskan perubahan: animasi hanya untuk muat halaman, pergantian panel, dan umpan balik hover.
@@ -18,9 +18,9 @@
 | garis | #E0E3E8 | #252A31 | border kartu, pemisah |
 | garis-kuat | #C6CBD3 | #3A414B | border input |
 | garis-putus | #BCC2CB | #3E4550 | item belum tersedia |
-| merah | #C41115 | #F0484E | aksen merek, panah hover, caret, pesan error |
+| merah | #C41115 | #F0484E | pita merek, salam pembuka, garis tab aktif, penanda baris terpilih, panah hover, caret, pesan error |
 | merah-ikon | #DD2A30 | #F0484E | aksen di ikon generatif dan logo |
-| merah-latar | #FBE3E3 | rgb(240 72 78 / .24) | sorotan kata hasil cari |
+| merah-latar | #FBE3E3 | rgb(240 72 78 / .24) | sorotan kata hasil cari, tujuan aktif di navigasi utama |
 | sukses | #1E7A4C | #4CC38A | status data, selalu bersama teks atau ikon |
 | peringatan | #8A5A00 | #E0A33B | status data, selalu bersama teks atau ikon |
 
@@ -47,15 +47,16 @@ Satu keluarga huruf: Plus Jakarta Sans (variable, subset latin). Angka di tabel 
 - Skala spasi: 4, 8, 12, 16, 24, 32, 48, 64. Tepi halaman 20px di HP dan 40px mulai 1024px. Lebar maksimum wadah 1240px termasuk tepi.
 - Radius: panel 24, kartu dan kolom cari 16, input form 12. Tombol, label, dan chip berbentuk pil.
 - Border 1px. Dalam satu kolom, tepi kanan kolom cari, tab, dan kartu sejajar.
-- Bar atas: tinggi 64 di HP, 72 di desktop. Kiri: logo 28px dan nama app (16px, 700). Kanan: nama unit (14px, redup, disembunyikan di bawah 640px).
-- Pembuka layar: salam opsional (16px, 500, redup), h1, subjudul (maks 20 kata), lalu kontrol utama. Maksimal 4 elemen teks; informasi tambahan masuk ke subjudul.
+- Pita merek: garis 4px merah selebar layar di tepi paling atas, ditulis sebagai border atas bar (atau bar atas halaman yang tidak punya bar, seperti layar Masuk) supaya tingginya tidak bertambah. Satu per halaman, dan satu-satunya bidang berwarna penuh di sistem ini.
+- Bar atas: tinggi 64 di HP, 72 di desktop, termasuk pita merek. Kiri: logo 28px dan nama app (16px, 700). Kanan: nama unit (14px, redup, disembunyikan di bawah 640px).
+- Pembuka layar: salam opsional (16px, 500, **merah** — ini baris merek halaman), h1, subjudul (maks 20 kata), lalu kontrol utama. Maksimal 4 elemen teks; informasi tambahan masuk ke subjudul.
 - Judul bagian: keterangannya ditumpuk di bawah judul (14px, redup).
 - Desktop (mulai 1024px): grid `minmax(0,1fr) minmax(320px,400px)`, jarak kolom 64, area `"pembuka panel" "konten panel"`, padding atas 32. Panel `position: sticky; top: 24px`, sejajar dengan baris salam.
 - Di bawah 1024px: satu kolom (pembuka lalu konten), jarak antarblok 48, padding atas 24.
 
 ## Komponen
 - Kolom cari (kontrol utama): label di atas (14px, 600). Input tinggi 60, radius 16, border garis-kuat, latar kartu, bayangan kontrol, teks 16px 500. Ikon kaca pembesar 20px di kiri (padding kiri 52), petunjuk `/` di kanan untuk perangkat berkursor, tombol hapus bulat 36px saat terisi, caret merah. Hover: border redup. Fokus: border tinta dan cincin 1px tinta.
-- Tab filter: tombol teks 14px 500 warna redup, tinggi 44, jarak 16, `aria-pressed`. Tab aktif: teks tinta dengan garis bawah 2px tinta di atas garis dasar 1px garis. Satu baris; di HP bisa digeser, dengan tepi memudar (mask-image) saat meluap.
+- Tab filter: tombol teks 14px 500 warna redup, tinggi 44, jarak 16, `aria-pressed`. Tab aktif: teks tinta dengan garis bawah 2px merah di atas garis dasar 1px garis. Satu baris; di HP bisa digeser, dengan tepi memudar (mask-image) saat meluap.
 - Kelompok: judul 14px 650 dan jumlah (500, redup). Jarak judul ke kartu 12, antarkelompok 32.
 - Kartu item: grid kolom `auto 1fr auto`, area `"ikon nama ujung" "ikon desk desk"`, jarak 4 dan 16, padding 16, radius 16, border garis, latar kartu.
   - Isi: ikon generatif 40px; nama 16px 650; ujung kanan setinggi 22 berisi label status dan panah arrow-up-right 18px; deskripsi 14px redup, maksimal 3 baris.
@@ -67,7 +68,8 @@ Satu keluarga huruf: Plus Jakarta Sans (variable, subset latin). Angka di tabel 
 - Tombol utama: pil tinggi 48 (di panel) atau 40, latar tinta, teks kartu 600, hover tinta-hover, saat ditekan scale .99. Satu tombol utama per tampilan.
 - Tombol sekunder: pil, latar kartu, border garis-kuat, teks tinta.
 - Input form: label di atas (14px 600), tinggi 44, radius 12, border garis-kuat. Teks bantuan di bawah (14px redup). Pesan error di bawah (14px merah dengan ikon warning-circle).
-- Tabel: header 12px 600 redup, baris 14px setinggi 48, pemisah 1px antarbaris, angka rata kanan, hover baris berlatar latar. Baris terpilih berlatar latar dengan teks 600, dan isinya tampil di panel detail.
+- Tabel: header 12px 600 redup, baris 14px setinggi 48, pemisah 1px antarbaris, angka rata kanan, hover baris berlatar latar. Baris terpilih berlatar latar dengan teks 600, penanda kiri 2px merah, dan isinya tampil di panel detail. Penanda kirinya dipasang transparan di semua baris supaya pilihan yang berpindah tidak menggeser isi tabel.
+- Navigasi utama (daftar tujuan app): pil tinggi 44, radius penuh, ikon 18px lalu label 14px. Tujuan aktif berlatar merah-latar, ikonnya merah, labelnya 700 tinta, dan membawa `aria-current="page"`; sisanya redup dengan hover berlatar kartu.
 - Keadaan kosong: kotak border putus-putus radius 16, padding 32 dan 24, judul 18px 700, satu kalimat ajakan, satu tombol aksi.
 - Kaki halaman: garis atas 1px, padding 24 0 48, teks 14px redup (tanggal diperbarui, kontak).
 - Ikon UI: Phosphor Icons gaya regular. Ikon item selalu dari GenerativeIcon.

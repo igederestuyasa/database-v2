@@ -13,6 +13,13 @@ import Logo from "./Logo";
  *
  * Bukan navigasi. Di HC Core, delapan tujuan tetap tinggal di sidebar — bar ini
  * hanya memberi tahu "app apa ini, dan saya masuk sebagai siapa".
+ *
+ * PITA MEREK. Tepi paling atasnya garis 4px merah HK selebar layar
+ * (docs/DESIGN.md §Komponen). Ditulis sebagai border-top, bukan elemen
+ * sendiri: `box-sizing: border-box` membuat tinggi bar tetap 64/72 seperti
+ * spesifikasi, dan tidak ada 4px tambahan yang mendorong seluruh halaman ke
+ * bawah. Ini satu-satunya bidang merah penuh di sistem ini — yang membuat
+ * layar terbaca sebagai milik Hutama Karya sebelum satu kata pun dibaca.
  */
 export function BarAtas({
   nama = "HC Core",
@@ -30,6 +37,9 @@ export function BarAtas({
     <header
       className={cn(
         "flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border px-5",
+        // Pita merek. `border-t-brand` menang atas `* { border-color: garis }`
+        // di `globals.css` karena utilities terbit setelah base.
+        "border-t-4 border-t-brand",
         "lg:h-bar-desktop lg:px-10",
         className,
       )}

@@ -135,7 +135,7 @@ export default async function AppLayout({
                 Setiap perubahan tercatat dan bisa dikembalikan lewat{" "}
                 <Link
                   href="/log"
-                  className="underline underline-offset-4 hover:text-foreground"
+                  className="underline underline-offset-4 transition-colors duration-150 ease-standar hover:text-brand"
                 >
                   {NAV_LABELS.log}
                 </Link>

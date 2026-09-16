@@ -101,18 +101,30 @@ export function SidebarNav({
               "text-pendukung transition-colors duration-150 ease-standar",
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
               /*
-                `bg-card`, bukan `bg-muted`. Di HC Panel `muted` DAN
-                `background` sama-sama token latar, jadi pil ber-`bg-muted` di
-                atas kanvas halaman tidak terlihat sama sekali — yang
-                membedakan cuma tebal hurufnya. Kartu di atas kanvas adalah
-                beda permukaan yang memang dipakai sistem ini.
+                TUJUAN AKTIF BERLATAR MEREK. Bukan `bg-muted`: di HC Panel
+                `muted` DAN `background` sama-sama token latar, jadi pil
+                ber-`bg-muted` di atas kanvas halaman tidak terlihat sama
+                sekali — yang membedakan cuma tebal hurufnya. Yang dipakai
+                sekarang `merah-latar`, aksen merek yang sama dengan sorotan
+                hasil cari: satu bidang merah muda di kolom kiri, cukup untuk
+                menandai tempat tanpa menambah permukaan baru.
+
+                Warna bukan satu-satunya penanda — `aria-current="page"` dan
+                huruf tebal tetap ada, jadi tujuan aktif tetap terbaca di mode
+                kontras paksa dan buat yang tidak membedakan warna.
               */
               active
-                ? "border border-border bg-card font-bold text-foreground"
-                : "border border-transparent font-[650] text-muted-foreground hover:bg-card hover:text-foreground",
+                ? "bg-brand-latar font-bold text-foreground"
+                : "font-[650] text-muted-foreground hover:bg-card hover:text-foreground",
             )}
           >
-            <Ikon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+            <Ikon
+              aria-hidden="true"
+              className={cn(
+                "h-[18px] w-[18px] shrink-0",
+                active ? "text-brand" : null,
+              )}
+            />
             {item.label}
           </Link>
         );

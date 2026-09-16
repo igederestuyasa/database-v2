@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 /**
  * Tab filter HC Panel — docs/DESIGN.md §Komponen.
  *
- * Satu baris, tinggi 44, garis bawah 2px tinta di atas garis dasar 1px garis.
+ * Satu baris, tinggi 44, garis bawah 2px merah HK di atas garis dasar 1px
+ * garis — aksen merek yang sama seperti pita di bar atas.
  * Di layar sempit barisnya digeser, dan tepinya memudar HANYA saat memang ada
  * yang tersembunyi di sisi itu — memudarkan tepi yang tidak meluap justru
  * membuat tab pertama terlihat seperti terpotong padahal tidak.
@@ -47,9 +48,15 @@ const KELAS_TAB = [
   "disabled:pointer-events-none disabled:opacity-50",
 ].join(" ");
 
+/**
+ * Garisnya merah, teksnya tetap tinta. Merah di sini cuma menegaskan tab yang
+ * sudah ditandai `aria-current`/`aria-pressed` dan dibedakan warna teksnya dari
+ * yang lain — bukan satu-satunya yang membedakan, jadi tetap terbaca tanpa
+ * warna.
+ */
 function kelasNada(aktif: boolean): string {
   return aktif
-    ? "border-foreground text-foreground"
+    ? "border-brand text-foreground"
     : "border-transparent text-muted-foreground hover:text-foreground";
 }
 
