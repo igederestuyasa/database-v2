@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /**
  * Tata letak daftar-detail — docs/DESIGN.md §Spasi, bentuk, tata letak.
  *
- * Mulai 1024px: dua kolom `minmax(0,1fr) minmax(320px,400px)` berjarak 64,
+ * Mulai `AMBANG_PANEL` (1280 di HC Core, lihat `useDaftarDetail.ts`): dua kolom `minmax(0,1fr) minmax(320px,400px)` berjarak 64,
  * pembuka dan konten di kolom kiri, panel menempel di kanan sejajar baris
  * pembuka. Di bawah itu satu kolom dan PANEL TIDAK DIRENDER SAMA SEKALI —
  * bukan sekadar disembunyikan dengan CSS, supaya isinya tidak ikut terbaca
@@ -33,18 +33,16 @@ export function TataLetakDaftarDetail({
     <div
       className={cn(
         "flex flex-col gap-12 pt-6",
-        "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] lg:gap-x-16 lg:gap-y-8 lg:pt-8",
+        "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] xl:gap-x-16 xl:gap-y-8 xl:pt-8",
         className,
       )}
     >
-      <div className="min-w-0 lg:col-start-1 lg:row-start-1">{pembuka}</div>
+      <div className="min-w-0 xl:col-start-1 xl:row-start-1">{pembuka}</div>
 
-      <div id="konten" className="min-w-0 lg:col-start-1 lg:row-start-2">
-        {children}
-      </div>
+      <div className="min-w-0 xl:col-start-1 xl:row-start-2">{children}</div>
 
       {panelTerlihat && panel ? (
-        <aside className="hidden lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:block">
+        <aside className="hidden xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:block">
           <div className="sticky top-6">{panel}</div>
         </aside>
       ) : null}

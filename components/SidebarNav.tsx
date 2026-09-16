@@ -12,30 +12,63 @@ export type SidebarNavItem = {
   keterangan: string;
 };
 
-export function SidebarNav({ items }: { items: readonly SidebarNavItem[] }) {
+/**
+ * Navigasi utama HC Core, dalam dua bentuk dari satu daftar.
+ *
+ * `tegak` untuk sidebar mulai 1024px, `mendatar` untuk strip yang bisa digeser
+ * di bawah bar atas pada layar sempit. Keduanya di sini supaya kedelapan tujuan
+ * itu tidak pernah punya dua markup yang bisa berbeda diam-diam.
+ *
+ * Bukan `FilterTabs`: ini navigasi, bukan filter, jadi pembungkusnya `<nav>`
+ * dan penanda halaman aktifnya `aria-current="page"`.
+ */
+export function SidebarNav({
+  items,
+  arah = "tegak",
+}: {
+  items: readonly SidebarNavItem[];
+  arah?: "tegak" | "mendatar";
+}) {
   const pathname = usePathname();
+  const mendatar = arah === "mendatar";
 
   return (
-    <nav className="flex flex-col gap-1" aria-label="Navigasi utama">
+    <nav
+      aria-label="Navigasi utama"
+      className={cn(
+        mendatar
+          ? "flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          : "flex flex-col gap-1",
+      )}
+    >
       {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
+
         return (
           <Link
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-md px-3 py-2 text-sm transition-colors",
+              "transition-colors duration-150 ease-standar",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
+              mendatar
+                ? "flex h-11 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-pendukung font-medium"
+                : "rounded-kartu px-3 py-2",
               active
-                ? "bg-accent font-medium text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
-            <span className="block">{item.label}</span>
-            <span className="block text-xs text-muted-foreground/80">
-              {item.keterangan}
+            <span className={cn("block", mendatar ? null : "text-pendukung font-semibold")}>
+              {item.label}
             </span>
+            {mendatar ? null : (
+              <span className="mt-0.5 block text-mikro font-normal text-muted-foreground">
+                {item.keterangan}
+              </span>
+            )}
           </Link>
         );
       })}

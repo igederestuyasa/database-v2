@@ -23,7 +23,24 @@ import { indeksBerikutnya, type KotakItem } from "./navigasiDaftar";
  * utuh.
  */
 const TUNDA_SOROT = 120;
-const PANEL_TERLIHAT = "(min-width: 1024px)";
+
+/**
+ * Lebar layar minimum yang menampilkan panel detail.
+ *
+ * docs/DESIGN.md menulis 1024px, dan itu benar untuk layar TANPA navigasi di
+ * kiri — lebar yang tersisa untuk daftar memang 1024 dikurangi panel. HC Core
+ * punya sidebar selebar 256: di 1024px, daftar hanya kebagian ±264px setelah
+ * sidebar, tepi halaman, jarak kolom, dan panel — terlalu sempit untuk tabel
+ * berkolom banyak yang jadi alasan halaman-halaman ini ada.
+ *
+ * 1280 adalah angka yang sama dengan maksud spesifikasi: 1280 dikurangi
+ * sidebar 256 menyisakan tepat 1024 untuk kolom daftar dan panel.
+ *
+ * Harus sama dengan `xl:` di `TataLetakDaftarDetail` — keduanya menyebut
+ * ambang yang sama dan tidak boleh berbeda.
+ */
+export const AMBANG_PANEL = 1280;
+const PANEL_TERLIHAT = `(min-width: ${AMBANG_PANEL}px)`;
 
 export type OpsiDaftarDetail<T> = {
   /** Item yang sedang terlihat, sesudah pencarian dan filter. */

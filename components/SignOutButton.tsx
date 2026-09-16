@@ -14,24 +14,26 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import { toast } from "@/components/ui/sonner";
 import { signOut } from "@/lib/actions/auth";
 
 export function SignOutButton({
   className,
-  variant = "outline",
+  nada = "sekunder",
+  ukuran = "biasa",
 }: {
   className?: string;
-  variant?: "default" | "outline" | "ghost" | "secondary";
+  nada?: "utama" | "sekunder" | "halus";
+  ukuran?: "biasa" | "ringkas" | "panel";
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
   return (
-    <Button
-      type="button"
-      variant={variant}
+    <Tombol
+      nada={nada}
+      ukuran={ukuran}
       className={className}
       disabled={pending}
       onClick={() => {
@@ -47,7 +49,7 @@ export function SignOutButton({
       }}
     >
       {pending ? "Memproses…" : "Keluar"}
-    </Button>
+    </Tombol>
   );
 }
 
