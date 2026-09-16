@@ -76,6 +76,39 @@ jobs:
 
       - run: npm run db:local
 
+      # JALUR NAIK — migration ini dipasang di atas skema yang SUDAH ADA.
+      #
+      # `db:local` di atas menghapus databasenya lebih dulu, jadi ia hanya
+      # pernah menguji pemasangan ke database KOSONG. Padahal satu-satunya
+      # pihak yang benar-benar memasang migration ini adalah orang yang
+      # menempelkannya ke SQL Editor Supabase — selalu ke database berisi.
+      # Selisih itu pernah lolos sekali: `create or replace view` hanya boleh
+      # MENAMBAH kolom di ujung, jadi kolom yang disisipkan di tengah view
+      # ditolak 42P16 di Supabase sementara CI tetap hijau.
+      #
+      # Caranya: pasang migration versi `main` dulu, lalu jalankan
+      # `db-local.sh --keep` (pakai database yang sama, tanpa menghapusnya)
+      # supaya migration versi PR ini dipasang DI ATASNYA, lalu diverifikasi.
+      # Pada push ke main keduanya sama, dan langkah ini berubah menjadi uji
+      # idempotensi — memasang migration yang sama dua kali harus tetap hijau.
+      - name: Jalur naik — skema main dulu, migration PR ini di atasnya
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          base="$RUNNER_TEMP/migrasi-main"
+          mkdir -p "$base"
+          for f in supabase/migrations/*.sql; do
+            git show "origin/main:$f" > "$base/$(basename "$f")"
+          done
+          chmod -R a+rX "$RUNNER_TEMP"
+
+          psu() { sudo -u postgres psql -v ON_ERROR_STOP=1 -X -q "$@"; }
+          psu -d postgres -c 'drop database if exists hc_core_naik with (force);'
+          psu -d postgres -c 'create database hc_core_naik;'
+          psu -d hc_core_naik -f db/local/00-shim.sql
+          for f in "$base"/*.sql; do psu -d hc_core_naik -f "$f"; done
+
+          HC_LOCAL_DB=hc_core_naik bash scripts/db-local.sh --keep
+
       # Tiga test ber-database: lib/derived/sql.test.ts (lib/derived vs
       # v_employees), tests/seedFromPayload.sql.test.ts (workbook dummy →
       # seed_from_payload → satu Batch seed), dan

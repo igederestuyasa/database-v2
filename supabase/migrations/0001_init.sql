@@ -909,6 +909,33 @@ create trigger on_auth_user_created after insert on auth.users
 -- 8. Views — all security_invoker so the base-table RLS still bites
 -- ----------------------------------------------------------------------------
 
+-- KETIGA VIEW DI BAWAH DIBUANG DULU, BUKAN LANGSUNG `create or replace`.
+--
+-- `create or replace view` di PostgreSQL hanya boleh MENAMBAH kolom di UJUNG.
+-- Menyisipkan kolom di tengah — atau apa pun yang menggeser posisi kolom yang
+-- sudah ada — ditolak dengan:
+--
+--   42P16: cannot change name of view column "status" to "email_kantor"
+--
+-- Pesan itu menyesatkan: tidak ada yang sedang mengganti nama apa pun,
+-- Postgres cuma membandingkan kolom ke-5 lama dengan kolom ke-5 baru.
+--
+-- Kenapa ini baru ketahuan di Supabase, bukan di sini: `scripts/db-local.sh`
+-- MENGHAPUS databasenya tiap kali jalan, jadi migration selalu dipasang ke
+-- database KOSONG — di sana `create or replace view` sama saja dengan
+-- `create view`, dan batasan urutan kolom tidak pernah tersentuh. Yang
+-- menempel migration ke database berisi hanya satu pihak: orang yang menempel
+-- ke SQL Editor. Job `skema` di CI sekarang menguji jalur naik itu juga.
+--
+-- Dibuang berurutan dari yang paling bergantung, TANPA `cascade`: kalau suatu
+-- saat ada objek lain yang menumpang di atas view ini, drop-nya harus gagal
+-- terbaca, bukan diam-diam ikut membuangnya. Tidak ada data yang hilang (view
+-- tidak menyimpan apa pun) dan tidak ada hak akses yang hilang: seluruh
+-- `grant select` atas ketiganya ditulis ulang di §11 berkas yang sama.
+drop view if exists public.v_employees_api;
+drop view if exists public.v_employees_private;
+drop view if exists public.v_employees;
+
 -- 8.1 v_employees — Karyawan + rantai Unit Organisasi + label Lookup + turunan
 create or replace view public.v_employees
 with (security_invoker = true) as
