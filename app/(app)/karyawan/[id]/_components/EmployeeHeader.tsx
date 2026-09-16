@@ -1,26 +1,10 @@
-/**
- * The top of the Karyawan detail page: who this is, at a glance.
- *
- * Two things it must get right:
- *
- *   * **A nonaktif Karyawan still renders, and says so.** Nothing is ever
- *     deleted in HC Core (PRD §6 Non-Goals, CONTEXT.md "Status Karyawan"), so
- *     this page has to work for someone who left in 2019. The status is a
- *     badge next to the name and a note under it with the Tanggal Keluar —
- *     including when that date was never filled in, which is worth saying out
- *     loud rather than hiding.
- *   * **"Ubah" only for an admin.** A viewer reads (ARCHITECTURE.md §5). The
- *     Server Action behind the form checks the role again, and so does RLS;
- *     this only decides whether the link is drawn.
- */
 import Link from "next/link";
 
 import { formatTanggal } from "@/components/revisions/revisionDiff";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import StatusLabel from "@/components/hc/StatusLabel";
+import Tombol from "@/components/hc/Tombol";
 import { TERMS, UI } from "@/lib/i18n/terms";
 import type { VEmployee } from "@/lib/types/db";
-import { cn } from "@/lib/utils";
 
 import { labelStatus, rantaiUnit } from "./employeeDetailFields";
 
@@ -29,7 +13,6 @@ export type EmployeeHeaderProps = {
   isAdmin: boolean;
 };
 
-/** Personnel Number · NIP · Jabatan — the one-line identity under the name. */
 function baris(employee: VEmployee): string {
   return [
     `${TERMS.personnelNumber} ${employee.personnel_number}`,
@@ -40,6 +23,13 @@ function baris(employee: VEmployee): string {
     .join(" · ");
 }
 
+/**
+ * Pembuka halaman detail Karyawan.
+ *
+ * Nama orangnya adalah judul halaman, jadi ia memakai skala h1 HC Panel — yang
+ * dicari orang saat membuka halaman ini memang "ini datanya siapa". Satu tombol
+ * utama per tampilan: "Ubah data Karyawan", dan hanya untuk admin.
+ */
 export default function EmployeeHeader({
   employee,
   isAdmin,
@@ -50,41 +40,42 @@ export default function EmployeeHeader({
     : null;
 
   return (
-    <header className="space-y-4">
+    <header className="space-y-4 pt-6">
       <Link
         href="/karyawan"
-        className="inline-block text-sm text-muted-foreground underline-offset-4 hover:underline"
+        className="inline-block text-pendukung text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
         ← Kembali ke daftar {TERMS.karyawan}
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-balance text-judul-halaman text-foreground">
               {employee.full_name}
             </h1>
-            <Badge variant={nonaktif ? "secondary" : "default"}>
+            <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
               {labelStatus(employee.status)}
-            </Badge>
+            </StatusLabel>
           </div>
-          <p className="text-sm text-muted-foreground">{baris(employee)}</p>
-          <p className="text-sm text-muted-foreground">{rantaiUnit(employee)}</p>
+          <p className="text-pendukung text-muted-foreground">{baris(employee)}</p>
+          <p className="text-pendukung text-muted-foreground">
+            {rantaiUnit(employee)}
+          </p>
         </div>
 
         {isAdmin ? (
-          <Link
-            href={`/karyawan/${employee.id}/edit`}
-            className={cn(buttonVariants(), "shrink-0")}
-          >
-            {UI.ubah} data {TERMS.karyawan}
-          </Link>
+          <Tombol asChild className="shrink-0">
+            <Link href={`/karyawan/${employee.id}/edit`}>
+              {UI.ubah} data {TERMS.karyawan}
+            </Link>
+          </Tombol>
         ) : null}
       </div>
 
       {nonaktif ? (
-        <div className="rounded-md border bg-muted/40 p-4 text-sm">
-          <p className="font-medium">
+        <div className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
+          <p className="text-label text-foreground">
             {TERMS.karyawan} ini berstatus {labelStatus(employee.status)}.
           </p>
           <p className="mt-1 text-muted-foreground">

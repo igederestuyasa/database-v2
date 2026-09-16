@@ -24,7 +24,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -141,15 +141,15 @@ export function RevertRevisionButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <Button
+      <Tombol
         type="button"
-        variant="outline"
-        size="sm"
+        nada="sekunder"
+        ukuran="ringkas"
         onClick={() => setOpen(true)}
         aria-label={`${UI.kembalikan} Revisi #${revision.id}`}
       >
         {UI.kembalikan}
-      </Button>
+      </Tombol>
 
       <AlertDialogContent>
         <AlertDialogHeader>

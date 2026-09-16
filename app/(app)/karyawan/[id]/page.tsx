@@ -116,7 +116,7 @@ export default async function Page({
             />
           ))}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(karyawan.created_at)} · Terakhir diubah{" "}
             {formatWaktu(karyawan.updated_at)}. Setiap perubahan tercatat di
             Riwayat Revisi di samping.
@@ -138,8 +138,10 @@ export default async function Page({
               }
             />
           ) : (
-            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-              <p className="font-medium">{TERMS.dataPribadiSensitif}</p>
+            <div className="hc-permukaan rounded-kartu border border-dashed border-garis-putus p-4 text-pendukung">
+              <p className="text-label text-foreground">
+                {TERMS.dataPribadiSensitif}
+              </p>
               <p className="mt-1 text-muted-foreground">
                 Agama, tanggal &amp; tempat lahir, dan status pernikahan hanya
                 bisa dibaca admin. Halaman ini menampilkan selebihnya secara
