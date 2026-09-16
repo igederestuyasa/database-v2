@@ -82,6 +82,15 @@ export type DataTableProps<TData, TValue> = {
    */
   searchable?: boolean;
   searchPlaceholder?: string;
+  /**
+   * Kata kunci yang dikendalikan dari luar.
+   *
+   * Di HC Panel kolom cari adalah kontrol utama layar dan tinggal di pembuka,
+   * bukan di dalam tabel. Saat prop ini diisi, kotak cari bawaan tabel tidak
+   * dirender sama sekali dan penyaringannya memakai nilai ini — jadi tidak
+   * pernah ada dua kotak cari yang menyaring daftar yang sama.
+   */
+  cari?: string;
   /** Filters and buttons rendered on the same row as the search box. */
   toolbar?: React.ReactNode;
   /** Shown instead of rows when there are none. Default "Belum ada data.". */
@@ -123,6 +132,7 @@ export function DataTable<TData, TValue>({
   data,
   searchable,
   searchPlaceholder,
+  cari,
   toolbar,
   emptyMessage,
   initialSorting,
@@ -137,11 +147,15 @@ export function DataTable<TData, TValue>({
   className,
 }: DataTableProps<TData, TValue>) {
   const serverMode = pagination !== undefined;
+  const cariDariLuar = cari !== undefined;
   // Never in server mode, whatever the caller asked for — see the prop doc.
-  const showSearch = serverMode ? false : (searchable ?? true);
+  // Juga tidak saat kata kuncinya datang dari kolom cari di pembuka layar.
+  const showSearch = serverMode || cariDariLuar ? false : (searchable ?? true);
 
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
-  const [globalFilter, setGlobalFilter] = React.useState("");
+  const [filterSendiri, setFilterSendiri] = React.useState("");
+  const globalFilter = cariDariLuar ? cari : filterSendiri;
+  const setGlobalFilter = cariDariLuar ? () => {} : setFilterSendiri;
 
   const table = useReactTable({
     data,

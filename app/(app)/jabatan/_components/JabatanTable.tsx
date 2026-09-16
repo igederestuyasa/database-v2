@@ -19,6 +19,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import DetailPanel from "@/components/hc/DetailPanel";
+import FilterTabs from "@/components/hc/FilterTabs";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import SearchField from "@/components/hc/SearchField";
+import StatusLabel from "@/components/hc/StatusLabel";
+import TataLetakDaftarDetail from "@/components/hc/TataLetakDaftarDetail";
+import Tombol from "@/components/hc/Tombol";
+import useDaftarDetail from "@/components/hc/useDaftarDetail";
 import JabatanForm from "@/components/forms/JabatanForm";
 import { DataTable } from "@/components/shared/DataTable";
 import { toJabatanOptions } from "@/components/shared/EntityPicker";
@@ -33,8 +41,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -42,16 +48,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { countJabatanHolders, setJabatanStatus } from "@/lib/actions/jabatan";
-import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
+import { NAV_LABELS, STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 import type { Jabatan } from "@/lib/types/db";
 
 import {
@@ -74,9 +73,16 @@ export type JabatanTableProps = {
   status: StatusFilter;
   /** Viewer hanya membaca; tombol tulisan disembunyikan (ARCHITECTURE.md §5). */
   isAdmin: boolean;
+  /** Peringatan dari halaman — daftar yang terbaca tidak lengkap. */
+  peringatan?: React.ReactNode;
 };
 
-export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
+export function JabatanTable({
+  rows,
+  status,
+  isAdmin,
+  peringatan,
+}: JabatanTableProps) {
   const router = useRouter();
   // Dua transisi terpisah: mengganti filter tidak boleh membuat tombol simpan
   // berbunyi "Menyimpan…", dan sebaliknya.
@@ -95,10 +101,35 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
     return map;
   }, [rows]);
 
-  const barisTampil = React.useMemo(
-    () => rows.filter((row) => status === "semua" || row.status === status),
-    [rows, status],
-  );
+  const [cari, setCari] = React.useState("");
+
+  const barisTampil = React.useMemo(() => {
+    const kunci = cari.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (status !== "semua" && row.status !== status) return false;
+      if (kunci === "") return true;
+      return (
+        row.nama.toLowerCase().includes(kunci) ||
+        row.kode.toLowerCase().includes(kunci)
+      );
+    });
+  }, [rows, status, cari]);
+
+  /**
+   * Pola daftar-detail. Penyaringnya di browser, jadi hasil teratas sudah
+   * diketahui saat Enter ditekan dan Enter memang membuka Jabatan teratas.
+   */
+  const dd = useDaftarDetail({
+    items: barisTampil,
+    idDari: (row) => row.id,
+    kunciPencarian: cari,
+  });
+  const terpilih = dd.terpilih;
+
+  const jumlahStatus = React.useMemo(() => {
+    const aktif = rows.filter((row) => row.status === "aktif").length;
+    return { aktif, nonaktif: rows.length - aktif, semua: rows.length };
+  }, [rows]);
 
   /**
    * Hitung pemegang saat dialog dibuka.
@@ -199,7 +230,7 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
         accessorKey: "kode",
         header: "Kode",
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.kode}</span>
+          <span className="tabular-nums">{row.original.kode}</span>
         ),
       },
       {
@@ -212,6 +243,7 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
             // menjalankan dua navigasi ke alamat yang sama.
             onClick={(event) => event.stopPropagation()}
             className="font-medium underline-offset-2 hover:underline"
+            tabIndex={-1}
           >
             {row.original.nama}
           </Link>
@@ -227,11 +259,11 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
             : undefined;
           return (
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={statusBaris === "aktif" ? "secondary" : "outline"}>
+              <StatusLabel nada={statusBaris === "aktif" ? "sukses" : "netral"}>
                 {STATUS_LABELS[statusBaris === "aktif" ? "aktif" : "nonaktif"]}
-              </Badge>
+              </StatusLabel>
               {merged_into_id ? (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-mikro font-normal text-muted-foreground">
                   Digabung ke {tujuan ? `"${tujuan}"` : `${TERMS.jabatan} lain`}
                 </span>
               ) : null}
@@ -261,45 +293,45 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
               // ini juga ikut membukanya di belakang dialog yang baru terbuka.
               onClick={(event) => event.stopPropagation()}
             >
-              <Button
+              <Tombol
                 type="button"
-                variant="ghost"
-                size="sm"
+                nada="halus"
+                ukuran="ringkas"
                 onClick={() => bukaUbah(jabatan)}
               >
                 {UI.ubah}
                 <span className="sr-only"> {jabatan.nama}</span>
-              </Button>
-              <Button
+              </Tombol>
+              <Tombol
                 type="button"
-                variant="ghost"
-                size="sm"
+                nada="halus"
+                ukuran="ringkas"
                 onClick={() => bukaMerge(jabatan)}
               >
                 Gabungkan
                 <span className="sr-only"> {jabatan.nama} ke Jabatan lain</span>
-              </Button>
+              </Tombol>
               {jabatan.status === "aktif" ? (
-                <Button
+                <Tombol
                   type="button"
-                  variant="ghost"
-                  size="sm"
+                  nada="halus"
+                  ukuran="ringkas"
                   onClick={() => bukaNonaktifkan(jabatan)}
                 >
                   {UI.nonaktifkan}
                   <span className="sr-only"> {jabatan.nama}</span>
-                </Button>
+                </Tombol>
               ) : (
-                <Button
+                <Tombol
                   type="button"
-                  variant="ghost"
-                  size="sm"
+                  nada="halus"
+                  ukuran="ringkas"
                   disabled={sedangMenyimpan}
                   onClick={() => ubahStatus(jabatan, "aktif")}
                 >
                   {UI.aktifkan}
                   <span className="sr-only"> {jabatan.nama}</span>
-                </Button>
+                </Tombol>
               )}
             </div>
           );
@@ -342,51 +374,124 @@ export function JabatanTable({ rows, status, isAdmin }: JabatanTableProps) {
 
   return (
     <>
-      <DataTable
-        columns={columns}
-        data={barisTampil}
-        getRowId={(row) => row.id}
-        onRowClick={bukaDetail}
-        initialSorting={[{ id: "nama", desc: false }]}
-        // Selama pindah filter, barisnya masih baris filter lama; katakan apa
-        // adanya daripada membiarkannya terlihat seperti hasil yang baru.
-        isLoading={sedangPindahFilter}
-        searchPlaceholder={`${UI.cari} kode atau nama ${TERMS.jabatan}…`}
-        emptyMessage={
-          status === "nonaktif"
-            ? `Tidak ada ${TERMS.jabatan} nonaktif.`
-            : `Belum ada ${TERMS.jabatan}.`
+      <TataLetakDaftarDetail
+        panelTerlihat={dd.panelTerlihat}
+        pembuka={
+          <PembukaLayar
+            salam="Data Referensi"
+            judul={NAV_LABELS.jabatan}
+            subjudul={`Nama pekerjaan yang bisa dipegang banyak ${TERMS.karyawan} sekaligus. ${TERMS.jabatan} bukan ${TERMS.formasi}: tidak ada kursi atau kuota di sini.`}
+          >
+            <SearchField
+              id="cari-jabatan"
+              label={`${UI.cari} ${TERMS.jabatan}`}
+              nilai={cari}
+              onNilaiChange={setCari}
+              placeholder={`Kode atau nama ${TERMS.jabatan}…`}
+              onSubmit={() => {
+                if (dd.teratas) bukaDetail(dd.teratas);
+              }}
+              onPanahBawah={dd.fokusItemPertama}
+            />
+          </PembukaLayar>
         }
-        toolbar={
-          <>
-            <Select value={status} onValueChange={gantiFilter}>
-              <SelectTrigger
-                className="h-9 w-[170px]"
-                aria-label={`${UI.filter} status`}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_FILTERS.map((nilai) => (
-                  <SelectItem key={nilai} value={nilai}>
-                    {STATUS_FILTER_LABELS[nilai]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        panel={
+          <DetailPanel
+            entitas={TERMS.jabatan}
+            nama={terpilih?.nama ?? null}
+            kategori={TERMS.jabatan}
+            status={
+              terpilih ? (
+                <StatusLabel
+                  nada={terpilih.status === "aktif" ? "sukses" : "netral"}
+                >
+                  {STATUS_LABELS[terpilih.status === "aktif" ? "aktif" : "nonaktif"]}
+                </StatusLabel>
+              ) : null
+            }
+            deskripsi={
+              terpilih?.merged_into_id
+                ? `Digabung ke "${namaPerId.get(terpilih.merged_into_id) ?? `${TERMS.jabatan} lain`}".`
+                : null
+            }
+            baris={
+              terpilih
+                ? [
+                    { label: "Kode", nilai: terpilih.kode },
+                    {
+                      label: "Status",
+                      nilai:
+                        STATUS_LABELS[terpilih.status === "aktif" ? "aktif" : "nonaktif"],
+                    },
+                  ]
+                : undefined
+            }
+            pesanKosong={`Tidak ada ${TERMS.jabatan} yang cocok. Ubah kata kunci, atau ganti filter status.`}
+            aksi={
+              terpilih ? (
+                <Tombol ukuran="panel" onClick={() => bukaDetail(terpilih)}>
+                  Buka detail {TERMS.jabatan}
+                </Tombol>
+              ) : null
+            }
+          />
+        }
+      >
+        <div className="space-y-6">
+          {peringatan}
 
-            {isAdmin ? (
-              <Button type="button" className="ml-auto" onClick={bukaTambah}>
-                {UI.tambah} {TERMS.jabatan}
-              </Button>
-            ) : (
-              <span className="ml-auto text-xs text-muted-foreground">
-                {UI.hanyaAdmin}
-              </span>
-            )}
-          </>
-        }
-      />
+          <FilterTabs
+            label={`${UI.filter} status ${TERMS.jabatan}`}
+            aktif={status}
+            items={STATUS_FILTERS.map((nilai) => ({
+              nilai,
+              label: STATUS_FILTER_LABELS[nilai],
+              jumlah: jumlahStatus[nilai],
+            }))}
+            onPilih={gantiFilter}
+          />
+
+          <DataTable
+            columns={columns}
+            data={barisTampil}
+            getRowId={(row) => row.id}
+            onRowClick={bukaDetail}
+            initialSorting={[{ id: "nama", desc: false }]}
+            // Selama pindah filter, barisnya masih baris filter lama; katakan
+            // apa adanya daripada membiarkannya terlihat seperti hasil baru.
+            isLoading={sedangPindahFilter}
+            cari={cari}
+            emptyMessage={
+              cari.trim() !== ""
+                ? `Tidak ada ${TERMS.jabatan} yang cocok dengan pencarian ini.`
+                : status === "nonaktif"
+                  ? `Tidak ada ${TERMS.jabatan} nonaktif.`
+                  : `Belum ada ${TERMS.jabatan}.`
+            }
+            propsDaftar={dd.propsDaftar()}
+            propsBaris={(row) => ({
+              ...dd.propsItem(row),
+              tabIndex: 0,
+              onKeyDown: (event: React.KeyboardEvent) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                bukaDetail(row);
+              },
+            })}
+            toolbar={
+              isAdmin ? (
+                <Tombol className="ml-auto" onClick={bukaTambah}>
+                  {UI.tambah} {TERMS.jabatan}
+                </Tombol>
+              ) : (
+                <span className="ml-auto text-mikro font-normal text-muted-foreground">
+                  {UI.hanyaAdmin}
+                </span>
+              )
+            }
+          />
+        </div>
+      </TataLetakDaftarDetail>
 
       {/* Tambah / Ubah */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
