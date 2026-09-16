@@ -27,6 +27,7 @@ export type Database = {
           personnel_number: string;
           nip: string | null;
           full_name: string;
+          email_kantor: string | null;
           org_unit_id: string | null;
           jabatan_id: string | null;
           gender_id: string | null;
@@ -61,6 +62,7 @@ export type Database = {
           personnel_number: string;
           nip?: string | null;
           full_name: string;
+          email_kantor?: string | null;
           org_unit_id?: string | null;
           jabatan_id?: string | null;
           gender_id?: string | null;
@@ -95,6 +97,7 @@ export type Database = {
           personnel_number?: string;
           nip?: string | null;
           full_name?: string;
+          email_kantor?: string | null;
           org_unit_id?: string | null;
           jabatan_id?: string | null;
           gender_id?: string | null;
@@ -389,6 +392,7 @@ export type Database = {
           personnel_number: string;
           nip: string | null;
           full_name: string;
+          email_kantor: string | null;
           status: string;
           org_unit_id: string | null;
           org_unit_kode: string | null;
@@ -465,6 +469,7 @@ export type Database = {
           personnel_number: string;
           nip: string | null;
           full_name: string;
+          email_kantor: string | null;
           status: string;
           org_unit_id: string | null;
           org_unit_kode: string | null;
@@ -546,6 +551,7 @@ export type Database = {
           personnel_number: string;
           nip: string | null;
           full_name: string;
+          email_kantor: string | null;
           status: string;
           tanggal_keluar: string | null;
           org_unit_id: string | null;

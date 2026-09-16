@@ -95,7 +95,7 @@ export type EmployeeListParams = PageParams & {
 const SELECT_VIEW = "*";
 
 const SELECT_EMPLOYEE_ROW =
-  "id, personnel_number, nip, full_name, org_unit_id, jabatan_id, " +
+  "id, personnel_number, nip, full_name, email_kantor, org_unit_id, jabatan_id, " +
   "gender_id, work_contract_id, person_grade_id, job_grade_id, legal_entity_id, " +
   "klasifikasi_rekrutmen_id, teknik_non_teknik_id, bod_range_id, band_jabatan_id, " +
   "kategori_penempatan_id, kategori_fungsi_id, keterangan_pj_plt, " +

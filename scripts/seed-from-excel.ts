@@ -327,6 +327,7 @@ const EMPLOYEE_COLUMNS = [
   "personnel_number",
   "nip",
   "full_name",
+  "email_kantor",
   "status",
   "org_unit_id",
   "jabatan_id",
@@ -449,6 +450,10 @@ export async function writeSeed(
     employee.personnel_number,
     employee.nip,
     employee.full_name,
+    // Huruf kecil, sama seperti `import_from_payload()` dan form Ubah: index
+    // uniknya `lower(email_kantor)`, jadi dua ejaan yang berbeda untuk satu
+    // kotak surat tidak boleh sampai tersimpan sebagai dua nilai.
+    employee.text.email_kantor?.trim().toLowerCase() || null,
     employee.status,
     employee.orgUnitKey === null ? null : (orgIds.get(employee.orgUnitKey) ?? null),
     employee.jabatanKey === null ? null : (jabatanIds.get(employee.jabatanKey) ?? null),

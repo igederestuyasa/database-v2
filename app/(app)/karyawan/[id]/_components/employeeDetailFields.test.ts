@@ -13,11 +13,9 @@
  *   * Data Pribadi Sensitif renders the same for "belum diisi" as for a viewer
  *     whose row RLS removed — the caller decides whether to draw it at all.
  *
- * NOT COLLECTED BY `npm test` YET. `vitest.config.ts` includes `lib/**`,
- * `components/**`, `scripts/**` and `tests/**`, not `app/**`, and the config is
- * frozen while five units are in flight. Run it explicitly:
- *
- *     npx vitest run --include 'app/**''/*.test.ts'
+ * COLLECTED BY `npm test`. `vitest.config.ts` gathers `*.test.ts` from `app/**`
+ * as well as `lib/**`, `components/**`, `scripts/**` and `tests/**`, so a test
+ * written next to its `page.tsx` runs with the rest (CLAUDE.md).
  *
  * DUMMY DATA ONLY — invented names and Personnel Numbers (CLAUDE.md).
  */
@@ -130,6 +128,21 @@ const UUID_RE =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 describe("buildEmployeeSections", () => {
+  it("menampilkan Email Kantor, dan menyebut bahwa ia keluar lewat API", () => {
+    const fields = semuaField(karyawan({ email_kantor: "budi.contoh@contoh.test" }));
+    expect(nilai(fields, "Email Kantor")).toBe("budi.contoh@contoh.test");
+
+    // Penandanya bukan hiasan: satu-satunya email lain di aplikasi ini adalah
+    // akun login (`profiles.email`), dan halaman yang tidak mengatakan yang
+    // mana ini mengundang tepat kebingungan itu.
+    const email = fields.find((field) => field.label === "Email Kantor");
+    expect(email?.info).toMatch(/API/);
+  });
+
+  it("Email Kantor yang kosong jadi tanda kosong, bukan string kosong", () => {
+    expect(nilai(semuaField(karyawan()), "Email Kantor")).toBe(KOSONG);
+  });
+
   it("menampilkan nama Data Referensi, bukan uuid", () => {
     const fields = semuaField(
       karyawan({

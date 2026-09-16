@@ -287,6 +287,17 @@ create table if not exists public.employees (
   nip                       text unique,
   full_name                 text not null,
 
+  -- Email KANTOR, dan hanya itu. Bukan `profiles.email`: yang itu akun login
+  -- HC Core, dimiliki segelintir staf HC, dicerminkan dari `auth.users`. Yang
+  -- ini alamat kerja orangnya, dan justru inilah kunci yang dipakai aplikasi
+  -- HC lain untuk mencocokkan seseorang dengan akun Microsoft/Entra-nya —
+  -- `personnel_number` cuma dikenal di dunia HC.
+  --
+  -- Email PRIBADI (gmail dan sejenisnya) TIDAK boleh masuk sini: itu Data
+  -- Pribadi Sensitif, tempatnya `employee_private`, dan kolom ini terbuka
+  -- lewat /api/v1. Lihat catatan di `employee_private` (§3.7).
+  email_kantor              text,
+
   org_unit_id               uuid references public.org_units (id),
   jabatan_id                uuid references public.jabatan (id),
 
@@ -330,11 +341,30 @@ create table if not exists public.employees (
 comment on table public.employees is
   'Karyawan: satu orang pegawai HK. Business key = personnel_number. Tidak pernah dihapus; keluar = status ''nonaktif'' + tanggal_keluar.';
 
+-- `create table if not exists` di atas TIDAK menambah kolom pada database yang
+-- tabelnya sudah ada, jadi kolom yang lahir belakangan dipasang ulang di sini.
+-- Idempoten: aman dijalankan berapa kali pun.
+alter table public.employees add column if not exists email_kantor text;
+
+comment on column public.employees.email_kantor is
+  'Email KANTOR Karyawan. Bukan akun login (itu profiles.email), bukan email pribadi (itu Data Pribadi Sensitif dan tidak disimpan di sini). Keluar lewat /api/v1 sebagai kunci pencocokan dengan sistem lain.';
+
 create index if not exists employees_status_idx on public.employees (status);
 create index if not exists employees_org_unit_idx on public.employees (org_unit_id);
 create index if not exists employees_jabatan_idx on public.employees (jabatan_id);
 create index if not exists employees_full_name_lower_idx on public.employees (lower(full_name));
 create index if not exists employees_updated_at_idx on public.employees (updated_at desc);
+
+-- Satu alamat email = satu orang, dibandingkan tanpa peduli huruf besar-kecil
+-- ("Budi.S@…" dan "budi.s@…" adalah kotak surat yang sama). Bukan sekadar
+-- kerapian: kolom ini ada supaya aplikasi lain bisa mencocokkan orang lewat
+-- email, dan dua Karyawan dengan email sama membuat pencocokan itu menjawab
+-- dua orang untuk satu pertanyaan.
+--
+-- NULL tidak ikut terkena: Postgres membiarkan berapa pun baris ber-NULL di
+-- index unik, jadi 1.475 Karyawan yang emailnya belum diisi tidak bertabrakan.
+create unique index if not exists employees_email_kantor_lower_key
+  on public.employees (lower(email_kantor));
 
 do $trgm$
 begin
@@ -920,6 +950,7 @@ select
   e.personnel_number,
   e.nip,
   e.full_name,
+  e.email_kantor,
   e.status,
 
   e.org_unit_id,
@@ -1024,6 +1055,7 @@ select
   personnel_number,
   nip,
   full_name,
+  email_kantor,
   status,
   tanggal_keluar,
 

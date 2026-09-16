@@ -22,6 +22,7 @@ function employee(
 ): Employee {
   return {
     nip: null,
+    email_kantor: null,
     org_unit_id: null,
     jabatan_id: null,
     gender_id: null,
@@ -60,6 +61,7 @@ export const EMPLOYEES: Employee[] = [
     personnel_number: "TEST-0001",
     nip: "TESTNIP0001",
     full_name: "Budi Contoh",
+    email_kantor: "budi.contoh@contoh.test",
     org_unit_id: ORG_UNIT_ID.subBagian,
     jabatan_id: JABATAN_ID.manager,
     gender_id: LOOKUP_ID.genderPria,

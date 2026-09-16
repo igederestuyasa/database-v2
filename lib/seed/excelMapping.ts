@@ -112,6 +112,7 @@ export type EmployeeTextField =
   | "personnel_number"
   | "nip"
   | "full_name"
+  | "email_kantor"
   | "keterangan_pj_plt"
   | "keterangan_rangkap_1"
   | "keterangan_rangkap_2"
@@ -166,6 +167,14 @@ export const HEADER_TARGETS: ReadonlyArray<
   [
     ["nama", "nama karyawan", "nama lengkap", "full name", "employee name"],
     { kind: "text", field: "full_name" },
+  ],
+  // Email KANTOR. Workbook HC sumber tidak punya kolom ini sama sekali — itu
+  // sebabnya kolomnya lahir belakangan — jadi ejaan di sini mengikuti template
+  // (lib/seed/template.ts) dan export dari IT/Entra, bukan file seed asli.
+  // `email` polos sengaja ikut: file dari IT hampir pasti menuliskannya begitu.
+  [
+    ["email kantor", "email", "e mail", "email perusahaan", "work email", "office email", "email address"],
+    { kind: "text", field: "email_kantor" },
   ],
   [["status", "status karyawan"], { kind: "status" }],
 

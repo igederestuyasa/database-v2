@@ -37,6 +37,7 @@ import type { PlannedEmployee, SeedPlan } from "./excelMapping";
 
 /** `employees` text columns the Seed fills besides the three identity ones. */
 export const SEED_TEXT_FIELDS = [
+  "email_kantor",
   "keterangan_pj_plt",
   "keterangan_rangkap_1",
   "keterangan_rangkap_2",

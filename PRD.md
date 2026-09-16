@@ -56,6 +56,9 @@ Satu aplikasi web internal yang menjadi **satu-satunya sumber kebenaran** data k
 23. Admin bisa menjalankan seed awal (#1) dari halaman web tanpa alat teknis: memilih file Excel, membaca pratinjau (apa yang akan dibuat, kolom tidak dikenal, peringatan), lalu menjalankannya; hasilnya satu batch `seed` yang bisa dibalikkan utuh (#16). Hanya berjalan sekali, selama tabel karyawan masih kosong.
 24. Admin bisa mengunggah Excel **berulang kali** di atas data yang sudah ada, lewat halaman yang sama: personnel number jadi kuncinya — yang belum ada ditambah, yang sudah ada diperbarui pada kolom yang berubah saja, dan sel Excel yang dikosongkan tidak menghapus isi yang sudah ada. Satu unggahan = satu batch `impor` yang bisa dibalikkan utuh (#16). Templat Excel bisa diunduh dari halaman itu, dan nama kolomnya dijamin sama dengan yang dibaca aplikasi.
 
+**Kontak**
+25. Setiap karyawan punya kolom **email kantor**: diisi/diubah lewat form, ikut terbaca lewat Excel impor (#24), dan keluar lewat API (#17) sebagai kunci kedua — personnel number hanya dikenal di lingkungan HC, sedangkan email inilah yang dipakai aplikasi lain untuk mencocokkan seseorang dengan akun Microsoft/Entra-nya. Boleh kosong, tapi satu alamat hanya boleh dimiliki satu karyawan. Email **pribadi** tidak disimpan di mana pun: itu masuk kategori #22 dan tidak punya kolom.
+
 ## 5. Nice-to-Have (bukan MVP)
 
 - SSO Microsoft Entra (menggantikan login email) — diselesaikan di level portal HC, bukan per aplikasi.

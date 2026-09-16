@@ -96,6 +96,28 @@ describe("buildSeedPayload", () => {
     expect(p.employees[1].nip).toBeNull();
   });
 
+  it("membawa Email Kantor dari kolom Excel sampai ke payload", () => {
+    // Rantai penuh: header -> buildHeaderPlan -> planSeed -> payload. Dipatok
+    // di sini karena tes RPC di tests/importFromPayload.sql.test.ts menyusun
+    // payload-nya sendiri, jadi ia membuktikan apa yang database lakukan
+    // dengan email, bukan bahwa email pernah sampai ke sana dari sebuah file.
+    const p = buildSeedPayload(
+      planSeed(
+        sheet(
+          ["Personnel Number", "Nama", "Email"],
+          ["90000001", "Rahmat", "  Rahmat.S@Contoh.TEST  "],
+          ["90000002", "Sari", null],
+        ),
+      ),
+    );
+
+    // Dipangkas tapi TIDAK dihuruf-kecilkan di sini: modul ini murni pemetaan
+    // dan tidak pernah membersihkan (lihat kepala excelMapping.ts). Yang
+    // menormalkan adalah sisi tulis — `import_from_payload()` dan skema form.
+    expect(p.employees[0].text.email_kantor).toBe("Rahmat.S@Contoh.TEST");
+    expect(p.employees[1].text.email_kantor).toBeUndefined();
+  });
+
   it("tidak memuat karakter NUL — jsonb menolaknya", () => {
     expect(JSON.stringify(payload())).not.toContain("\\u0000");
   });

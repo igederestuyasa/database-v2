@@ -76,12 +76,13 @@ export const API_FIELD_GROUPS: readonly ApiFieldGroup[] = [
     id: "identitas",
     label: "Identitas",
     keterangan:
-      "Nomor dan nama Karyawan. personnel_number adalah kunci yang dipakai Konsumen untuk mencocokkan datanya sendiri.",
+      "Nomor, nama, dan email kantor Karyawan. personnel_number adalah kunci yang dipakai Konsumen untuk mencocokkan datanya sendiri; email_kantor kunci kedua, buat mencocokkan dengan akun Microsoft/Entra.",
     fields: [
       "id",
       "personnel_number",
       "nip",
       "full_name",
+      "email_kantor",
       "status",
       "tanggal_keluar",
     ],

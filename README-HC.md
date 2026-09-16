@@ -21,11 +21,9 @@ dikembalikan.
    **Masuk**.
 2. Isi **email kantor** Anda. Hanya email kantor yang diterima; email pribadi
    akan ditolak.
-3. Dua cara masuk, pilih salah satu:
-   - **Punya kata sandi** — isi kata sandi lalu tekan **Masuk**.
-   - **Belum punya kata sandi** — kosongkan kata sandi dan tekan **Kirim tautan
-     masuk ke email**. Sebuah tautan sekali pakai dikirim ke email kantor Anda.
-     Buka tautan itu **di peramban yang sama**; masa berlakunya terbatas.
+3. Isi kata sandi, lalu tekan **Masuk**. Belum punya kata sandi? Akun dibuatkan
+   admin lebih dulu — lihat §8b. Tidak ada pendaftaran sendiri dan tidak ada
+   "kirim tautan masuk ke email".
 4. Setelah masuk, Anda mendarat di halaman **Karyawan**.
 
 Keluar dari aplikasi: tombol **Keluar** ada di pojok kiri bawah, di bawah alamat
@@ -80,8 +78,15 @@ Yang perlu diketahui saat mengisi:
 - **Status dan Tanggal Keluar tidak ada di form ini.** Keduanya diatur di kotak
   **Status Karyawan** di halaman yang sama, supaya tanggal keluar dan status
   tidak pernah berbeda cerita.
+- **Email Kantor adalah alamat kantor, bukan email pribadi dan bukan akun
+  login HC Core.** Kolom ini ikut keluar lewat API, dan biasanya justru inilah
+  yang dipakai aplikasi HC lain untuk mencocokkan orang ini dengan akun
+  Microsoft-nya. Boleh dikosongkan, tapi satu alamat hanya boleh dimiliki satu
+  orang — kalau alamatnya sudah dipakai orang lain, simpan akan ditolak.
 - **Data Pribadi Sensitif** punya form sendiri di bawah, khusus admin. Kolomnya
-  boleh dikosongkan, dan isinya tidak pernah keluar lewat API.
+  boleh dikosongkan, dan isinya tidak pernah keluar lewat API. Email **pribadi**
+  tidak punya tempat di HC Core sama sekali — jangan menuliskannya di kolom
+  Email Kantor.
 
 ### Menandai Karyawan keluar
 
@@ -381,6 +386,11 @@ ada karyawan baru atau perubahan massal.
   Karyawan orang itu.
 - **Nama kolom yang menentukan, bukan urutannya.** Kolom boleh digeser,
   dibuang, atau ditambah. Yang tidak boleh salah adalah nama di baris header.
+- **Email Kantor boleh ikut diimpor.** Template punya kolomnya, dan judul
+  seperti "Email", "Email Kantor", atau "Work Email" sama-sama dikenali — jadi
+  daftar yang dikirim IT biasanya bisa langsung dipakai. Satu alamat hanya
+  boleh milik satu orang: kalau ada alamat kembar, impor dibatalkan seluruhnya
+  dan tidak ada yang tertulis.
 
 #### Langkahnya
 

@@ -115,7 +115,7 @@ const IMPOR_DB: DbErrorContext = {
   },
   unikDefault: {
     message:
-      "Ada NIP atau kode Data Referensi di file ini yang sudah dipakai orang lain di database. Personnel Number sendiri tidak pernah bentrok — itu kuncinya, dan barisnya diperbarui. Impor dibatalkan seluruhnya; tidak ada yang tertulis.",
+      "Ada NIP, Email Kantor, atau kode Data Referensi di file ini yang sudah dipakai orang lain di database. Personnel Number sendiri tidak pernah bentrok — itu kuncinya, dan barisnya diperbarui. Impor dibatalkan seluruhnya; tidak ada yang tertulis.",
   },
   rujukan: {
     message:

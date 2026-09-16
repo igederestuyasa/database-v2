@@ -170,6 +170,7 @@ const EDITABLE_COLUMNS = [
   "personnel_number",
   "nip",
   "full_name",
+  "email_kantor",
   "org_unit_id",
   "jabatan_id",
   "gender_id",

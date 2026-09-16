@@ -38,6 +38,7 @@ export const TEMPLATE_KOLOM: readonly KolomTemplate[] = [
   { header: "Personnel Number", contoh: "90000001", wajib: true },
   { header: "Nama", contoh: "Budi Santoso", wajib: true },
   { header: "NIP", contoh: "1990001" },
+  { header: "Email Kantor", contoh: "budi.santoso@hutamakarya.com" },
   { header: "Status", contoh: "aktif" },
 
   { header: "Business Unit", contoh: "Direktorat Operasi" },
