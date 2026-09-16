@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
+import { Button } from "@/components/ui/button";
 import { requirePageSession } from "@/lib/auth/session";
 import { listEmployees } from "@/lib/db/employees";
 import { loadReferenceOptions } from "@/lib/db/referenceOptions";
@@ -16,6 +18,7 @@ import type { VEmployee } from "@/lib/types/db";
 import KaryawanClient from "./_components/KaryawanClient";
 import {
   KARYAWAN_PER_PAGE,
+  hitungFilterAktif,
   parseKaryawanFilters,
   sortOption,
   type KaryawanFilters,
@@ -91,6 +94,25 @@ export default async function Page({ searchParams }: PageProps) {
           disaring bisa dibagikan apa adanya.
         </p>
       </header>
+
+      {user.role === "admin" &&
+      !galatHierarki &&
+      (daftar?.total ?? 0) === 0 &&
+      hitungFilterAktif(filters) === 0 ? (
+        // The one moment the Seed page is the right next step: an admin, an
+        // empty table, and no filter that could be hiding anyone (PRD #23).
+        <div className="rounded-md border bg-muted/30 p-4 text-sm">
+          <p className="font-medium">Belum ada {TERMS.karyawan} sama sekali.</p>
+          <p className="mt-1 text-muted-foreground">
+            Data awal masuk lewat {TERMS.seed} dari file Excel, sekali saja.
+            Semuanya tercatat sebagai satu {TERMS.batch} yang bisa dikembalikan
+            utuh.
+          </p>
+          <Button asChild className="mt-3">
+            <Link href="/karyawan/seed">Jalankan {TERMS.seed} awal</Link>
+          </Button>
+        </div>
+      ) : null}
 
       <DaftarTerpotongAlert
         daftar={options.terpotong}

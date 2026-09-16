@@ -422,3 +422,18 @@ export async function countEmployeesPerOrgUnit(client: DbClient): Promise<Placem
 
   return { aktif, semua };
 }
+
+/**
+ * How many Karyawan exist at all, aktif or not.
+ *
+ * The Seed page's one question (PRD #23): an empty table is the only state in
+ * which the Seed may run, and `seed_from_payload()` refuses otherwise — this
+ * read is what lets the page say so before the admin picks a file.
+ */
+export async function countEmployees(client: DbClient): Promise<number> {
+  const { count, error } = await client
+    .from("employees")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new DbError("Gagal menghitung Karyawan", error);
+  return count ?? 0;
+}
