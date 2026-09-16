@@ -222,6 +222,25 @@ dihapus, jadi jejaknya tetap ada di Log Perubahan.
 Kolom **Terakhir dipakai** di tabel menunjukkan aplikasi mana yang masih hidup
 dan mana yang sebenarnya sudah tidak memanggil apa-apa lagi.
 
+### Key untuk Employee Journey Survey System (EJS)
+
+Aplikasi survei karyawan (EJS) menarik daftar Karyawan dan Divisi dari sini
+setiap hari, supaya orang yang pindah divisi, divisi yang diganti nama, atau
+Karyawan yang dinonaktifkan langsung ikut ke analisis surveinya. Ia hanya
+membaca; tidak ada yang ditulis balik ke HC Core.
+
+Saat membuat key-nya (nama Konsumen misalnya "EJS"), centang **persis** kolom
+berikut — kalau ada yang kurang, sinkronisasi di EJS gagal dengan pesan yang
+menyebut kolom mana yang belum dicentang:
+
+- Identitas: `personnel_number`, `full_name`, `email_kantor`, `status`
+- Posisi: `divisi_nama`, `departemen_nama`, `org_unit_nama`, `jabatan_nama`
+- Lookup: `gender_kode`, `gender_label`
+- Tanggal: `original_start_date`
+
+Kolom Data Pribadi Sensitif tidak diminta dan memang tidak bisa diberikan.
+Key-nya dipasang admin EJS sebagai `HC_CORE_API_KEY` di aplikasi itu.
+
 ---
 
 ## 7. Halaman lain, sekilas
