@@ -252,7 +252,7 @@ data, dan data tidak dipercaya.
 5. Response envelope `{ data, meta: { page, per_page, total } }`.
 
 ### E. Seed awal dari Excel
-1. Dua pintu, satu logika. Halaman `/karyawan/seed` (PRD #23, admin saja) atau `scripts/seed-from-excel.ts <file.xlsx>` membaca sheet "Demografi Karyawan - Posisi", header baris 4, mengabaikan kolom rumus — keduanya lewat `lib/seed/excelMapping.ts:planSeed()`, yang murni dan diuji. Di halaman web, Excel dibaca **di peramban admin** (SheetJS lewat `import()` dinamis); file tidak pernah diunggah ke server.
+1. Dua pintu, satu logika. Halaman `/karyawan/impor` (PRD #23/#24, admin saja) atau `scripts/seed-from-excel.ts <file.xlsx>` membaca sheet "Demografi Karyawan - Posisi", header baris 4, mengabaikan kolom rumus — keduanya lewat `lib/seed/excelMapping.ts:planSeed()`, yang murni dan diuji. Di halaman web, Excel dibaca **di peramban admin** (SheetJS lewat `import()` dinamis); file tidak pernah diunggah ke server.
 2. Rencana membuat `lookups`, `jabatan`, `org_units` dari nilai unik **apa adanya** (trim saja), hierarki: Business Unit → Divisi → Bagian → Sub Bagian; kalau Sub Bagian == Bagian, tidak dibuat node anak; Bagian yang diawali "Proyek" bertipe `proyek`.
 3. Pratinjau (`--dry-run` di skrip, langkah kedua wizard di web) menampilkan angka yang sama: yang akan dibuat, kolom tidak dikenal, Peringatan, error. Ada error → tidak ada yang ditulis.
 4. Penulisan: `employees` + `employee_private` (DOB/tempat lahir/agama/status nikah masuk ke private) dalam **satu transaksi** = satu batch `seed` → bisa di-revert utuh kalau seed salah.

@@ -125,10 +125,12 @@ export default async function Page({ searchParams }: PageProps) {
           hitungFilterAktif(filters) === 0 ? (
             <EmptyState
               judul={`Belum ada ${TERMS.karyawan} sama sekali`}
-              ajakan={`Data awal masuk lewat ${TERMS.seed} dari file Excel, sekali saja. Semuanya tercatat sebagai satu ${TERMS.batch} yang bisa dikembalikan utuh.`}
+              ajakan={`Data masuk lewat ${TERMS.impor} dari file Excel — boleh diulang kapan saja, dan setiap kali tercatat sebagai satu ${TERMS.batch} yang bisa dikembalikan utuh.`}
               aksi={
                 <Tombol asChild>
-                  <Link href="/karyawan/seed">Jalankan {TERMS.seed} awal</Link>
+                  <Link href="/karyawan/impor">
+                    {TERMS.impor} dari Excel
+                  </Link>
                 </Tombol>
               }
             />

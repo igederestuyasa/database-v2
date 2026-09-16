@@ -654,6 +654,13 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
+      import_from_payload: {
+        Args: {
+          p_payload: Json;
+          p_keterangan?: string;
+        };
+        Returns: Json;
+      };
       is_admin: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;

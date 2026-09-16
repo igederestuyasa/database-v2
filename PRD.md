@@ -52,18 +52,19 @@ Satu aplikasi web internal yang menjadi **satu-satunya sumber kebenaran** data k
 21. User login dengan email kantor; ada dua role: admin (semua aksi) dan viewer (hanya baca).
 22. Tabel data pribadi sensitif (agama, tanggal & tempat lahir, status pernikahan) disiapkan terpisah, kolomnya boleh kosong, hanya bisa dibaca dan diubah oleh admin, dan tidak pernah keluar lewat API.
 
-**Seed lewat web**
+**Impor lewat web**
 23. Admin bisa menjalankan seed awal (#1) dari halaman web tanpa alat teknis: memilih file Excel, membaca pratinjau (apa yang akan dibuat, kolom tidak dikenal, peringatan), lalu menjalankannya; hasilnya satu batch `seed` yang bisa dibalikkan utuh (#16). Hanya berjalan sekali, selama tabel karyawan masih kosong.
+24. Admin bisa mengunggah Excel **berulang kali** di atas data yang sudah ada, lewat halaman yang sama: personnel number jadi kuncinya — yang belum ada ditambah, yang sudah ada diperbarui pada kolom yang berubah saja, dan sel Excel yang dikosongkan tidak menghapus isi yang sudah ada. Satu unggahan = satu batch `impor` yang bisa dibalikkan utuh (#16). Templat Excel bisa diunduh dari halaman itu, dan nama kolomnya dijamin sama dengan yang dibaca aplikasi.
 
 ## 5. Nice-to-Have (bukan MVP)
 
-- Batch add karyawan **berulang** lewat upload Excel setelah seed awal (menambah/memperbarui di atas data yang ada). Seed awal sekali-jalan lewat web sudah ada: #23.
 - SSO Microsoft Entra (menggantikan login email) — diselesaikan di level portal HC, bukan per aplikasi.
 - Formasi/kursi: jabatan × unit dengan kuota, sebagai dasar FTE dan WLA.
 - Rumus kelayakan kenaikan PG/JG ("Memenuhi Syarat") dari Excel dipindahkan menjadi aturan bisnis di aplikasi.
 - Export ke Excel.
 - Endpoint API selain GET (konsumen menulis balik).
 - Riwayat posisi eksplisit (valid_from / valid_to per penugasan) — untuk MVP histori diturunkan dari log revisi.
+- Foto karyawan menggantikan ikon generatif di kartu item dan panel detail. Fotonya di Supabase Storage (bukan di database — kolomnya cuma path pendek, mis. `employees.foto_path`); ikon generatif tetap jadi *fallback* permanen, bukan placeholder yang dibuang, karena `ItemCard`/`DetailPanel` juga dipakai unit organisasi, jabatan, lookup, dan API key yang tidak akan pernah punya foto, dan karena tidak semua karyawan akan punya foto. Titik pasangnya cuma dua: `components/hc/ItemCard.tsx` dan `components/hc/DetailPanel.tsx`. Perlu diputuskan lebih dulu, dan ini keputusan kebijakan bukan teknis: foto wajah adalah data pribadi (UU PDP) — apakah ia ikut aturan admin-saja seperti fitur 22, dan apakah konsumen API boleh mengambilnya.
 
 ## 6. Non-Goals
 

@@ -47,6 +47,7 @@ export const BATCH_JENIS = [
   "merge",
   "rename",
   "seed",
+  "impor",
   "revert",
 ] as const;
 

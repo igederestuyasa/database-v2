@@ -1,17 +1,17 @@
 /**
- * Everything the Seed page *says* and *decides*, as plain functions.
+ * Everything the Impor page *says* and *decides*, as plain functions.
  *
- * `SeedWizard.tsx` is a Client Component and cannot be rendered in `npm test`
+ * `ImporWizard.tsx` is a Client Component and cannot be rendered in `npm test`
  * (no jsdom, ADR-005 §1), so the parts that must be right — which sheet is
  * read, what the preview says, what the result screen reports — live here and
- * are unit-tested (`seedWizard.test.ts`). Same split as `MergeDialog.tsx`.
+ * are unit-tested (`imporWizard.test.ts`). Same split as `MergeDialog.tsx`.
  */
-import type { SeedResult } from "@/lib/actions/seed";
-import { SHEET_NAME } from "@/lib/seed/excelMapping";
+import type { ImporResult } from "@/lib/actions/impor";
+import { SHEET_NAME, type SeedPlan } from "@/lib/seed/excelMapping";
 import type { RingkasanSeed } from "@/lib/seed/ringkasan";
 
 /** Which screen of the wizard is showing. */
-export type SeedStep = "pilih" | "pratinjau" | "selesai";
+export type ImporStep = "pilih" | "pratinjau" | "selesai";
 
 /** Well above the ±1.500-row workbook; a bigger file is the wrong file. */
 export const MAKS_UKURAN_FILE = 20 * 1024 * 1024;
@@ -55,9 +55,30 @@ export function pilihSheet(
   };
 }
 
-/** `batches.keterangan` when the admin leaves the field alone — the CLI's default. */
+/** `batches.keterangan` when the admin leaves the field alone. */
 export function keteranganDefault(namaFile: string): string {
-  return `Seed awal dari ${namaFile}`;
+  return `Impor dari ${namaFile}`;
+}
+
+/**
+ * Berapa baris file ini yang orangnya sudah ada di database, dan berapa yang
+ * benar-benar baru — dihitung terhadap Personnel Number yang halaman baca.
+ *
+ * Yang TIDAK bisa dihitung di sini: berapa yang akan benar-benar berubah.
+ * Itu perbandingan nilai per kolom terhadap isi database, dan satu-satunya
+ * tempat yang tahu jawabannya adalah `import_from_payload()` — pratinjau ini
+ * mengatakan "sudah ada", bukan "akan diperbarui", supaya angkanya tidak
+ * menjanjikan sesuatu yang belum tentu terjadi.
+ */
+export function hitungKecocokan(
+  plan: SeedPlan,
+  sudahAda: ReadonlySet<string>,
+): { baru: number; sudahAda: number } {
+  let cocok = 0;
+  for (const karyawan of plan.employees) {
+    if (sudahAda.has(karyawan.personnel_number)) cocok += 1;
+  }
+  return { baru: plan.employees.length - cocok, sudahAda: cocok };
 }
 
 export type BarisAngka = { label: string; nilai: string };
@@ -102,16 +123,22 @@ export function barisRingkasan(r: RingkasanSeed): BarisAngka[] {
   ];
 }
 
-/** The result screen — the CLI's closing summary, one line per count. */
-export function barisHasil(result: SeedResult): BarisAngka[] {
+/**
+ * Layar hasil. Tiga angka Karyawan lebih dulu, karena itulah yang ditanya
+ * orang setelah menekan tombolnya — dan "tidak berubah" adalah angka yang
+ * paling menenangkan dari ketiganya.
+ */
+export function barisHasil(result: ImporResult): BarisAngka[] {
   return [
-    { label: "Batch id", nilai: result.batchId },
-    { label: "Lookup", nilai: String(result.lookups) },
-    { label: "Jabatan", nilai: String(result.jabatan) },
-    { label: "Unit Organisasi", nilai: String(result.orgUnits) },
-    { label: "Karyawan", nilai: String(result.employees) },
+    { label: "Karyawan baru", nilai: String(result.karyawanBaru) },
+    { label: "Karyawan diperbarui", nilai: String(result.karyawanDiperbarui) },
+    { label: "Karyawan tidak berubah", nilai: String(result.karyawanTetap) },
+    { label: "Unit Organisasi baru", nilai: String(result.orgUnitsBaru) },
+    { label: "Jabatan baru", nilai: String(result.jabatanBaru) },
+    { label: "Lookup baru", nilai: String(result.lookupsBaru) },
     { label: "Data Pribadi Sensitif", nilai: `${result.dataPribadi} baris diisi` },
     { label: "Revisi tercatat", nilai: String(result.revisions) },
+    { label: "Batch id", nilai: result.batchId },
   ];
 }
 

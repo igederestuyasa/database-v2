@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE IS LONG
  * ---------------------------------------------------------------------------
- * `scripts/lib/excelMapping.ts` is the one place in HC Core where being wrong
+ * `lib/seed/excelMapping.ts` is the one place in HC Core where being wrong
  * is completely silent. Nothing throws when `Tanggal Promosi JG` is written
  * into `tanggal_promosi_pg`; the Seed reports success, the pages render, and
  * ~1.475 people carry the wrong date until somebody happens to check one. The
@@ -45,7 +45,10 @@ import {
 // ---------------------------------------------------------------------------
 
 /** A minimal sheet: three title rows, headers on row 4, then data rows. */
-function sheet(headers: readonly unknown[], ...rows: readonly unknown[][]): unknown[][] {
+function sheet(
+  headers: readonly unknown[],
+  ...rows: readonly unknown[][]
+): unknown[][] {
   return [["Judul"], [], [], [...headers], ...rows.map((row) => [...row])];
 }
 
@@ -119,7 +122,9 @@ describe("kolom rumus yang diabaikan", () => {
       "Keterangan Naik JG",
       "PG-JG",
     ];
-    expect(layout.filter((h) => isIgnoredFormulaHeader(canonicalHeader(h)))).toHaveLength(12);
+    expect(
+      layout.filter((h) => isIgnoredFormulaHeader(canonicalHeader(h))),
+    ).toHaveLength(12);
   });
 
   it("TIDAK mengabaikan kolom yang cuma mengandung kata yang sama", () => {
@@ -128,7 +133,9 @@ describe("kolom rumus yang diabaikan", () => {
     // "Range" adalah rentang usia; "BoD Range" adalah Lookup.
     expect(isIgnoredFormulaHeader(canonicalHeader("BoD Range"))).toBe(false);
     // "Keterangan Naik PG" rumus; "Keterangan Rangkap" dan "Keterangan" bukan.
-    expect(isIgnoredFormulaHeader(canonicalHeader("Keterangan Rangkap"))).toBe(false);
+    expect(isIgnoredFormulaHeader(canonicalHeader("Keterangan Rangkap"))).toBe(
+      false,
+    );
     expect(isIgnoredFormulaHeader(canonicalHeader("Keterangan"))).toBe(false);
   });
 });
@@ -206,9 +213,69 @@ describe("pemetaan header → kolom", () => {
   });
 
   it("menerima ejaan alternatif yang umum", () => {
-    expect(targetOf("Nama Karyawan")).toEqual({ kind: "text", field: "full_name" });
+    expect(targetOf("Nama Karyawan")).toEqual({
+      kind: "text",
+      field: "full_name",
+    });
     expect(targetOf("Tgl Lahir")).toEqual({ kind: "private_date" });
-    expect(targetOf("Jenis Kelamin")).toEqual({ kind: "lookup", tipe: "gender" });
+    expect(targetOf("Jenis Kelamin")).toEqual({
+      kind: "lookup",
+      tipe: "gender",
+    });
+  });
+
+  /**
+   * Ejaan yang benar-benar ada di workbook HC, ditemukan saat uji-coba Seed
+   * pertama dan dilaporkan sebagai `kolom_tidak_dikenal`.
+   *
+   * Dipatok satu per satu, bukan sekadar "ada di HEADER_TARGETS": yang mahal
+   * bukan header yang tidak dikenal — itu dilaporkan dan datanya dibuang —
+   * melainkan header yang dikenal lalu mendarat di kolom yang salah pada
+   * ±1.475 orang sekaligus.
+   */
+  it.each([
+    ["Business Unit Name", { kind: "org", level: "business_unit" }],
+    ["Company Legal Entity Name", { kind: "lookup", tipe: "legal_entity" }],
+    [
+      "Klasifikasi Program Rekrutmen",
+      { kind: "lookup", tipe: "klasifikasi_rekrutmen" },
+    ],
+    [
+      "Employment Details Original Start Date",
+      { kind: "date", field: "original_start_date" },
+    ],
+  ])("ejaan workbook HC: %s", (header, target) => {
+    expect(targetOf(header)).toEqual(target);
+  });
+
+  it('"Nomer Surat" kembar tetap jadi PG lalu JG, bukan digabung', () => {
+    const plan = buildHeaderPlan([
+      ...MINIMAL_HEADERS,
+      "Nomer Surat",
+      "Nomer Surat",
+    ]);
+    expect(plan.unknown).toEqual([]);
+    expect(
+      plan.columns
+        .filter((c) => c.header === "Nomer Surat")
+        .map((c) => c.target),
+    ).toEqual([
+      { kind: "text", field: "nomor_surat_pg" },
+      { kind: "text", field: "nomor_surat_jg" },
+    ]);
+  });
+
+  it("menyuruh pembacanya ke template, bukan ke berkas kode", () => {
+    const plan = buildHeaderPlan([...MINIMAL_HEADERS, "Catatan HC"]);
+    const pesan =
+      plan.issues.find((i) => i.kode === "kolom_tidak_dikenal")?.pesan ?? "";
+    // Pesan ini muncul di pratinjau halaman Impor dan dibaca staf HC
+    // non-teknis. Dulu ia menyuruh mereka menyunting sebuah berkas .ts — dan
+    // berkas yang ditunjuknya bahkan sudah pindah sekali tanpa ada yang sadar.
+    // Sejak ada template yang bisa diunduh (PRD #24), jalan keluarnya ada di
+    // layar yang sama dengan pesannya.
+    expect(pesan).toContain("template");
+    expect(pesan).not.toMatch(/\.ts\b/);
   });
 
   it("melaporkan kolom yang tidak dikenal, bukan menebaknya", () => {
@@ -220,7 +287,9 @@ describe("pemetaan header → kolom", () => {
 
   it("gagal keras kalau kolom wajib tidak ada", () => {
     const plan = buildHeaderPlan(["Divisi", "Jabatan"]);
-    const kodes = plan.issues.filter((i) => i.level === "error").map((i) => i.kode);
+    const kodes = plan.issues
+      .filter((i) => i.level === "error")
+      .map((i) => i.kode);
     expect(kodes).toEqual(["kolom_wajib_hilang", "kolom_wajib_hilang"]);
   });
 
@@ -276,7 +345,11 @@ describe("header kembar — jangan pernah digabung (CLAUDE.md)", () => {
   });
 
   it("ejaan eksplisit lebih dulu: yang polos mengisi slot yang MASIH kosong", () => {
-    const plan = buildHeaderPlan([...MINIMAL_HEADERS, "No Surat PG", "No Surat"]);
+    const plan = buildHeaderPlan([
+      ...MINIMAL_HEADERS,
+      "No Surat PG",
+      "No Surat",
+    ]);
     expect(plan.columns.slice(2).map((c) => c.target)).toEqual([
       { kind: "text", field: "nomor_surat_pg" },
       { kind: "text", field: "nomor_surat_jg" },
@@ -285,7 +358,11 @@ describe("header kembar — jangan pernah digabung (CLAUDE.md)", () => {
   });
 
   it("ejaan eksplisit belakangan: tabrakan dilaporkan, bukan didiamkan", () => {
-    const plan = buildHeaderPlan([...MINIMAL_HEADERS, "No Surat", "No Surat PG"]);
+    const plan = buildHeaderPlan([
+      ...MINIMAL_HEADERS,
+      "No Surat",
+      "No Surat PG",
+    ]);
     expect(plan.issues.map((i) => i.kode)).toContain("kolom_ganda");
   });
 
@@ -307,18 +384,27 @@ describe("header kembar — jangan pernah digabung (CLAUDE.md)", () => {
 
   it("dua grup kembar yang dikenal, masing-masing dua slot", () => {
     expect(DUPLICATE_HEADER_GROUPS).toHaveLength(2);
-    expect(DUPLICATE_HEADER_GROUPS.every((g) => g.slots.length === 2)).toBe(true);
+    expect(DUPLICATE_HEADER_GROUPS.every((g) => g.slots.length === 2)).toBe(
+      true,
+    );
   });
 
   it("kedua slot terisi terpisah dari dua kolom yang sama namanya", () => {
     const plan = planSeed(
       sheet(
-        ["Personnel Number", "Nama", "Keterangan Rangkap", "Keterangan Rangkap"],
+        [
+          "Personnel Number",
+          "Nama",
+          "Keterangan Rangkap",
+          "Keterangan Rangkap",
+        ],
         ["90000001", "Budi Contoh", "Ketua Tim A", "Sekretaris Tim B"],
       ),
     );
     expect(plan.employees[0].text.keterangan_rangkap_1).toBe("Ketua Tim A");
-    expect(plan.employees[0].text.keterangan_rangkap_2).toBe("Sekretaris Tim B");
+    expect(plan.employees[0].text.keterangan_rangkap_2).toBe(
+      "Sekretaris Tim B",
+    );
   });
 });
 
@@ -403,13 +489,25 @@ describe("parseDateCell", () => {
   });
 
   it("membaca teks ISO", () => {
-    expect(parseDateCell("2019-08-05")).toEqual({ ok: true, iso: "2019-08-05" });
+    expect(parseDateCell("2019-08-05")).toEqual({
+      ok: true,
+      iso: "2019-08-05",
+    });
   });
 
   it("membaca teks hari-dulu, bukan bulan-dulu", () => {
-    expect(parseDateCell("05/08/2019")).toEqual({ ok: true, iso: "2019-08-05" });
-    expect(parseDateCell("31-12-2019")).toEqual({ ok: true, iso: "2019-12-31" });
-    expect(parseDateCell("01.02.2020")).toEqual({ ok: true, iso: "2020-02-01" });
+    expect(parseDateCell("05/08/2019")).toEqual({
+      ok: true,
+      iso: "2019-08-05",
+    });
+    expect(parseDateCell("31-12-2019")).toEqual({
+      ok: true,
+      iso: "2019-12-31",
+    });
+    expect(parseDateCell("01.02.2020")).toEqual({
+      ok: true,
+      iso: "2020-02-01",
+    });
   });
 
   it("membaca objek Date memakai komponen UTC-nya", () => {
@@ -455,7 +553,9 @@ describe("parseDateCell", () => {
 describe("slugKode & KodeRegistry", () => {
   it("membuat kode yang bisa dibaca manusia", () => {
     expect(slugKode("Divisi QHSSE")).toBe("DIVISI-QHSSE");
-    expect(slugKode("Bagian Keuangan & Akuntansi")).toBe("BAGIAN-KEUANGAN-AKUNTANSI");
+    expect(slugKode("Bagian Keuangan & Akuntansi")).toBe(
+      "BAGIAN-KEUANGAN-AKUNTANSI",
+    );
   });
 
   it("membuang aksen dan tanda baca di ujung", () => {
@@ -552,7 +652,9 @@ describe("planSeed — hierarki Unit Organisasi", () => {
         "Bagian Akuntansi",
       ]),
     );
-    expect(plan.orgUnits.filter((u) => u.tipe === "sub_bagian")).toHaveLength(0);
+    expect(plan.orgUnits.filter((u) => u.tipe === "sub_bagian")).toHaveLength(
+      0,
+    );
     expect(plan.orgUnits.at(-1)?.nama).toBe("Bagian Akuntansi");
     expect(plan.employees[0].orgUnitKey).toBe(plan.orgUnits.at(-1)?.key);
   });
@@ -568,7 +670,9 @@ describe("planSeed — hierarki Unit Organisasi", () => {
         "BAGIAN AKUNTANSI",
       ]),
     );
-    expect(plan.orgUnits.filter((u) => u.tipe === "sub_bagian")).toHaveLength(1);
+    expect(plan.orgUnits.filter((u) => u.tipe === "sub_bagian")).toHaveLength(
+      1,
+    );
   });
 
   it("Bagian yang diawali Proyek bertipe proyek", () => {
@@ -590,7 +694,14 @@ describe("planSeed — hierarki Unit Organisasi", () => {
 
   it("kata Proyek di tengah nama tidak mengubah tipe", () => {
     const plan = planSeed(
-      sheet(HEADERS, ["90000001", "Budi Contoh", "BU", "Divisi", "Bagian Proyek", ""]),
+      sheet(HEADERS, [
+        "90000001",
+        "Budi Contoh",
+        "BU",
+        "Divisi",
+        "Bagian Proyek",
+        "",
+      ]),
     );
     expect(plan.orgUnits.at(-1)?.tipe).toBe("bagian");
   });
@@ -617,16 +728,26 @@ describe("planSeed — hierarki Unit Organisasi", () => {
   });
 
   it("Karyawan tanpa unit sama sekali diperingatkan, bukan ditolak", () => {
-    const plan = planSeed(sheet(HEADERS, ["90000001", "Budi Contoh", "", "", "", ""]));
+    const plan = planSeed(
+      sheet(HEADERS, ["90000001", "Budi Contoh", "", "", "", ""]),
+    );
     expect(plan.employees).toHaveLength(1);
     expect(plan.employees[0].orgUnitKey).toBeNull();
-    expect(warningsOf(plan).map((i) => i.kode)).toContain("karyawan_tanpa_unit");
+    expect(warningsOf(plan).map((i) => i.kode)).toContain(
+      "karyawan_tanpa_unit",
+    );
     expect(errorsOf(plan)).toHaveLength(0);
   });
 });
 
 describe("planSeed — Data Referensi masuk apa adanya (ADR-002)", () => {
-  const HEADERS = ["Personnel Number", "Nama", "Divisi", "Jabatan", "Gender"] as const;
+  const HEADERS = [
+    "Personnel Number",
+    "Nama",
+    "Divisi",
+    "Jabatan",
+    "Gender",
+  ] as const;
 
   it("varian kapitalisasi TIDAK digabung", () => {
     const plan = planSeed(
@@ -636,16 +757,28 @@ describe("planSeed — Data Referensi masuk apa adanya (ADR-002)", () => {
         ["90000002", "Siti Misal", "DIVISI QHSSE", "staf muda", "Laki-Laki"],
       ),
     );
-    expect(plan.orgUnits.map((u) => u.nama)).toEqual(["Divisi QHSSE", "DIVISI QHSSE"]);
+    expect(plan.orgUnits.map((u) => u.nama)).toEqual([
+      "Divisi QHSSE",
+      "DIVISI QHSSE",
+    ]);
     expect(plan.jabatan.map((j) => j.nama)).toEqual(["Staf Muda", "staf muda"]);
-    expect(plan.lookups.map((l) => l.label)).toEqual(["Laki-laki", "Laki-Laki"]);
+    expect(plan.lookups.map((l) => l.label)).toEqual([
+      "Laki-laki",
+      "Laki-Laki",
+    ]);
   });
 
   it('"dan" dan "&" TIDAK disatukan', () => {
     const plan = planSeed(
       sheet(
         HEADERS,
-        ["90000001", "Budi Contoh", "Divisi Keuangan dan Akuntansi", "Staf", "L"],
+        [
+          "90000001",
+          "Budi Contoh",
+          "Divisi Keuangan dan Akuntansi",
+          "Staf",
+          "L",
+        ],
         ["90000002", "Siti Misal", "Divisi Keuangan & Akuntansi", "Staf", "L"],
       ),
     );
@@ -703,9 +836,13 @@ describe("planSeed — Data Referensi masuk apa adanya (ADR-002)", () => {
   });
 
   it("Karyawan tanpa Jabatan diperingatkan, bukan ditolak", () => {
-    const plan = planSeed(sheet(HEADERS, ["90000001", "Budi Contoh", "D", "", "L"]));
+    const plan = planSeed(
+      sheet(HEADERS, ["90000001", "Budi Contoh", "D", "", "L"]),
+    );
     expect(plan.employees[0].jabatanKey).toBeNull();
-    expect(warningsOf(plan).map((i) => i.kode)).toContain("karyawan_tanpa_jabatan");
+    expect(warningsOf(plan).map((i) => i.kode)).toContain(
+      "karyawan_tanpa_jabatan",
+    );
   });
 });
 
@@ -768,7 +905,12 @@ describe("planSeed — baris Karyawan", () => {
 
   it("baris kosong dilewati, bukan jadi Karyawan tanpa nama", () => {
     const plan = planSeed(
-      sheet(["Personnel Number", "Nama"], ["90000001", "Budi Contoh"], [], ["", ""]),
+      sheet(
+        ["Personnel Number", "Nama"],
+        ["90000001", "Budi Contoh"],
+        [],
+        ["", ""],
+      ),
     );
     expect(plan.employees).toHaveLength(1);
     expect(plan.stats.barisKosong).toBe(2);
@@ -777,13 +919,20 @@ describe("planSeed — baris Karyawan", () => {
 
   it("nomor baris yang dilaporkan = nomor baris di Excel", () => {
     const plan = planSeed(
-      sheet(["Personnel Number", "Nama"], ["90000001", "Budi"], ["90000002", "Siti"]),
+      sheet(
+        ["Personnel Number", "Nama"],
+        ["90000001", "Budi"],
+        ["90000002", "Siti"],
+      ),
     );
     expect(plan.employees.map((e) => e.baris)).toEqual([5, 6]);
   });
 
   it("mengikuti --header-row kalau header tidak di baris 4", () => {
-    const rows = [["Personnel Number", "Nama"], ["90000001", "Budi Contoh"]];
+    const rows = [
+      ["Personnel Number", "Nama"],
+      ["90000001", "Budi Contoh"],
+    ];
     const plan = planSeed(rows, { headerRowNumber: 1 });
     expect(plan.employees).toHaveLength(1);
     expect(plan.employees[0].baris).toBe(2);
@@ -803,7 +952,9 @@ describe("planSeed — baris Karyawan", () => {
       "nonaktif",
       "aktif",
     ]);
-    expect(warningsOf(plan).map((i) => i.kode)).toContain("status_tidak_dikenal");
+    expect(warningsOf(plan).map((i) => i.kode)).toContain(
+      "status_tidak_dikenal",
+    );
   });
 
   it("dua kolom untuk tujuan yang sama: yang terisi belakangan yang dipakai", () => {
@@ -844,12 +995,18 @@ describe("planSeed — baris Karyawan", () => {
 
 describe("planSeed — yang menghentikan Seed", () => {
   it("Personnel Number kosong adalah error", () => {
-    const plan = planSeed(sheet(["Personnel Number", "Nama"], ["", "Budi Contoh"]));
-    expect(errorsOf(plan).map((i) => i.kode)).toContain("personnel_number_kosong");
+    const plan = planSeed(
+      sheet(["Personnel Number", "Nama"], ["", "Budi Contoh"]),
+    );
+    expect(errorsOf(plan).map((i) => i.kode)).toContain(
+      "personnel_number_kosong",
+    );
   });
 
   it("Nama kosong adalah error", () => {
-    const plan = planSeed(sheet(["Personnel Number", "Nama"], ["90000001", ""]));
+    const plan = planSeed(
+      sheet(["Personnel Number", "Nama"], ["90000001", ""]),
+    );
     expect(errorsOf(plan).map((i) => i.kode)).toContain("nama_kosong");
   });
 
@@ -861,7 +1018,9 @@ describe("planSeed — yang menghentikan Seed", () => {
         ["90000001", "Siti Misal"],
       ),
     );
-    const issue = errorsOf(plan).find((i) => i.kode === "personnel_number_ganda");
+    const issue = errorsOf(plan).find(
+      (i) => i.kode === "personnel_number_ganda",
+    );
     expect(issue?.pesan).toContain("baris 5 dan 6");
     expect(plan.employees).toHaveLength(1);
   });
@@ -896,7 +1055,9 @@ describe("planSeed — yang menghentikan Seed", () => {
         ["90000001", "Budi Contoh", "belum ada SK"],
       ),
     );
-    const issue = errorsOf(plan).find((i) => i.kode === "tanggal_tidak_terbaca");
+    const issue = errorsOf(plan).find(
+      (i) => i.kode === "tanggal_tidak_terbaca",
+    );
     expect(issue?.kolom).toBe("Tanggal Diangkat");
     expect(plan.employees).toHaveLength(0);
   });
