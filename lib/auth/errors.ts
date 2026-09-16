@@ -18,12 +18,15 @@
 import { officeEmailMessage } from "./domain";
 
 /** Anything shaped like a Supabase `AuthError`, without importing the class. */
-export type AuthErrorLike = {
-  name?: string;
-  message?: string | null;
-  status?: number | null;
-  code?: string | null;
-} | null | undefined;
+export type AuthErrorLike =
+  | {
+      name?: string;
+      message?: string | null;
+      status?: number | null;
+      code?: string | null;
+    }
+  | null
+  | undefined;
 
 /**
  * Which call failed.
@@ -82,7 +85,10 @@ export function authErrorMessage(
 
   // Supabase is unreachable (which is also the state of this environment —
   // supabase.com is blocked, see ADR-005).
-  if (name === "AuthRetryableFetchError" || message.includes("failed to fetch")) {
+  if (
+    name === "AuthRetryableFetchError" ||
+    message.includes("failed to fetch")
+  ) {
     return "Tidak bisa menghubungi server Supabase. Periksa koneksi, lalu coba lagi.";
   }
 
@@ -139,7 +145,6 @@ export function authErrorMessage(
  * nothing at all for anything it does not recognise.
  */
 export const LOGIN_NOTICES = [
-  "login",
   "keluar",
   "konfigurasi",
   "profil",
@@ -164,8 +169,6 @@ export function loginNotice(
   if (!code) return null;
 
   switch (code as LoginNotice) {
-    case "login":
-      return { tone: "info", text: "Masuk dulu untuk membuka halaman itu." };
     case "keluar":
       return { tone: "info", text: "Anda sudah keluar dari HC Core." };
     case "konfigurasi":
@@ -183,12 +186,12 @@ export function loginNotice(
     case "tautan-kedaluwarsa":
       return {
         tone: "error",
-        text: "Tautan masuk sudah kedaluwarsa atau sudah dipakai. Minta tautan baru.",
+        text: "Tautan masuk sudah kedaluwarsa atau sudah dipakai. Minta tautan baru ke admin HC Core.",
       };
     case "tautan-gagal":
       return {
         tone: "error",
-        text: "Tautan masuk tidak bisa diproses. Minta tautan baru, lalu buka tautannya di peramban yang sama.",
+        text: "Tautan masuk tidak bisa diproses. Minta tautan baru ke admin HC Core, lalu buka tautannya di peramban yang sama.",
       };
     default:
       return null;

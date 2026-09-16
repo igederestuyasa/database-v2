@@ -281,15 +281,16 @@ yang dipakai — semuanya lewat layar web keduanya.
      `https://<alamat-vercel>/login/callback`. Daftar ini adalah pintu
      keamanan sungguhan — tautan masuk hanya boleh mendarat di alamat yang
      tercantum di sini. Jangan diisi `*`.
-   - **Email Templates**: pada template **Magic Link** dan **Invite user**,
-     ganti tautan di dalamnya supaya menuju halaman pendaratan aplikasi:
-     `{{ .SiteURL }}/login/callback?token_hash={{ .TokenHash }}&type=magiclink`
-     untuk Magic Link, dan `…&type=invite` untuk Invite user. Tanpa ini,
+   - **Email Templates**: pada template **Reset Password** (dan **Invite user**
+     kalau Anda memakainya), ganti tautan di dalamnya supaya menuju halaman
+     pendaratan aplikasi:
+     `{{ .SiteURL }}/login/callback?token_hash={{ .TokenHash }}&type=recovery`
+     untuk Reset Password, dan `…&type=invite` untuk Invite user. Tanpa ini,
      tautan di email mendarat di halaman depan tanpa membawa sesi.
    - **Sign In / Providers → Email**: pastikan *Email* aktif, dan **matikan**
-     *Allow new users to sign up*. Aplikasi ini memakai **undangan**: akun
-     dibuat oleh admin, bukan oleh orang yang mendaftar sendiri. Cara
-     mengundang ada di 8b.
+     *Allow new users to sign up*. Akun dibuat admin, bukan oleh orang yang
+     mendaftar sendiri — caranya di 8b. Aplikasi sendiri sudah tidak punya
+     tombol "kirim tautan masuk", jadi ini lapis keduanya di sisi Supabase.
 
 **Di Vercel**
 
@@ -315,17 +316,31 @@ dinaikkan jadi admin.
 
 ### 8b. Mengundang pengguna, dan admin pertama harus dinaikkan lewat SQL
 
-Karena pendaftaran sendiri dimatikan (8a langkah 4), setiap pengguna baru
-**diundang** dulu: di Supabase, buka **Authentication → Users → Invite user**,
-isi email kantornya. Email di luar domain kantor ditolak otomatis. Orang itu
-menerima email undangan, membuka tautannya, dan masuk. Sesudah admin pertama
-ada, undangan tetap dari layar Supabase itu; halaman **Pengguna** di aplikasi
-hanya mengatur *siapa jadi apa*, bukan membuat akun.
+Halaman **Masuk** hanya menerima **email kantor + kata sandi**. Tidak ada
+pendaftaran sendiri dan tidak ada "kirim tautan masuk ke email" — keduanya
+sengaja tidak ada, karena database ini memuat tanggal lahir, agama, dan status
+pernikahan 1.475 orang. Punya alamat @hutamakarya.com tidak sama dengan berhak
+membacanya.
 
-> Orang yang belum diundang lalu mencoba "Kirim tautan masuk ke email" akan
-> melihat kalimat *"Masuk lewat email sedang dimatikan di Supabase. Hubungi
-> admin HC Core."* Kalimatnya kurang tepat tetapi arahnya benar: ia memang
-> harus minta diundang.
+Akun karena itu **dibuat admin**, satu per satu, di Supabase:
+
+1. Buka **Authentication → Users → Add user → Create new user**.
+2. Isi email kantornya dan sebuah kata sandi awal. Centang *Auto Confirm User*
+   supaya ia tidak perlu mengklik apa pun.
+3. Serahkan kata sandi itu ke orangnya lewat jalur yang wajar (bukan grup
+   WhatsApp bersama).
+
+Email di luar domain kantor tetap ditolak otomatis oleh database, jadi salah
+ketik domain gagal saat itu juga, bukan nanti.
+
+Setelah akunnya ada, halaman **Pengguna** di aplikasi mengatur *siapa jadi
+apa* — ia tidak pernah membuat atau menghapus akun.
+
+> **Kalau seseorang lupa kata sandinya:** di layar **Authentication → Users**
+> yang sama, buka menu titik tiga di barisnya dan pilih *Send password
+> recovery*. Tautannya mendarat di aplikasi dan memberinya sesi. (Aplikasi ini
+> belum punya halaman ganti kata sandi sendiri; menggantinya untuk sementara
+> juga dari layar Supabase itu.)
 
 Setiap orang yang baru pertama kali masuk otomatis menjadi **viewer** — termasuk
 orang pertama. Artinya, setelah pemasangan selesai, orang pertama yang masuk

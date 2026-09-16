@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import DetailPanel from "@/components/hc/DetailPanel";
 import FilterTabs from "@/components/hc/FilterTabs";
 import PembukaLayar from "@/components/hc/PembukaLayar";
-import SearchField from "@/components/hc/SearchField";
 import StatusLabel from "@/components/hc/StatusLabel";
 import TataLetakDaftarDetail from "@/components/hc/TataLetakDaftarDetail";
 import Tombol from "@/components/hc/Tombol";
@@ -16,6 +15,7 @@ import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 import type { LookupType } from "@/lib/validation/lookupTypes";
 
 import KaryawanFilterBar from "./KaryawanFilterBar";
+import SaranCari from "./SaranCari";
 import KaryawanTable from "./KaryawanTable";
 import {
   bersihkanFilter,
@@ -116,7 +116,7 @@ export function KaryawanClient({
           judul={TERMS.karyawan}
           info={`Cari berdasarkan nama, ${TERMS.nip}, atau ${TERMS.personnelNumber}, lalu persempit dengan filter. Filter tersimpan di alamat halaman.`}
         >
-          <SearchField
+          <SaranCari
             id="cari-karyawan"
             label={`${UI.cari} ${TERMS.karyawan}`}
             nilai={teks}
@@ -126,10 +126,11 @@ export function KaryawanClient({
             /* Enter menjalankan PENCARIAN, bukan membuka hasil teratas seperti
                di docs/DESIGN.md: daftar ini disaring di server, jadi hasil
                teratas untuk kata yang baru diketik belum ada sampai
-               pencariannya jalan. Setelah hasilnya muncul, Panah bawah lalu
-               Enter membuka baris yang disorot. */
+               pencariannya jalan. Yang menjembatani jeda itu daftar saran di
+               `SaranCari` — menekan salah satunya langsung membuka orangnya.
+               Panah bawah tanpa saran terbuka tetap masuk ke baris tabel. */
             onSubmit={() => pindah(ubahFilter(filters, {}))}
-            onPanahBawah={dd.fokusItemPertama}
+            onPanahBawahDaftar={dd.fokusItemPertama}
           />
         </PembukaLayar>
       }
@@ -140,7 +141,9 @@ export function KaryawanClient({
           kategori={terpilih?.jabatanNama ?? null}
           status={
             terpilih ? (
-              <StatusLabel nada={terpilih.status === "aktif" ? "sukses" : "netral"}>
+              <StatusLabel
+                nada={terpilih.status === "aktif" ? "sukses" : "netral"}
+              >
                 {STATUS_LABELS[terpilih.status]}
               </StatusLabel>
             ) : null
@@ -149,7 +152,10 @@ export function KaryawanClient({
           baris={
             terpilih
               ? [
-                  { label: TERMS.personnelNumber, nilai: terpilih.personnelNumber },
+                  {
+                    label: TERMS.personnelNumber,
+                    nilai: terpilih.personnelNumber,
+                  },
                   { label: TERMS.nip, nilai: terpilih.nip },
                   { label: TERMS.unitOrganisasi, nilai: terpilih.unitNama },
                   { label: TERMS.jabatan, nilai: terpilih.jabatanNama },
@@ -185,7 +191,9 @@ export function KaryawanClient({
           }))}
           onPilih={(nilai) =>
             pindah(
-              ubahFilter(filters, { status: nilai as KaryawanFilters["status"] }),
+              ubahFilter(filters, {
+                status: nilai as KaryawanFilters["status"],
+              }),
             )
           }
         />

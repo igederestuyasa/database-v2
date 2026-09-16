@@ -80,13 +80,24 @@ function labelKolom(column: string): string {
   return columnLabel("employees", column);
 }
 
-/** Kode as small print — only when there is a nama for it to belong to. */
-function catatanKode(
-  nama: string | null | undefined,
-  kode: string | null | undefined,
-): string | undefined {
-  return nama && kode ? `Kode ${kode}` : undefined;
-}
+/*
+  KODE DATA REFERENSI TIDAK DITAMPILKAN DI SINI.
+
+  Dulu tiap Lookup, Unit Organisasi, dan Jabatan membawa satu baris kecil
+  "Kode FEMALE" di bawah "Female". Kode-nya memang diturunkan dari labelnya,
+  jadi hampir selalu ia hanya mengeja ulang baris di atasnya dengan huruf
+  besar — tiga belas baris abu-abu di satu halaman yang tidak menjawab
+  pertanyaan siapa pun tentang orang ini.
+
+  Yang hilang, dan kenapa itu tidak apa-apa: kalau dua Lookup punya label yang
+  sama persis, halaman ini tidak lagi bisa memberi tahu yang mana. Tapi itu
+  memang Temuan — halaman Perlu Dibereskan yang mendaftarnya dan Merge yang
+  membereskannya (PRD #11/#12), bukan halaman ini. Dan untuk siapa pun yang
+  memang butuh kodenya — integrasi Konsumen API, atau mencocokkan dengan
+  Excel — kodenya tetap ada di halaman detail Data Referensi-nya sendiri
+  (/master-data/[id], /jabatan/[id], /struktur/[id]), tempat kode itu adalah
+  identitas barangnya dan bukan catatan kaki.
+*/
 
 /**
  * One Lookup, read from the view's resolved `<tipe>_label` / `<tipe>_kode`.
@@ -95,12 +106,9 @@ function catatanKode(
  * `lib/validation/lookupTypes.ts` — a new tipe there is a type error here.
  */
 function lookupField(employee: VEmployee, tipe: LookupType): DetailField {
-  const label = employee[`${tipe}_label`];
-  const kode = employee[`${tipe}_kode`];
   return {
     label: LOOKUP_TYPE_LABELS[tipe],
-    value: teks(label),
-    catatan: catatanKode(label, kode),
+    value: teks(employee[`${tipe}_label`]),
   };
 }
 
@@ -136,14 +144,17 @@ export function rantaiUnit(employee: VEmployee): string {
   return chain.length > 0 ? chain.join(" › ") : KOSONG;
 }
 
-/** Unit Organisasi small print: "Kode X · Sub Bagian", as far as it is known. */
+/**
+ * Unit Organisasi small print: tingkatnya saja — "Sub Bagian".
+ *
+ * Tingkat BUKAN ejaan ulang namanya: "Bagian Human Capital Strategy" kebetulan
+ * memuat katanya, "Proyek Tol Trans Sumatera" tidak, dan tingkat itulah yang
+ * menentukan di mana unit ini duduk di hierarki. Kode-nya yang dicabut; lihat
+ * catatan di atas.
+ */
 function catatanUnit(employee: VEmployee): string | undefined {
-  if (!employee.org_unit_nama) return undefined;
-  const parts = [
-    catatanKode(employee.org_unit_nama, employee.org_unit_kode),
-    employee.org_unit_tipe ? labelTipeUnit(employee.org_unit_tipe) : undefined,
-  ].filter((part): part is string => typeof part === "string" && part !== "");
-  return parts.length > 0 ? parts.join(" · ") : undefined;
+  if (!employee.org_unit_nama || !employee.org_unit_tipe) return undefined;
+  return labelTipeUnit(employee.org_unit_tipe);
 }
 
 /**
@@ -190,7 +201,6 @@ export function buildEmployeeSections(
         {
           label: labelKolom("jabatan_id"),
           value: teks(employee.jabatan_nama),
-          catatan: catatanKode(employee.jabatan_nama, employee.jabatan_kode),
         },
         { label: ORG_UNIT_TYPE_LABELS.direktorat, value: teks(employee.direktorat_nama) },
         { label: ORG_UNIT_TYPE_LABELS.divisi, value: teks(employee.divisi_nama) },

@@ -34,7 +34,29 @@ export const kelasTombol = cva(
         utama: "bg-primary text-primary-foreground hover:bg-primary-hover",
         sekunder:
           "hc-permukaan border border-input bg-card text-foreground hover:bg-accent",
-        halus: "text-muted-foreground hover:bg-accent hover:text-foreground",
+        /*
+          TERLIHAT BISA DITEKAN SAAT DIAM, bukan cuma saat disorot.
+
+          Dulu nada ini tanpa border: teks redup dengan `hover:bg-accent`.
+          Dua hal membuatnya gagal sekaligus. Pertama, teks abu-abu tanpa
+          bentuk apa pun terbaca sebagai LABEL, bukan tombol — orang tidak
+          menyorot sesuatu yang tidak terlihat bisa ditekan. Kedua, dan ini
+          yang membuat hover-nya sia-sia: di HC Panel `--accent` dan `--muted`
+          dua-duanya menunjuk `--latar`, dan baris tabel sudah memakai
+          `hover:bg-muted`. Jadi begitu kursor masuk ke barisnya — satu-satunya
+          cara mencapai tombol ini — latar tombol dan latar baris jadi warna
+          yang sama persis, dan hover tombolnya TIDAK PERNAH terlihat.
+
+          Karena itu isiannya dipatok `bg-card` (kartu selalu beda dari latar,
+          baik baris itu sedang disorot maupun tidak) dan yang bergerak saat
+          hover adalah border dan warna teksnya. Bentuk pil ber-border inilah
+          yang dimaksud docs/DESIGN.md dengan tombol sekunder; nada ini versi
+          tenangnya untuk aksi per baris — border `garis`, bukan `garis-kuat`.
+        */
+        halus: [
+          "border border-border bg-card text-muted-foreground",
+          "hover:border-input hover:text-foreground",
+        ].join(" "),
       },
       ukuran: {
         /** Tinggi 40 — tombol di dalam halaman. */

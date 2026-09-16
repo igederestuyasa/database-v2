@@ -70,12 +70,23 @@ export type SidebarNavItem = {
 export function SidebarNav({
   items,
   arah = "tegak",
+  ciut = false,
 }: {
   items: readonly SidebarNavItem[];
   arah?: "tegak" | "mendatar";
+  /**
+   * Sidebar sedang diciutkan: hanya ikon, tanpa label.
+   *
+   * Labelnya tidak dihapus dari DOM, cuma disembunyikan lewat `sr-only` —
+   * pembaca layar tetap membacakan nama tujuannya, dan pengguna berkursor
+   * mendapat `title` sebagai gantinya. Menghapus teksnya akan membuat
+   * navigasi ini tidak bisa dipakai tanpa melihat.
+   */
+  ciut?: boolean;
 }) {
   const pathname = usePathname();
   const mendatar = arah === "mendatar";
+  const hanyaIkon = ciut && !mendatar;
 
   return (
     <nav
@@ -84,6 +95,7 @@ export function SidebarNav({
         mendatar
           ? "flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           : "flex flex-col gap-1",
+        hanyaIkon && "items-center",
       )}
     >
       {items.map((item) => {
@@ -96,8 +108,12 @@ export function SidebarNav({
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
+            title={hanyaIkon ? item.label : undefined}
             className={cn(
-              "flex h-11 shrink-0 items-center gap-3 whitespace-nowrap rounded-full px-3",
+              "flex h-11 shrink-0 items-center rounded-full",
+              hanyaIkon
+                ? "w-11 justify-center px-0"
+                : "gap-3 whitespace-nowrap px-3",
               "text-pendukung transition-colors duration-150 ease-standar",
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground",
               /*
@@ -113,7 +129,7 @@ export function SidebarNav({
             )}
           >
             <Ikon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
-            {item.label}
+            <span className={cn(hanyaIkon && "sr-only")}>{item.label}</span>
           </Link>
         );
       })}

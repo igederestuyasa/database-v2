@@ -156,7 +156,18 @@ describe("buildEmployeeSections", () => {
     expect(semuaTeks).not.toMatch(UUID_RE);
   });
 
-  it("menyebut kode di catatan, bukan di nilai", () => {
+  /**
+   * Halaman ini TIDAK memuat kode Data Referensi.
+   *
+   * Kode-nya diturunkan dari labelnya, jadi "Kode FEMALE" di bawah "Female"
+   * hanya mengeja ulang baris di atasnya — tiga belas baris abu-abu yang tidak
+   * menjawab apa pun tentang orang ini. Kodenya tetap ada di halaman detail
+   * Data Referensi-nya sendiri, tempat ia memang identitas barangnya.
+   *
+   * Tingkat unit tetap ditulis, dan itu bukan pengecualian yang tidak
+   * konsisten: "Sub Bagian" tidak bisa dibaca dari nama unitnya sendiri.
+   */
+  it("menulis tingkat Unit Organisasi, tanpa kodenya", () => {
     const fields = semuaField(
       karyawan({
         org_unit_nama: "Sub Bagian Contoh",
@@ -165,7 +176,24 @@ describe("buildEmployeeSections", () => {
       }),
     );
     const unit = fields.find((field) => field.label === "Unit Organisasi");
-    expect(unit?.catatan).toBe("Kode SUB-CONTOH · Sub Bagian");
+    expect(unit?.catatan).toBe("Sub Bagian");
+  });
+
+  it("tidak menempelkan kode pada Jabatan maupun Lookup", () => {
+    const fields = semuaField(
+      karyawan({
+        jabatan_nama: "Manager",
+        jabatan_kode: "JB-MANAGER",
+        gender_label: "Female",
+        gender_kode: "FEMALE",
+      }),
+    );
+    const jabatan = fields.find((field) => field.label === "Jabatan");
+    const gender = fields.find((field) => field.label === "Jenis Kelamin");
+    expect(jabatan?.value).toBe("Manager");
+    expect(jabatan?.catatan).toBeUndefined();
+    expect(gender?.value).toBe("Female");
+    expect(gender?.catatan).toBeUndefined();
   });
 
   it("tidak menempelkan kode pada kolom yang kosong", () => {

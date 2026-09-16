@@ -52,8 +52,28 @@ export function PembukaLayar({
         {info ? <Info label={`Keterangan ${typeof judul === "string" ? judul : "halaman"}`}>{info}</Info> : null}
       </div>
 
+      {/*
+        `relative z-20`, dan itu BUKAN hiasan.
+
+        `animate-naik-muncul` memasang `transform` di kotak ini, dan sebuah
+        transform membentuk stacking context sendiri — apa pun di dalamnya,
+        setinggi apa pun z-index-nya, tetap terkurung di lapis kotak ini. Tanpa
+        `z-20`, kotak ini ber-`z-index: auto` dan kalah urutan cat dari isi
+        halaman di bawahnya yang muncul belakangan di DOM.
+
+        Yang terlihat dari itu: daftar saran di bawah kolom cari (`SaranCari`)
+        tertembus panah pemilih filter, yang ber-`opacity: .5` sehingga
+        membentuk stacking context-nya sendiri juga. Menaikkan z-index daftar
+        sarannya tidak menolong sama sekali; yang harus naik kotak ini.
+
+        Dialog dan popover tetap menang: mereka di-portal ke <body>, di luar
+        stacking context ini.
+      */}
       {children ? (
-        <div className="animate-naik-muncul mt-6" style={{ animationDelay: "110ms" }}>
+        <div
+          className="animate-naik-muncul relative z-20 mt-6"
+          style={{ animationDelay: "110ms" }}
+        >
           {children}
         </div>
       ) : null}

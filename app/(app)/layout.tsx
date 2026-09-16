@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import BarAtas, { LewatiKeKonten } from "@/components/hc/BarAtas";
 import KakiHalaman from "@/components/hc/KakiHalaman";
+import Sidebar from "@/components/hc/Sidebar";
 import { SidebarNav, type SidebarNavItem } from "@/components/SidebarNav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { readSession } from "@/lib/auth/session";
@@ -81,39 +82,32 @@ export default async function AppLayout({
       <LewatiKeKonten />
 
       {/*
-        Bar atas memegang logo dan nama app; sidebar di bawahnya memegang
-        tujuan. Sengaja tidak dua-duanya membawa logo — docs/DESIGN.md menaruh
-        identitas app di bar, dan mengulangnya di kepala sidebar hanya membuat
-        dua hal yang harus diubah bersamaan setiap kali nama app berganti.
+        Bar atas HANYA untuk layar sempit.
+
+        Mulai 1024px sidebar memegang semuanya — logo, nama app, tujuan, dan
+        blok akun — jadi bar di atasnya cuma mengulang yang sudah ada dan
+        memakan 72px tinggi layar. Di bawah 1024px sidebar tidak dirender sama
+        sekali, dan tanpa bar ini tidak ada logo DAN tidak ada jalan keluar:
+        tombol Keluar hidup di kaki sidebar yang tidak ada di sana.
       */}
       <BarAtas
         href="/karyawan"
-        kanan={akun ? `${akun.email} · ${ROLE_LABELS[akun.role]}` : undefined}
+        className="lg:hidden"
+        kanan={akun ? <SignOutButton ukuran="ringkas" /> : undefined}
       />
 
       <div className="flex">
-        <aside className="hidden w-64 shrink-0 border-r border-border lg:block">
-          {/* Sticky di bawah bar atas, jadi navigasi tetap terjangkau pada
-              halaman sepanjang Log Perubahan. */}
-          <div className="sticky top-0 flex max-h-screen flex-col gap-4 overflow-y-auto p-4">
-            <SidebarNav items={NAV_ITEMS} />
-
-            {akun ? (
-              <div className="mt-auto border-t border-border pt-4">
-                <p
-                  className="truncate text-pendukung font-medium text-foreground"
-                  title={akun.email}
-                >
-                  {akun.email}
-                </p>
-                <p className="text-mikro font-normal text-muted-foreground">
-                  {ROLE_LABELS[akun.role]}
-                </p>
-                <SignOutButton className="mt-3 w-full" />
-              </div>
-            ) : null}
-          </div>
-        </aside>
+        {/*
+          Navigasi, keadaan ciut, dan blok akun semuanya di dalam `Sidebar`.
+          Yang menyeberang ke sana cuma teks — daftar tujuan, email, dan label
+          role — bukan komponen: prop Client Component harus bisa
+          diserialisasi (lihat catatan `ikon` di NAV_ITEMS).
+        */}
+        <Sidebar
+          items={NAV_ITEMS}
+          email={akun?.email ?? null}
+          role={akun ? ROLE_LABELS[akun.role] : null}
+        />
 
         <div className="min-w-0 flex-1">
           {/* Di bawah 1024px kedelapan tujuan jadi strip yang bisa digeser. */}
