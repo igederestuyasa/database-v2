@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import { toast } from "@/components/ui/sonner";
 import { revertBatch } from "@/lib/actions/revisions";
 import { UI } from "@/lib/i18n/terms";
@@ -94,14 +94,14 @@ export function RevertBatchButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <Button
+      <Tombol
         type="button"
-        variant="outline"
-        size="sm"
+        nada="sekunder"
+        ukuran="ringkas"
         onClick={() => setOpen(true)}
       >
         {UI.kembalikanBatch}
-      </Button>
+      </Tombol>
 
       <AlertDialogContent>
         <AlertDialogHeader>

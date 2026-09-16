@@ -4,6 +4,7 @@ import * as React from "react";
 import { Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { KELAS_KOLOM_CARI, KELAS_LABEL } from "./kelas";
 
 /**
  * Kolom cari HC Panel — kontrol utama layar (docs/DESIGN.md §Komponen).
@@ -101,7 +102,7 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
 
     return (
       <div className={cn("w-full", className)}>
-        <label htmlFor={idKolom} className="block text-label text-foreground">
+        <label htmlFor={idKolom} className={KELAS_LABEL}>
           {label}
         </label>
 
@@ -122,18 +123,7 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
             onKeyDown={tekanDiKolom}
             aria-describedby={aria["aria-describedby"]}
             autoComplete="off"
-            className={cn(
-              "hc-permukaan h-kontrol-utama w-full rounded-kartu border border-input bg-card",
-              "pl-kontrol-teks pr-14 text-isi font-medium caret-brand shadow-kontrol",
-              "transition-colors duration-150 ease-standar",
-              "placeholder:font-normal placeholder:text-muted-foreground",
-              "hover:border-muted-foreground",
-              "focus:border-foreground focus:outline-none focus:ring-1 focus:ring-foreground",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-              // Silang bawaan Safari/Chrome untuk input[type=search]; tombol
-              // hapus di bawah ini yang menggantikannya.
-              "[&::-webkit-search-cancel-button]:appearance-none",
-            )}
+            className={KELAS_KOLOM_CARI}
           />
 
           {nilai !== "" ? (
