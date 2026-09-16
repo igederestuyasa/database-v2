@@ -3,10 +3,11 @@ import Link from "next/link";
 
 import { formatWaktu } from "@/components/revisions/revisionDiff";
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
-import { Button } from "@/components/ui/button";
+import Info from "@/components/hc/Info";
+import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { listApiKeys } from "@/lib/db/apiKeys";
-import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
+import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 
 import { ApiKeyTable, type ApiKeyRow } from "./_components/ApiKeyTable";
 
@@ -40,19 +41,10 @@ export default async function Page() {
 
   if (user.role !== "admin") {
     return (
-      <div className="mx-auto max-w-2xl py-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {NAV_LABELS["api-keys"]}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{UI.hanyaAdmin}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Anda masuk sebagai {TERMS.viewer}. Halaman ini memuat kredensial
-          {" "}{TERMS.konsumen}, jadi hanya {TERMS.admin} yang bisa membukanya.
-        </p>
-        <Button asChild className="mt-6">
-          <Link href="/karyawan">Kembali ke {TERMS.karyawan}</Link>
-        </Button>
-      </div>
+      <HanyaAdmin
+        judul={NAV_LABELS["api-keys"]}
+        alasan={`Halaman ini memuat kredensial ${TERMS.konsumen}, jadi hanya ${TERMS.admin} yang bisa membukanya.`}
+      />
     );
   }
 
@@ -98,41 +90,31 @@ export default async function Page() {
   const jumlahAktif = rows.filter((row) => row.status === "aktif").length;
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {NAV_LABELS["api-keys"]}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Satu {TERMS.apiKey} untuk satu {TERMS.konsumen} — aplikasi HC lain
-          yang menarik data {TERMS.karyawan} lewat <code>/api/v1</code>. Tiap
-          key membawa daftar kolom yang boleh diambilnya; kolom di luar daftar
-          itu ditolak. {TERMS.dataPribadiSensitif} tidak pernah ada di daftar
-          mana pun.
+    <ApiKeyTable
+      rows={rows}
+      peringatan={
+        <DaftarTerpotongAlert
+          daftar={terpotong ? [{ nama: TERMS.apiKey, dibaca: rows.length, total }] : []}
+          keterangan={`Halaman ini juga mengambil paling banyak ${PER_PAGE} baris sekali jalan. Sisanya tidak bisa diubah atau dinonaktifkan dari sini, dan jangan menyimpulkan sebuah key sudah tidak ada karena tidak terlihat di daftar ini.`}
+        />
+      }
+      catatan={
+        <p className="flex flex-wrap items-center gap-2 text-pendukung text-muted-foreground">
+          {total} {TERMS.apiKey} · {jumlahAktif} aktif
+          {terpotong ? ` · ${rows.length} pertama ditampilkan` : ""}
+          <Info label={`Keterangan ${TERMS.apiKey}`}>
+            {TERMS.konsumen} memakainya sebagai header{" "}
+            <code className="font-mono">Authorization: Bearer hck_…</code>. Key
+            penuh hanya ditampilkan sekali saat dibuat dan tidak bisa dilihat
+            lagi — yang tersimpan hanya sidik SHA-256-nya. Setiap perubahan
+            tercatat sebagai {TERMS.revisi} dan bisa dikembalikan lewat{" "}
+            <Link href="/log" className="underline underline-offset-4">
+              {NAV_LABELS.log}
+            </Link>
+            .
+          </Info>
         </p>
-      </header>
-
-      <DaftarTerpotongAlert
-        daftar={terpotong ? [{ nama: TERMS.apiKey, dibaca: rows.length, total }] : []}
-        keterangan={`Halaman ini juga mengambil paling banyak ${PER_PAGE} baris sekali jalan. Sisanya tidak bisa diubah atau dinonaktifkan dari sini, dan jangan menyimpulkan sebuah key sudah tidak ada karena tidak terlihat di daftar ini.`}
-      />
-
-      <ApiKeyTable rows={rows} />
-
-      <p className="max-w-3xl text-xs text-muted-foreground">
-        {terpotong
-          ? `${total} ${TERMS.apiKey}; dari ${rows.length} yang dimuat di halaman ini, ${jumlahAktif} aktif.`
-          : `${total} ${TERMS.apiKey}, ${jumlahAktif} di antaranya aktif.`}{" "}
-        {TERMS.konsumen} memakainya sebagai header{" "}
-        <code>Authorization: Bearer hck_…</code>. Key
-        penuh hanya ditampilkan sekali saat dibuat dan tidak bisa dilihat lagi
-        — yang tersimpan hanya sidik SHA-256-nya. Setiap perubahan di halaman
-        ini tercatat sebagai {TERMS.revisi} dan bisa dikembalikan lewat{" "}
-        <Link href="/log" className="underline underline-offset-4">
-          {NAV_LABELS.log}
-        </Link>
-        .
-      </p>
-    </div>
+      }
+    />
   );
 }

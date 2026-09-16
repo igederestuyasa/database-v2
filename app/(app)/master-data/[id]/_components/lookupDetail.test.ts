@@ -103,7 +103,7 @@ describe("buildLookupFields", () => {
     expect(field(fields, "Tipe").href).toBe(hrefTabMasterData(JG_A.tipe));
   });
 
-  it("explains an empty Urutan instead of leaving a bare dash", () => {
+  it("explains an empty Urutan behind the info marker, not as a bare dash", () => {
     const fields = buildLookupFields({
       lookup: { ...JG_A, urutan: null },
       digabungkanKe: null,
@@ -111,7 +111,7 @@ describe("buildLookupFields", () => {
     });
     const urutan = field(fields, "Urutan");
     expect(urutan.value).toBe(KOSONG);
-    expect(String(urutan.catatan)).toContain("paling bawah");
+    expect(String(urutan.info)).toContain("paling bawah");
   });
 
   it("shows Digabungkan ke only for a Lookup that was merged away", () => {
@@ -140,11 +140,13 @@ describe("fieldJumlahPemakai", () => {
     expect(row.href).toBeUndefined();
   });
 
-  it("names the employees column it counted through", () => {
+  it("names the employees column it counted through, behind the info marker", () => {
     const row = fieldJumlahPemakai(JG_A, { semua: 7, aktif: 6 });
     expect(row.value).toBe("7 Karyawan");
     expect(row.href).toBe(hrefKaryawanDenganLookup(JG_A));
-    expect(String(row.catatan)).toContain("job_grade_id");
+    // Angkanya tetap terlihat; nama kolomnya pindah ke penanda "i".
+    expect(String(row.catatan)).toContain("di antaranya aktif");
+    expect(String(row.info)).toContain("job_grade_id");
   });
 
   it("says the count failed instead of showing a zero it did not measure", () => {

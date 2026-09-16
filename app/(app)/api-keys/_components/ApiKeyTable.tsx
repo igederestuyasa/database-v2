@@ -25,6 +25,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import DetailPanel from "@/components/hc/DetailPanel";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import SearchField from "@/components/hc/SearchField";
+import StatusLabel from "@/components/hc/StatusLabel";
+import TataLetakDaftarDetail from "@/components/hc/TataLetakDaftarDetail";
+import Tombol from "@/components/hc/Tombol";
+import useDaftarDetail from "@/components/hc/useDaftarDetail";
 import { DataTable } from "@/components/shared/DataTable";
 import {
   AlertDialog,
@@ -36,8 +43,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -50,7 +55,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { setApiKeyStatus, type ApiKeyBaru } from "@/lib/actions/apiKeys";
 import { TOTAL_API_FIELDS, sortApiFields } from "@/lib/apiKeys/fieldGroups";
-import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
+import { NAV_LABELS, STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 
 import { ApiKeyForm } from "./ApiKeyForm";
 
@@ -75,10 +80,37 @@ export type ApiKeyRow = {
 export type ApiKeyTableProps = {
   /** Seluruh key, aktif maupun nonaktif; `page.tsx` tidak menyaring apa pun. */
   rows: ApiKeyRow[];
+  /** Peringatan dari halaman — daftar yang terbaca tidak lengkap. */
+  peringatan?: React.ReactNode;
+  /** Kalimat penutup di bawah tabel, dirakit halaman. */
+  catatan?: React.ReactNode;
 };
 
-export function ApiKeyTable({ rows }: ApiKeyTableProps) {
+export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
   const router = useRouter();
+  const [cari, setCari] = React.useState("");
+
+  const barisTampil = React.useMemo(() => {
+    const kunci = cari.trim().toLowerCase();
+    if (kunci === "") return rows;
+    return rows.filter(
+      (row) =>
+        row.nama_konsumen.toLowerCase().includes(kunci) ||
+        (row.key_prefix ?? "").toLowerCase().includes(kunci),
+    );
+  }, [rows, cari]);
+
+  /**
+   * Di sinilah panel detail benar-benar membawa sesuatu yang baru: daftar
+   * kolom yang boleh diambil sebuah key bisa puluhan nama, dan di dalam sel
+   * tabel ia selalu terpotong jadi "+N lainnya". Panel menampilkannya utuh.
+   */
+  const dd = useDaftarDetail({
+    items: barisTampil,
+    idDari: (row) => row.id,
+    kunciPencarian: cari,
+  });
+  const terpilih = dd.terpilih;
   const [sedangMenyimpan, mulaiMenyimpan] = React.useTransition();
 
   const [formOpen, setFormOpen] = React.useState(false);
@@ -117,15 +149,27 @@ export function ApiKeyTable({ rows }: ApiKeyTableProps) {
     [router],
   );
 
-  const columns = React.useMemo<ColumnDef<ApiKeyRow>[]>(
-    () => [
+  /**
+   * Enam kolom tidak muat berdampingan dengan panel detail: di pratinjau
+   * kolom aksi terpotong di balik tepi kartu, dan tabel yang terpotong
+   * diam-diam lebih buruk daripada tabel yang lebih ringkas.
+   *
+   * Yang pindah ke panel adalah tiga kolom yang memang sudah ditampilkan di
+   * sana — daftar kolom yang boleh diambil (di panel malah UTUH, tidak
+   * dipotong "+N lainnya"), terakhir dipakai, dan dibuat. Di bawah 1280px
+   * panelnya tidak ada dan keenam kolom kembali.
+   */
+  const panelTerlihat = dd.panelTerlihat;
+
+  const columns = React.useMemo<ColumnDef<ApiKeyRow>[]>(() => {
+    const semua: ColumnDef<ApiKeyRow>[] = [
       {
         accessorKey: "nama_konsumen",
         header: `Nama ${TERMS.konsumen}`,
         cell: ({ row }) => (
           <div className="space-y-0.5">
             <div className="font-medium">{row.original.nama_konsumen}</div>
-            <div className="font-mono text-xs text-muted-foreground">
+            <div className="font-mono text-mikro font-normal text-muted-foreground">
               {row.original.key_prefix ?? "—"}
               <span aria-hidden="true">…</span>
               <span className="sr-only">
@@ -137,19 +181,20 @@ export function ApiKeyTable({ rows }: ApiKeyTableProps) {
         ),
       },
       {
-        id: "kolom",
         accessorFn: (row) => row.allowed_fields.join(" "),
         header: "Kolom yang boleh diambil",
+        // Pindah ke panel detail saat panel terlihat.
+        id: "sekunder-kolom",
         cell: ({ row }) => {
           const fields = sortApiFields(row.original.allowed_fields);
           const cuplikan = fields.slice(0, 3);
           const sisa = fields.length - cuplikan.length;
           return (
             <div className="max-w-xs space-y-1">
-              <div className="text-xs">
+              <div className="text-mikro font-normal">
                 {fields.length} dari {TOTAL_API_FIELDS} kolom
               </div>
-              <div className="font-mono text-xs text-muted-foreground">
+              <div className="font-mono text-mikro font-normal text-muted-foreground">
                 {fields.length === 0
                   ? "belum ada kolom yang diizinkan"
                   : `${cuplikan.join(", ")}${sisa > 0 ? `, +${sisa} lainnya` : ""}`}
@@ -162,27 +207,29 @@ export function ApiKeyTable({ rows }: ApiKeyTableProps) {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge
-            variant={row.original.status === "aktif" ? "secondary" : "outline"}
-          >
+          <StatusLabel nada={row.original.status === "aktif" ? "sukses" : "netral"}>
             {STATUS_LABELS[row.original.status]}
-          </Badge>
+          </StatusLabel>
         ),
       },
       {
         accessorKey: "terakhirDipakai",
+        // Pindah ke panel detail saat panel terlihat.
+        id: "sekunder-terakhir",
         header: "Terakhir dipakai",
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-mikro font-normal text-muted-foreground">
             {row.original.terakhirDipakai ?? "Belum pernah"}
           </span>
         ),
       },
       {
         accessorKey: "dibuat",
+        // Pindah ke panel detail saat panel terlihat.
+        id: "sekunder-dibuat",
         header: "Dibuat",
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-mikro font-normal text-muted-foreground">
             {row.original.dibuat}
           </span>
         ),
@@ -198,48 +245,133 @@ export function ApiKeyTable({ rows }: ApiKeyTableProps) {
           const apiKey = row.original;
           return (
             <div className="flex flex-wrap justify-end gap-1">
-              <Button
+              <Tombol
                 type="button"
-                variant="ghost"
-                size="sm"
+                nada="halus"
+                ukuran="ringkas"
                 onClick={() => bukaUbah(apiKey)}
               >
                 {UI.ubah}
                 <span className="sr-only"> {apiKey.nama_konsumen}</span>
-              </Button>
-              <Button
+              </Tombol>
+              <Tombol
                 type="button"
-                variant="ghost"
-                size="sm"
+                nada="halus"
+                ukuran="ringkas"
                 disabled={sedangMenyimpan}
                 onClick={() => setTargetStatus(apiKey)}
               >
                 {apiKey.status === "aktif" ? UI.nonaktifkan : UI.aktifkan}
                 <span className="sr-only"> {apiKey.nama_konsumen}</span>
-              </Button>
+              </Tombol>
             </div>
           );
         },
       },
-    ],
-    [bukaUbah, sedangMenyimpan],
-  );
+    ];
+
+    return semua.filter(
+      (kolom) => !(panelTerlihat && kolom.id?.startsWith("sekunder-")),
+    );
+  }, [bukaUbah, sedangMenyimpan, panelTerlihat]);
 
   return (
     <>
-      <DataTable
-        columns={columns}
-        data={rows}
-        getRowId={(row) => row.id}
-        initialSorting={[{ id: "nama_konsumen", desc: false }]}
-        searchPlaceholder={`${UI.cari} nama ${TERMS.konsumen}…`}
-        emptyMessage={`Belum ada ${TERMS.apiKey}.`}
-        toolbar={
-          <Button type="button" className="ml-auto" onClick={bukaTambah}>
-            {UI.tambah} {TERMS.apiKey}
-          </Button>
+      <TataLetakDaftarDetail
+        panelTerlihat={dd.panelTerlihat}
+        pembuka={
+          <PembukaLayar
+            salam="Integrasi"
+            judul={NAV_LABELS["api-keys"]}
+            info={`Satu ${TERMS.apiKey} untuk satu ${TERMS.konsumen}. Tiap key membawa daftar kolom yang boleh diambilnya; ${TERMS.dataPribadiSensitif} tidak pernah ada di daftar mana pun.`}
+          >
+            <SearchField
+              id="cari-api-key"
+              label={`${UI.cari} ${TERMS.apiKey}`}
+              nilai={cari}
+              onNilaiChange={setCari}
+              placeholder={`Nama ${TERMS.konsumen} atau prefix key…`}
+              onPanahBawah={dd.fokusItemPertama}
+            />
+          </PembukaLayar>
         }
-      />
+        panel={
+          <DetailPanel
+            entitas={TERMS.apiKey}
+            nama={terpilih?.nama_konsumen ?? null}
+            kategori={TERMS.konsumen}
+            status={
+              terpilih ? (
+                <StatusLabel nada={terpilih.status === "aktif" ? "sukses" : "netral"}>
+                  {STATUS_LABELS[terpilih.status]}
+                </StatusLabel>
+              ) : null
+            }
+            deskripsi={
+              terpilih
+                ? `${terpilih.allowed_fields.length} dari ${TOTAL_API_FIELDS} kolom diizinkan.`
+                : null
+            }
+            baris={
+              terpilih
+                ? [
+                    { label: "Prefix key", nilai: terpilih.key_prefix ?? "—" },
+                    { label: "Dibuat", nilai: terpilih.dibuat },
+                    {
+                      label: "Terakhir dipakai",
+                      nilai: terpilih.terakhirDipakai ?? "Belum pernah",
+                    },
+                    {
+                      label: "Kolom yang boleh diambil",
+                      nilai:
+                        terpilih.allowed_fields.length === 0 ? (
+                          "Belum ada"
+                        ) : (
+                          <span className="font-mono text-mikro font-normal">
+                            {terpilih.allowed_fields.join(", ")}
+                          </span>
+                        ),
+                    },
+                  ]
+                : undefined
+            }
+            pesanKosong={`Tidak ada ${TERMS.apiKey} yang cocok dengan pencarian ini.`}
+            aksi={
+              terpilih ? (
+                <Tombol ukuran="panel" onClick={() => bukaUbah(terpilih)}>
+                  {UI.ubah} {TERMS.apiKey}
+                </Tombol>
+              ) : null
+            }
+          />
+        }
+      >
+        <div className="space-y-6">
+          {peringatan}
+
+          <DataTable
+            columns={columns}
+            data={barisTampil}
+            getRowId={(row) => row.id}
+            initialSorting={[{ id: "nama_konsumen", desc: false }]}
+            cari={cari}
+            emptyMessage={
+              cari.trim() !== ""
+                ? `Tidak ada ${TERMS.apiKey} yang cocok dengan pencarian ini.`
+                : `Belum ada ${TERMS.apiKey}.`
+            }
+            propsDaftar={dd.propsDaftar()}
+            propsBaris={(row) => ({ ...dd.propsItem(row), tabIndex: 0 })}
+            toolbar={
+              <Tombol className="ml-auto" onClick={bukaTambah}>
+                {UI.tambah} {TERMS.apiKey}
+              </Tombol>
+            }
+          />
+
+          {catatan}
+        </div>
+      </TataLetakDaftarDetail>
 
       {/* Tambah / Ubah */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -428,14 +560,14 @@ function KeyBaruDialog({
               </p>
 
               <div className="space-y-2">
-                <code className="block select-all break-all rounded-md border bg-muted p-3 font-mono text-sm text-foreground">
+                <code className="block select-all break-all rounded-md border bg-muted p-3 font-mono text-pendukung text-foreground">
                   {hasil.key}
                 </code>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={salin}>
+                  <Tombol type="button" nada="sekunder" ukuran="ringkas" onClick={salin}>
                     {tersalin ? "Tersalin" : "Salin key"}
-                  </Button>
-                  <span className="text-xs" aria-live="polite">
+                  </Tombol>
+                  <span className="text-mikro font-normal" aria-live="polite">
                     {tersalin
                       ? "Key sudah ada di papan klip. Tempel ke konfigurasi Konsumen sekarang."
                       : ""}
@@ -443,7 +575,7 @@ function KeyBaruDialog({
                 </div>
               </div>
 
-              <p className="text-xs">
+              <p className="text-mikro font-normal">
                 {TERMS.konsumen} memakainya sebagai header{" "}
                 <code>Authorization: Bearer {hasil.apiKey.key_prefix}…</code>.
                 Yang tetap bisa dilihat di daftar hanya delapan karakter

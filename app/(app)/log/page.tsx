@@ -1,14 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Search } from "lucide-react";
+
+import FilterTabs from "@/components/hc/FilterTabs";
+import { KELAS_KOLOM_CARI, KELAS_LABEL } from "@/components/hc/kelas";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import { kelasTombol } from "@/components/hc/Tombol";
 
 import { requirePageSession } from "@/lib/auth/session";
 import { readProfileLabels } from "@/lib/db/labels";
 import { countRevisionsInBatch, getBatchById, listBatches } from "@/lib/db/revisions";
 import type { DbClient } from "@/lib/db/shared";
-import { BATCH_TYPE_LABELS, NAV_LABELS, UI } from "@/lib/i18n/terms";
+import { BATCH_TYPE_LABELS, NAV_LABELS } from "@/lib/i18n/terms";
 import { logError } from "@/lib/log";
 import type { ReferenceLabels } from "@/lib/revisions/references";
 import { BATCH_JENIS, type BatchJenis } from "@/lib/revisions/tables";
+import { cn } from "@/lib/utils";
 import { isUuid } from "@/lib/validation/uuid";
 
 import BatchList, { type BatchRow } from "./_components/BatchList";
@@ -71,8 +78,6 @@ function parseBatchId(value: string | undefined): string | undefined {
   return isUuid(value) ? value : undefined;
 }
 
-const SELECT_CLASS =
-  "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 export default async function Page({
   searchParams,
@@ -146,106 +151,96 @@ export default async function Page({
     return suffix ? `/log?${suffix}` : "/log";
   }
 
+  /** Alamat halaman dengan satu filter diganti — dipakai tab jenis & status. */
+  function hrefFilter(ubah: { jenis?: string | null; status?: string | null }): string {
+    const query = new URLSearchParams();
+    const jenisBaru = ubah.jenis === undefined ? jenis : ubah.jenis;
+    const statusBaru = ubah.status === undefined ? statusValue : ubah.status;
+    if (jenisBaru) query.set("jenis", jenisBaru);
+    if (search) query.set("q", search);
+    if (statusBaru && statusBaru !== "semua") query.set("status", statusBaru);
+    const suffix = query.toString();
+    return suffix ? `/log?${suffix}` : "/log";
+  }
+
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{NAV_LABELS.log}</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Setiap tindakan tercatat sebagai satu Batch berisi Revisi — sebelum,
-          sesudah, siapa, dan kapan. Admin bisa mengembalikan satu Batch utuh;
-          hasilnya jadi Batch baru, dan tidak ada yang dihapus dari log.
-        </p>
-      </header>
-
-      {batchId ? (
-        <p className="rounded-lg border bg-muted/30 p-3 text-sm">
-          {sorotan
-            ? "Menampilkan satu Batch yang ditautkan dari halaman lain."
-            : "Batch yang ditautkan tidak ditemukan, atau tidak boleh Anda baca."}{" "}
-          <Link href="/log" className="underline underline-offset-2">
-            Lihat semua Batch
-          </Link>
-        </p>
-      ) : null}
-
-      <form
-        method="get"
-        action="/log"
-        className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-3"
+    <div className="space-y-12 pb-4">
+      <PembukaLayar
+        salam="Jejak perubahan"
+        judul={NAV_LABELS.log}
+        info="Setiap tindakan tercatat sebagai satu Batch berisi Revisi — sebelum, sesudah, siapa, dan kapan. Tidak ada yang dihapus dari log."
       >
-        <div className="flex flex-col gap-1">
-          <label htmlFor="q" className="text-xs font-medium text-muted-foreground">
-            Cari keterangan
+        {/*
+          Form GET biasa, bukan kolom cari ber-state.
+          Halaman ini Server Component dan pagernya tautan; pencarian yang
+          berjalan tanpa JavaScript membuat seluruh halaman tetap berfungsi
+          kalau skripnya gagal dimuat. Bentuknya tetap kolom cari HC Panel
+          lewat KELAS_KOLOM_CARI yang sama persis dengan SearchField.
+        */}
+        <form method="get" action="/log" className="w-full">
+          {jenis ? <input type="hidden" name="jenis" value={jenis} /> : null}
+          {statusValue !== "semua" ? (
+            <input type="hidden" name="status" value={statusValue} />
+          ) : null}
+
+          <label htmlFor="q" className={KELAS_LABEL}>
+            Cari keterangan Batch
           </label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            defaultValue={search ?? ""}
-            placeholder="mis. Merge Jabatan"
-            className={`${SELECT_CLASS} w-56`}
-          />
-        </div>
 
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor="jenis"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Jenis Batch
-          </label>
-          <select
-            id="jenis"
-            name="jenis"
-            defaultValue={jenis ?? ""}
-            className={SELECT_CLASS}
-          >
-            <option value="">Semua jenis</option>
-            {BATCH_JENIS.map((value) => (
-              <option key={value} value={value}>
-                {BATCH_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="relative mt-2">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              id="q"
+              name="q"
+              type="search"
+              defaultValue={search ?? ""}
+              placeholder="mis. Merge Jabatan"
+              className={KELAS_KOLOM_CARI}
+            />
+          </div>
+        </form>
+      </PembukaLayar>
 
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor="status"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Status Revert
-          </label>
-          <select
-            id="status"
-            name="status"
-            defaultValue={statusValue}
-            className={SELECT_CLASS}
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          type="submit"
-          className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
-        >
-          {UI.filter}
-        </button>
-
-        {jenis || search || statusValue !== "semua" ? (
-          <Link
-            href="/log"
-            className="h-9 rounded-md border border-input px-4 text-sm leading-9 hover:bg-accent"
-          >
-            Bersihkan
-          </Link>
+      <div className="space-y-6">
+        {batchId ? (
+          <p className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
+            {sorotan
+              ? "Menampilkan satu Batch yang ditautkan dari halaman lain."
+              : "Batch yang ditautkan tidak ditemukan, atau tidak boleh Anda baca."}{" "}
+            <Link href="/log" className="underline underline-offset-4 hover:text-foreground">
+              Lihat semua Batch
+            </Link>
+          </p>
         ) : null}
-      </form>
+
+        {/* Jenis dan status jadi tab: keduanya memang mengubah alamat halaman,
+            jadi tautan ber-aria-current adalah bentuk yang benar. */}
+        <FilterTabs
+          label="Jenis Batch"
+          aktif={jenis ?? "semua"}
+          items={[
+            { nilai: "semua", label: "Semua jenis", href: hrefFilter({ jenis: null }) },
+            ...BATCH_JENIS.map((value) => ({
+              nilai: value,
+              label: BATCH_TYPE_LABELS[value],
+              href: hrefFilter({ jenis: value }),
+            })),
+          ]}
+        />
+
+        <FilterTabs
+          label="Status pengembalian"
+          aktif={statusValue}
+          items={STATUS_OPTIONS.map((option) => ({
+            nilai: option.value,
+            label: option.label,
+            href: hrefFilter({ status: option.value }),
+          }))}
+        />
+
 
       <BatchList
         batches={rows}
@@ -254,25 +249,27 @@ export default async function Page({
         expandedBatchId={sorotan?.id}
       />
 
-      {batchId ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>
-            {batches.total} Batch · Halaman {batches.page} dari {batches.pageCount}
-          </span>
-          <div className="flex gap-2">
-            <PagerLink
-              href={hrefFor(batches.page - 1)}
-              disabled={batches.page <= 1}
-              label="Sebelumnya"
-            />
-            <PagerLink
-              href={hrefFor(batches.page + 1)}
-              disabled={batches.page >= batches.pageCount}
-              label="Berikutnya"
-            />
+        {batchId ? null : (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-pendukung text-muted-foreground">
+            <span>
+              {batches.total} Batch · Halaman {batches.page} dari{" "}
+              {batches.pageCount}
+            </span>
+            <div className="flex gap-2">
+              <PagerLink
+                href={hrefFor(batches.page - 1)}
+                disabled={batches.page <= 1}
+                label="Sebelumnya"
+              />
+              <PagerLink
+                href={hrefFor(batches.page + 1)}
+                disabled={batches.page >= batches.pageCount}
+                label="Berikutnya"
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -311,7 +308,7 @@ function PagerLink({
     return (
       <span
         aria-disabled="true"
-        className="rounded-md border border-input px-3 py-1.5 text-sm opacity-50"
+        className={cn(kelasTombol({ nada: "sekunder", ukuran: "ringkas" }), "opacity-50")}
       >
         {label}
       </span>
@@ -320,7 +317,7 @@ function PagerLink({
   return (
     <Link
       href={href}
-      className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+      className={kelasTombol({ nada: "sekunder", ukuran: "ringkas" })}
     >
       {label}
     </Link>

@@ -12,7 +12,7 @@
  * all thirty columns of a Karyawan to reveal the one that changed is how an
  * audit log becomes unreadable.
  */
-import { Badge } from "@/components/ui/badge";
+import StatusLabel from "@/components/hc/StatusLabel";
 import { isLoggedTable } from "@/lib/revisions/tables";
 import { REVISION_ACTION_LABELS } from "@/lib/i18n/terms";
 import type { Revision } from "@/lib/types/db";
@@ -62,18 +62,18 @@ export function RevisionCard({
       : revision.action;
 
   return (
-    <li className="rounded-md border bg-card p-3">
+    <li className="hc-permukaan rounded-kartu border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={isInsert ? "secondary" : "outline"}>{aksiLabel}</Badge>
+            <StatusLabel nada={isInsert ? "sukses" : "netral"}>{aksiLabel}</StatusLabel>
             {showRow ? (
-              <span className="text-sm font-medium">
+              <span className="text-pendukung font-semibold">
                 {tableLabel(table)} · {rowTitle}
               </span>
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-mikro font-normal text-muted-foreground">
             {formatWaktu(revision.created_at)} · oleh{" "}
             {actorLabel(revision.actor_id, labels)} · Revisi #{revision.id}
           </p>
@@ -90,7 +90,7 @@ export function RevisionCard({
       </div>
 
       {fields.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-pendukung text-muted-foreground">
           {isLoggedTable(table)
             ? "Tidak ada kolom yang berubah pada Revisi ini."
             : `Tabel "${table}" tidak dikenal, jadi isinya tidak bisa dijabarkan.`}
@@ -105,10 +105,10 @@ export function RevisionCard({
                 key={field.column}
                 className="grid gap-x-4 gap-y-0.5 sm:grid-cols-[minmax(9rem,14rem)_1fr]"
               >
-                <dt className="text-xs font-medium text-muted-foreground sm:text-sm">
+                <dt className="text-pendukung text-muted-foreground">
                   {field.label}
                 </dt>
-                <dd className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                <dd className="flex flex-wrap items-baseline gap-x-2 text-pendukung">
                   {isInsert ? (
                     <span className="font-medium">{sesudah}</span>
                   ) : (
@@ -131,7 +131,7 @@ export function RevisionCard({
       )}
 
       {showRow ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-mikro font-normal text-muted-foreground">
           ID baris: {shortId(revision.row_id)}
         </p>
       ) : null}

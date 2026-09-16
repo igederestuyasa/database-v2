@@ -22,8 +22,8 @@ import RevisionCard from "@/components/revisions/RevisionCard";
 import type { ReferenceLabels } from "@/components/revisions/revisionDiff";
 import { formatWaktu, actorLabel } from "@/components/revisions/revisionDiff";
 import { useReferenceLabels } from "@/components/revisions/useReferenceLabels";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import StatusLabel, { type NadaStatus } from "@/components/hc/StatusLabel";
+import Tombol from "@/components/hc/Tombol";
 import { loadBatchRevisions } from "@/lib/actions/revisions";
 import { BATCH_TYPE_LABELS, UI } from "@/lib/i18n/terms";
 import type { BatchJenis } from "@/lib/revisions/tables";
@@ -55,23 +55,29 @@ export type BatchListProps = {
 
 const EMPTY_REVISIONS: readonly Revision[] = [];
 
-/** `edit` is the ordinary case and stays quiet; the rest are worth spotting. */
-const BADGE_VARIANT: Record<BatchJenis, "default" | "secondary" | "outline"> = {
-  edit: "outline",
-  create: "secondary",
-  deactivate: "secondary",
-  merge: "default",
-  rename: "secondary",
-  seed: "secondary",
-  revert: "default",
+/**
+ * `edit` adalah kejadian sehari-hari dan tetap diam; yang mengubah banyak baris
+ * sekaligus diberi nada peringatan supaya terlihat saat menyusuri log.
+ *
+ * Bukan "penting" versus "tidak penting": warna di HC Panel hanya menguatkan
+ * kata yang sudah terbaca, dan jenisnya tetap tertulis di dalam labelnya.
+ */
+const NADA_JENIS: Record<BatchJenis, NadaStatus> = {
+  edit: "netral",
+  create: "sukses",
+  deactivate: "netral",
+  merge: "peringatan",
+  rename: "netral",
+  seed: "peringatan",
+  revert: "peringatan",
 };
 
 function jenisLabel(jenis: string): string {
   return jenis in BATCH_TYPE_LABELS ? BATCH_TYPE_LABELS[jenis as BatchJenis] : jenis;
 }
 
-function badgeVariant(jenis: string): "default" | "secondary" | "outline" {
-  return jenis in BADGE_VARIANT ? BADGE_VARIANT[jenis as BatchJenis] : "secondary";
+function nadaJenis(jenis: string): NadaStatus {
+  return jenis in NADA_JENIS ? NADA_JENIS[jenis as BatchJenis] : "netral";
 }
 
 export function BatchList({
@@ -82,7 +88,7 @@ export function BatchList({
 }: BatchListProps) {
   if (batches.length === 0) {
     return (
-      <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-kartu border border-dashed border-garis-putus p-8 text-center text-pendukung text-muted-foreground">
         Belum ada Batch yang cocok dengan filter ini.
       </p>
     );
@@ -199,37 +205,37 @@ function BatchItem({
   const panelId = `batch-${batch.id}`;
 
   return (
-    <li className="rounded-lg border bg-card">
+    <li className="hc-permukaan rounded-kartu border border-border bg-card">
       <div className="flex flex-wrap items-start justify-between gap-3 p-4">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={badgeVariant(batch.jenis)}>
+            <StatusLabel nada={nadaJenis(batch.jenis)}>
               {jenisLabel(batch.jenis)}
-            </Badge>
-            <span className="font-medium">
+            </StatusLabel>
+            <span className="text-pendukung font-semibold">
               {batch.keterangan ?? "Tanpa keterangan"}
             </span>
             {sudahDikembalikan ? (
-              <Badge variant="outline">Sudah dikembalikan</Badge>
+              <StatusLabel nada="sukses">Sudah dikembalikan</StatusLabel>
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-mikro font-normal text-muted-foreground">
             {formatWaktu(batch.created_at)} · oleh{" "}
             {actorLabel(batch.actor_id, labels)} · {batch.revisionCount} Revisi
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
+          <Tombol
             type="button"
-            variant="ghost"
-            size="sm"
+            nada="halus"
+            ukuran="ringkas"
             onClick={toggle}
             aria-expanded={open}
             aria-controls={panelId}
           >
             {open ? "Sembunyikan Revisi" : "Lihat Revisi"}
-          </Button>
+          </Tombol>
           {canRevert && !sudahDikembalikan ? (
             <RevertBatchButton
               batchId={batch.id}
@@ -241,25 +247,25 @@ function BatchItem({
       </div>
 
       {open ? (
-        <div id={panelId} className="border-t px-4 py-3">
+        <div id={panelId} className="border-t border-border px-4 py-4">
           {status === "memuat" ? (
-            <p className="text-sm text-muted-foreground">{UI.sedangMemuat}</p>
+            <p className="text-pendukung text-muted-foreground">{UI.sedangMemuat}</p>
           ) : status === "gagal" ? (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-pendukung text-muted-foreground">
                 {pesanGagal ?? UI.gagalMemuat}
               </p>
-              <Button
+              <Tombol
                 type="button"
-                variant="outline"
-                size="sm"
+                nada="sekunder"
+                ukuran="ringkas"
                 onClick={() => void muatRevisi()}
               >
                 {UI.cobaLagi}
-              </Button>
+              </Tombol>
             </div>
           ) : revisions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-pendukung text-muted-foreground">
               Tidak ada Revisi yang bisa Anda baca di Batch ini. Revisi Data
               Pribadi Sensitif, API Key dan Pengguna dibatasi hak akses.
             </p>
@@ -283,7 +289,7 @@ function BatchItem({
                 it anyway. The note says what the state is instead.
               */}
               {sudahDikembalikan && canRevert ? (
-                <p className="mb-3 text-xs text-muted-foreground">
+                <p className="mb-3 text-mikro font-normal text-muted-foreground">
                   Batch ini sudah pernah dikembalikan utuh, jadi tombol
                   &ldquo;{UI.kembalikanBatch}&rdquo; di atas tidak ada lagi.
                   Mengembalikan satu Revisi di bawah tetap bisa: barisnya
@@ -305,18 +311,18 @@ function BatchItem({
                 ))}
               </ul>
               {catatanTidakBisa ? (
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-3 text-mikro font-normal text-muted-foreground">
                   {catatanTidakBisa}
                 </p>
               ) : null}
               {muat && muat.total > revisions.length ? (
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-3 text-mikro font-normal text-muted-foreground">
                   Menampilkan {revisions.length} dari {muat.total} Revisi.
                   Mengembalikan Batch ini tetap mencakup semuanya.
                 </p>
               ) : null}
               {gagalNama ? (
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-3 text-mikro font-normal text-muted-foreground">
                   Sebagian nama Data Referensi tidak bisa dimuat, jadi ada nilai
                   yang tampil sebagai &ldquo;(tidak dikenal)&rdquo;.
                 </p>

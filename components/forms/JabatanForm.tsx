@@ -23,18 +23,23 @@
  * dialog konfirmasi di halaman Jabatan, bukan di sebuah kotak centang.
  */
 import * as React from "react";
+
+import {
+  KELAS_ISIAN,
+  BidangLabel,
+  BidangBantuan,
+  BidangPesan,
+} from "@/components/hc/Bidang";
+import Tombol from "@/components/hc/Tombol";
+import { cn } from "@/lib/utils";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
@@ -120,7 +125,7 @@ export function JabatanForm({ jabatan, onSelesai, onBatal }: JabatanFormProps) {
           name="kode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Kode {TERMS.jabatan}</FormLabel>
+              <BidangLabel>Kode {TERMS.jabatan}</BidangLabel>
               <FormControl>
                 <Input
                   {...field}
@@ -129,15 +134,15 @@ export function JabatanForm({ jabatan, onSelesai, onBatal }: JabatanFormProps) {
                   autoComplete="off"
                   spellCheck={false}
                   placeholder="mis. JBT-001"
-                  className={sedangUbah ? "bg-muted" : undefined}
+                  className={cn(KELAS_ISIAN, sedangUbah ? "bg-muted" : undefined)}
                 />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 {sedangUbah
                   ? "Kode tidak bisa diubah setelah Jabatan dibuat. Kalau dua kode ternyata Jabatan yang sama, gabungkan keduanya lewat Merge."
                   : "Kode tetap yang dipakai untuk merujuk Jabatan ini. Tidak bisa diubah setelah disimpan."}
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
@@ -147,38 +152,38 @@ export function JabatanForm({ jabatan, onSelesai, onBatal }: JabatanFormProps) {
           name="nama"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nama {TERMS.jabatan}</FormLabel>
+              <BidangLabel>Nama {TERMS.jabatan}</BidangLabel>
               <FormControl>
-                <Input
+                <Input className={KELAS_ISIAN}
                   {...field}
                   autoFocus={sedangUbah}
                   autoComplete="off"
                   placeholder="mis. Manager Proyek"
                 />
               </FormControl>
-              <FormDescription>
+              <BidangBantuan>
                 Nama boleh diperbaiki kapan saja; perubahannya langsung berlaku
                 untuk semua {TERMS.karyawan} yang memegang {TERMS.jabatan} ini.
-              </FormDescription>
-              <FormMessage />
+              </BidangBantuan>
+              <BidangPesan />
             </FormItem>
           )}
         />
 
         <div className="flex justify-end gap-2 pt-2">
           {onBatal ? (
-            <Button
+            <Tombol
               type="button"
-              variant="outline"
+              nada="sekunder"
               onClick={onBatal}
               disabled={form.formState.isSubmitting}
             >
               {UI.batal}
-            </Button>
+            </Tombol>
           ) : null}
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Tombol type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Menyimpan…" : UI.simpan}
-          </Button>
+          </Tombol>
         </div>
       </form>
     </Form>

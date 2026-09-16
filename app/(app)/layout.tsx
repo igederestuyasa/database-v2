@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import BarAtas, { LewatiKeKonten } from "@/components/hc/BarAtas";
+import KakiHalaman from "@/components/hc/KakiHalaman";
 import { SidebarNav, type SidebarNavItem } from "@/components/SidebarNav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { readSession } from "@/lib/auth/session";
@@ -18,48 +20,22 @@ export const dynamic = "force-dynamic";
 /**
  * THE SIDEBAR. All eight destinations live here, in this one file, so that no
  * two units ever edit the same nav markup.
+ *
+ * `ikon` adalah NAMA, bukan komponen. File ini Server Component dan
+ * `SidebarNav` Client Component, jadi prop yang menyeberang harus bisa
+ * diserialisasi — komponen `lucide-react` tidak bisa, dan menyerahkannya
+ * membuat layout ini melempar dan seluruh grup `(app)` jadi halaman error.
+ * Tabel nama → ikonnya ada di `components/SidebarNav.tsx`.
  */
 const NAV_ITEMS: readonly SidebarNavItem[] = [
-  {
-    href: "/karyawan",
-    label: NAV_LABELS.karyawan,
-    keterangan: "Cari & kelola data Karyawan",
-  },
-  {
-    href: "/struktur",
-    label: NAV_LABELS.struktur,
-    keterangan: "Hierarki Unit Organisasi",
-  },
-  {
-    href: "/jabatan",
-    label: NAV_LABELS.jabatan,
-    keterangan: "Daftar nama pekerjaan",
-  },
-  {
-    href: "/master-data",
-    label: NAV_LABELS["master-data"],
-    keterangan: "Semua tipe Lookup",
-  },
-  {
-    href: "/bereskan",
-    label: NAV_LABELS.bereskan,
-    keterangan: "Temuan data kotor",
-  },
-  {
-    href: "/log",
-    label: NAV_LABELS.log,
-    keterangan: "Batch & Revisi, bisa dikembalikan",
-  },
-  {
-    href: "/api-keys",
-    label: NAV_LABELS["api-keys"],
-    keterangan: "Konsumen & whitelist kolom",
-  },
-  {
-    href: "/pengguna",
-    label: NAV_LABELS.pengguna,
-    keterangan: "Role admin / viewer",
-  },
+  { href: "/karyawan", label: NAV_LABELS.karyawan, ikon: "orang" },
+  { href: "/struktur", label: NAV_LABELS.struktur, ikon: "jaringan" },
+  { href: "/jabatan", label: NAV_LABELS.jabatan, ikon: "koper" },
+  { href: "/master-data", label: NAV_LABELS["master-data"], ikon: "daftar" },
+  { href: "/bereskan", label: NAV_LABELS.bereskan, ikon: "seru" },
+  { href: "/log", label: NAV_LABELS.log, ikon: "riwayat" },
+  { href: "/api-keys", label: NAV_LABELS["api-keys"], ikon: "kunci" },
+  { href: "/pengguna", label: NAV_LABELS.pengguna, ikon: "atur-orang" },
 ];
 
 /**
@@ -100,67 +76,74 @@ export default async function AppLayout({
   const akun = await bacaAkun();
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-72 shrink-0 flex-col border-r bg-muted/30 md:flex">
-        <div className="border-b px-6 py-5">
-          <Link href="/karyawan" className="block">
-            <span className="text-lg font-semibold tracking-tight">
-              HC Core
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              Data Karyawan PT Hutama Karya
-            </span>
-          </Link>
-        </div>
-        <div className="flex-1 overflow-y-auto p-3">
-          <SidebarNav items={NAV_ITEMS} />
-        </div>
+    <div className="min-h-screen bg-background">
+      {/* Harus jadi elemen yang bisa difokus pertama di halaman. */}
+      <LewatiKeKonten />
 
-        {akun ? (
-          <div className="border-t px-4 py-4">
-            <p className="truncate text-sm font-medium" title={akun.email}>
-              {akun.email}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {ROLE_LABELS[akun.role]}
-            </p>
-            <SignOutButton className="mt-3 w-full" />
-          </div>
-        ) : null}
-      </aside>
+      {/*
+        Bar atas memegang logo dan nama app; sidebar di bawahnya memegang
+        tujuan. Sengaja tidak dua-duanya membawa logo — docs/DESIGN.md menaruh
+        identitas app di bar, dan mengulangnya di kepala sidebar hanya membuat
+        dua hal yang harus diubah bersamaan setiap kali nama app berganti.
+      */}
+      <BarAtas
+        href="/karyawan"
+        kanan={akun ? `${akun.email} · ${ROLE_LABELS[akun.role]}` : undefined}
+      />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Narrow screens get the same destinations as a scrolling strip —
-            and, at the end of it, the same way out as the sidebar. */}
-        <div className="flex items-center gap-2 border-b bg-muted/30 p-2 md:hidden">
-          <div className="min-w-0 flex-1 overflow-x-auto">
-            <div className="flex gap-2">
-              {NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="whitespace-nowrap rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      <div className="flex">
+        <aside className="hidden w-64 shrink-0 border-r border-border lg:block">
+          {/* Sticky di bawah bar atas, jadi navigasi tetap terjangkau pada
+              halaman sepanjang Log Perubahan. */}
+          <div className="sticky top-0 flex max-h-screen flex-col gap-4 overflow-y-auto p-4">
+            <SidebarNav items={NAV_ITEMS} />
+
+            {akun ? (
+              <div className="mt-auto border-t border-border pt-4">
+                <p
+                  className="truncate text-pendukung font-medium text-foreground"
+                  title={akun.email}
                 >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
+                  {akun.email}
+                </p>
+                <p className="text-mikro font-normal text-muted-foreground">
+                  {ROLE_LABELS[akun.role]}
+                </p>
+                <SignOutButton className="mt-3 w-full" />
+              </div>
+            ) : null}
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1">
+          {/* Di bawah 1024px kedelapan tujuan jadi strip yang bisa digeser. */}
+          <div className="border-b border-border px-5 py-2 lg:hidden">
+            <SidebarNav items={NAV_ITEMS} arah="mendatar" />
           </div>
 
-          {akun ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                className="max-w-[10rem] truncate text-xs text-muted-foreground"
-                title={`${akun.email} · ${ROLE_LABELS[akun.role]}`}
-              >
-                {akun.email}
-              </span>
-              <SignOutButton variant="ghost" />
-            </div>
-          ) : null}
-        </div>
+          <div className="mx-auto max-w-wadah px-5 lg:px-10">
+            <main id="konten" className="min-w-0">
+              {children}
+            </main>
 
-        <main className="min-w-0 flex-1 p-6">{children}</main>
+            <KakiHalaman>
+              <p>
+                HC Core — sumber kebenaran data Karyawan PT Hutama Karya
+                (Persero).
+              </p>
+              <p className="mt-1">
+                Setiap perubahan tercatat dan bisa dikembalikan lewat{" "}
+                <Link
+                  href="/log"
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  {NAV_LABELS.log}
+                </Link>
+                . Ada data yang janggal? Hubungi admin HC Core.
+              </p>
+            </KakiHalaman>
+          </div>
+        </div>
       </div>
     </div>
   );

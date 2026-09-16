@@ -36,8 +36,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -52,22 +50,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import DetailPanel from "@/components/hc/DetailPanel";
+import FilterTabs from "@/components/hc/FilterTabs";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import SearchField from "@/components/hc/SearchField";
+import StatusLabel from "@/components/hc/StatusLabel";
+import TataLetakDaftarDetail from "@/components/hc/TataLetakDaftarDetail";
+import Tombol from "@/components/hc/Tombol";
+import useDaftarDetail from "@/components/hc/useDaftarDetail";
 import DataTable from "@/components/shared/DataTable";
 import { toLookupOptions, type EntityOption } from "@/components/shared/EntityPicker";
 import MergeDialog from "@/components/shared/MergeDialog";
 import LookupForm from "@/components/forms/LookupForm";
 import { countKaryawanByLookup, updateLookup } from "@/lib/actions/lookups";
-import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
-import { LOOKUP_TYPE_LABELS, type LookupType } from "@/lib/validation/lookupTypes";
+import { NAV_LABELS, STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
+import { LOOKUP_TYPES, LOOKUP_TYPE_LABELS, type LookupType } from "@/lib/validation/lookupTypes";
 
 /** One row of the active tab, already flattened by the Server Component. */
 export type MasterDataRow = {
@@ -87,6 +85,10 @@ export type LookupTableProps = {
   tipe: LookupType;
   rows: readonly MasterDataRow[];
   isAdmin: boolean;
+  /** Jumlah baris per tipe, untuk angka di tab. */
+  jumlahPerTipe: Readonly<Record<LookupType, number>>;
+  /** Peringatan dari halaman — daftar yang terbaca tidak lengkap. */
+  peringatan?: React.ReactNode;
 };
 
 type StatusFilter = "aktif" | "nonaktif" | "semua";
@@ -107,8 +109,15 @@ function urutanAsText(urutan: number | null): string {
   return urutan === null ? "" : String(urutan);
 }
 
-export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
+export function LookupTable({
+  tipe,
+  rows,
+  isAdmin,
+  jumlahPerTipe,
+  peringatan,
+}: LookupTableProps) {
   const router = useRouter();
+  const [cari, setCari] = React.useState("");
 
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("aktif");
   const [formRow, setFormRow] = React.useState<MasterDataRow | null>(null);
@@ -141,13 +150,30 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
       });
   }, []);
 
-  const barisTampil = React.useMemo(
-    () =>
-      statusFilter === "semua"
-        ? [...rows]
-        : rows.filter((row) => row.status === statusFilter),
-    [rows, statusFilter],
-  );
+  const barisTampil = React.useMemo(() => {
+    const kunci = cari.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (statusFilter !== "semua" && row.status !== statusFilter) return false;
+      if (kunci === "") return true;
+      return (
+        row.label.toLowerCase().includes(kunci) ||
+        row.kode.toLowerCase().includes(kunci)
+      );
+    });
+  }, [rows, statusFilter, cari]);
+
+  /** Pola daftar-detail; penyaringnya di browser, jadi Enter membuka teratas. */
+  const dd = useDaftarDetail({
+    items: barisTampil,
+    idDari: (row) => row.id,
+    kunciPencarian: cari,
+  });
+  const terpilih = dd.terpilih;
+
+  const jumlahStatus = React.useMemo(() => {
+    const aktif = rows.filter((row) => row.status === "aktif").length;
+    return { aktif, nonaktif: rows.length - aktif, semua: rows.length };
+  }, [rows]);
 
   /** Merge targets: same tipe, still aktif, never the source itself. */
   const kandidatMerge: EntityOption[] = React.useMemo(() => {
@@ -260,7 +286,7 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
         accessorKey: "kode",
         header: "Kode",
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.kode}</span>
+          <span className="tabular-nums">{row.original.kode}</span>
         ),
       },
       {
@@ -278,7 +304,7 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
               {row.original.label}
             </Link>
             {row.original.mergedIntoId ? (
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-mikro font-normal text-muted-foreground">
                 {row.original.mergedIntoLabel
                   ? `Digabungkan ke "${row.original.mergedIntoLabel}"`
                   : "Digabungkan ke Lookup lain"}
@@ -303,9 +329,9 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge variant={row.original.status === "aktif" ? "secondary" : "outline"}>
+          <StatusLabel nada={row.original.status === "aktif" ? "sukses" : "netral"}>
             {STATUS_LABELS[row.original.status]}
-          </Badge>
+          </StatusLabel>
         ),
       },
     ];
@@ -335,10 +361,10 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
             >
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Tombol nada="halus" ukuran="ringkas" className="h-8 w-8 p-0">
                     <span className="sr-only">{`Aksi untuk ${baris.label}`}</span>
                     <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-                  </Button>
+                  </Tombol>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => bukaUbah(baris)}>
@@ -372,52 +398,157 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
   const pemakaiSumber = pemakaiUntuk(mergeSource);
 
   return (
-    <div className="space-y-3">
-      <DataTable<MasterDataRow, unknown>
-        columns={columns}
-        data={barisTampil}
-        getRowId={(row) => row.id}
-        // Barisnya bisa diklik DAN labelnya tetap sebuah tautan sungguhan:
-        // klik baris nyaman untuk mouse, tautan di dalam sel itulah yang bisa
-        // di-Tab, dibuka di tab baru, dan dibacakan pembaca layar (PRD #14).
-        onRowClick={(row) => router.push(`/master-data/${row.id}`)}
-        searchPlaceholder={`Cari kode atau label ${tipeLabel}…`}
-        emptyMessage={
-          statusFilter === "aktif"
-            ? `Belum ada ${TERMS.lookup} aktif untuk ${tipeLabel}.`
-            : UI.tidakAdaData
+    <>
+      <TataLetakDaftarDetail
+        panelTerlihat={dd.panelTerlihat}
+        pembuka={
+          <PembukaLayar
+            salam="Data Referensi"
+            judul={NAV_LABELS["master-data"]}
+            info={`Daftar pilihan berkode yang dirujuk ${TERMS.karyawan} lewat ID. Kode tetap; label boleh berubah kapan saja.`}
+          >
+            <SearchField
+              id="cari-lookup"
+              label={`${UI.cari} ${tipeLabel}`}
+              nilai={cari}
+              onNilaiChange={setCari}
+              placeholder={`Kode atau label ${tipeLabel}…`}
+              onSubmit={() => {
+                if (dd.teratas) router.push(`/master-data/${dd.teratas.id}`);
+              }}
+              onPanahBawah={dd.fokusItemPertama}
+            />
+          </PembukaLayar>
         }
-        toolbar={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="filter-status" className="text-sm text-muted-foreground">
-                Status
-              </Label>
-              <Select
-                value={statusFilter}
-                onValueChange={(nilai) => setStatusFilter(nilai as StatusFilter)}
-              >
-                <SelectTrigger id="filter-status" className="h-9 w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="aktif">{STATUS_LABELS.aktif}</SelectItem>
-                  <SelectItem value="nonaktif">{STATUS_LABELS.nonaktif}</SelectItem>
-                  <SelectItem value="semua">Semua</SelectItem>
-                </SelectContent>
-              </Select>
+        panel={
+          <DetailPanel
+            entitas={TERMS.lookup}
+            nama={terpilih?.label ?? null}
+            kategori={tipeLabel}
+            status={
+              terpilih ? (
+                <StatusLabel nada={terpilih.status === "aktif" ? "sukses" : "netral"}>
+                  {STATUS_LABELS[terpilih.status]}
+                </StatusLabel>
+              ) : null
+            }
+            deskripsi={
+              terpilih?.mergedIntoLabel
+                ? `Digabung ke "${terpilih.mergedIntoLabel}".`
+                : null
+            }
+            baris={
+              terpilih
+                ? [
+                    { label: "Kode", nilai: terpilih.kode },
+                    { label: "Tipe", nilai: tipeLabel },
+                    {
+                      label: "Urutan",
+                      nilai: terpilih.urutan === null ? null : String(terpilih.urutan),
+                    },
+                    { label: "Status", nilai: STATUS_LABELS[terpilih.status] },
+                  ]
+                : undefined
+            }
+            pesanKosong={`Tidak ada ${tipeLabel} yang cocok. Ubah kata kunci, atau ganti filter status.`}
+            aksi={
+              terpilih ? (
+                <Tombol
+                  ukuran="panel"
+                  onClick={() => router.push(`/master-data/${terpilih.id}`)}
+                >
+                  Buka detail {TERMS.lookup}
+                </Tombol>
+              ) : null
+            }
+          />
+        }
+      >
+        <div className="space-y-6">
+          {peringatan}
+
+          {/* Sebelas tipe Lookup. Tiap tipe punya alamatnya sendiri, jadi
+              tabnya tautan ber-aria-current, bukan tombol. */}
+          <FilterTabs
+            label={`Tipe ${TERMS.lookup}`}
+            aktif={tipe}
+            items={LOOKUP_TYPES.map((satu) => ({
+              nilai: satu,
+              label: LOOKUP_TYPE_LABELS[satu],
+              jumlah: jumlahPerTipe[satu],
+              href: `/master-data?tipe=${satu}`,
+            }))}
+          />
+
+          <section aria-label={`Daftar ${tipeLabel}`} className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-judul-bagian text-foreground">{tipeLabel}</h2>
+                <p className="mt-1 text-pendukung text-muted-foreground">
+                  {jumlahStatus.semua} {TERMS.lookup} · {jumlahStatus.aktif}{" "}
+                  {STATUS_LABELS.aktif.toLowerCase()} · {jumlahStatus.nonaktif}{" "}
+                  {STATUS_LABELS.nonaktif.toLowerCase()}
+                </p>
+              </div>
+
+              <FilterTabs
+                label={`${UI.filter} status ${tipeLabel}`}
+                aktif={statusFilter}
+                items={[
+                  { nilai: "aktif", label: STATUS_LABELS.aktif, jumlah: jumlahStatus.aktif },
+                  { nilai: "nonaktif", label: STATUS_LABELS.nonaktif, jumlah: jumlahStatus.nonaktif },
+                  { nilai: "semua", label: "Semua", jumlah: jumlahStatus.semua },
+                ]}
+                onPilih={(nilai) => setStatusFilter(nilai as StatusFilter)}
+                className="border-b-0"
+              />
             </div>
-            {isAdmin ? (
-              <Button type="button" size="sm" onClick={bukaTambah}>
-                {`${UI.tambah} ${TERMS.lookup}`}
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
+
+            <DataTable<MasterDataRow, unknown>
+              columns={columns}
+              data={barisTampil}
+              getRowId={(row) => row.id}
+              // Barisnya bisa diklik DAN labelnya tetap sebuah tautan
+              // sungguhan: klik baris nyaman untuk mouse, tautan di dalam sel
+              // itulah yang bisa dibuka di tab baru dan dibacakan pembaca
+              // layar (PRD #14).
+              onRowClick={(row) => router.push(`/master-data/${row.id}`)}
+              cari={cari}
+              emptyMessage={
+                cari.trim() !== ""
+                  ? `Tidak ada ${tipeLabel} yang cocok dengan pencarian ini.`
+                  : statusFilter === "aktif"
+                    ? `Belum ada ${TERMS.lookup} aktif untuk ${tipeLabel}.`
+                    : UI.tidakAdaData
+              }
+              propsDaftar={dd.propsDaftar()}
+              propsBaris={(row) => ({
+                ...dd.propsItem(row),
+                tabIndex: 0,
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (event.key !== "Enter" || event.target !== event.currentTarget) return;
+                  event.preventDefault();
+                  router.push(`/master-data/${row.id}`);
+                },
+              })}
+              toolbar={
+                isAdmin ? (
+                  <Tombol className="ml-auto" onClick={bukaTambah}>
+                    {`${UI.tambah} ${TERMS.lookup}`}
+                  </Tombol>
+                ) : (
+                  <span className="ml-auto text-mikro font-normal text-muted-foreground">
+                    {UI.hanyaAdmin}
+                  </span>
+                )
+              }
+            />
+          </section>
+        </div>
+      </TataLetakDaftarDetail>
 
       {isAdmin ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-mikro font-normal text-muted-foreground">
           Urutan diketik langsung di tabel: angka kecil tampil lebih dulu di
           dropdown, yang dikosongkan tampil paling bawah menurut Label. Satu
           angka yang disimpan = satu {TERMS.revisi} yang bisa dikembalikan.
@@ -556,7 +687,7 @@ export function LookupTable({ tipe, rows, isAdmin }: LookupTableProps) {
           onMerged={() => router.refresh()}
         />
       ) : null}
-    </div>
+    </>
   );
 }
 

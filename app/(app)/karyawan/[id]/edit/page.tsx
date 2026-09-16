@@ -6,7 +6,6 @@ import EmployeeForm from "@/components/forms/EmployeeForm";
 import EmployeePrivateForm from "@/components/forms/EmployeePrivateForm";
 import EmployeeStatusDialog from "@/components/forms/EmployeeStatusDialog";
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -14,6 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Info from "@/components/hc/Info";
+import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeePrivate, getEmployeeRowById } from "@/lib/db/employees";
 import { loadReferenceOptions } from "@/lib/db/referenceOptions";
@@ -52,19 +53,12 @@ export default async function Page({ params }: PageProps) {
 
   if (user.role !== "admin") {
     return (
-      <div className="mx-auto max-w-2xl py-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Ubah {TERMS.karyawan}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{UI.hanyaAdmin}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Anda masuk sebagai {TERMS.viewer}, jadi hanya bisa membaca data{" "}
-          {TERMS.karyawan}.
-        </p>
-        <Button asChild className="mt-6">
-          <Link href={`/karyawan/${id}`}>Lihat detail {TERMS.karyawan}</Link>
-        </Button>
-      </div>
+      <HanyaAdmin
+        judul={`${UI.ubah} data ${TERMS.karyawan}`}
+        alasan={`Mengubah data ${TERMS.karyawan} hanya bisa dilakukan ${TERMS.admin}.`}
+        kembaliKe={`/karyawan/${id}`}
+        labelKembali={`Lihat detail ${TERMS.karyawan}`}
+      />
     );
   }
 
@@ -79,20 +73,23 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <p className="text-sm text-muted-foreground">
+      <header className="space-y-3 pt-6">
+        <p className="text-pendukung text-muted-foreground">
           <Link href={`/karyawan/${employee.id}`} className="hover:underline">
             &larr; {employee.full_name}
           </Link>
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Ubah {TERMS.karyawan}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          {TERMS.personnelNumber} {employee.personnel_number}. Setiap
-          penyimpanan tercatat sebagai {TERMS.revisi} — siapa, kapan, dan kolom
-          apa yang bergerak — dan bisa dikembalikan lewat Log Perubahan.
-        </p>
+        <div className="flex items-center gap-2">
+          <h1 className="text-balance text-judul-halaman text-foreground">
+            Ubah {TERMS.karyawan}
+          </h1>
+          <Info label={`Keterangan Ubah ${TERMS.karyawan}`}>
+            {TERMS.personnelNumber} {employee.personnel_number}. Setiap
+            penyimpanan tercatat sebagai {TERMS.revisi} — siapa, kapan, dan
+            kolom apa yang bergerak — dan bisa dikembalikan lewat Log
+            Perubahan.
+          </Info>
+        </div>
       </header>
 
       <DaftarTerpotongAlert
@@ -101,9 +98,9 @@ export default async function Page({ params }: PageProps) {
         keterangan={`Ada pilihan yang benar-benar ada tetapi tidak muncul di daftar — termasuk, mungkin, yang sedang dipakai ${TERMS.karyawan} ini. Periksa dulu sebelum menyimpan.`}
       />
 
-      <Card>
+      <Card className="hc-permukaan rounded-kartu border-border shadow-none">
         <CardHeader>
-          <CardTitle>{TERMS.statusKaryawan}</CardTitle>
+          <CardTitle className="text-judul-bagian">{TERMS.statusKaryawan}</CardTitle>
           <CardDescription>
             Status dan tanggal keluar diatur di sini, bukan di form di bawah,
             supaya keduanya tidak pernah berbeda cerita (PRD #5).

@@ -169,7 +169,7 @@ export function buildEmployeeSections(
         {
           label: labelKolom("personnel_number"),
           value: teks(employee.personnel_number),
-          catatan: "Business key — kode yang dipakai Konsumen lewat API.",
+          info: "Business key — kode yang dipakai Konsumen lewat API.",
         },
         { label: labelKolom("nip"), value: teks(employee.nip) },
         lookupField(employee, "gender"),

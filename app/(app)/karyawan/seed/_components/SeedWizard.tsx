@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { WorkBook } from "xlsx";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   Card,
   CardContent,
@@ -198,7 +198,7 @@ export default function SeedWizard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <dl className="grid gap-2 text-sm sm:grid-cols-[14rem_1fr]">
+          <dl className="grid gap-2 text-pendukung sm:grid-cols-[14rem_1fr]">
             {barisHasil(hasil).map((baris) => (
               <React.Fragment key={baris.label}>
                 <dt className="text-muted-foreground">{baris.label}</dt>
@@ -206,18 +206,18 @@ export default function SeedWizard() {
               </React.Fragment>
             ))}
           </dl>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-pendukung text-muted-foreground">
             Kalau hasilnya ternyata salah, buka Log Perubahan, cari {TERMS.batch}{" "}
             di atas, dan tekan &laquo;Kembalikan seluruh {TERMS.batch}&raquo;.
             Seluruh isi {TERMS.seed} ditandai nonaktif, bukan dihapus.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button asChild>
+            <Tombol asChild>
               <Link href="/karyawan">Buka daftar {TERMS.karyawan}</Link>
-            </Button>
-            <Button asChild variant="outline">
+            </Tombol>
+            <Tombol asChild nada="sekunder">
               <Link href="/log">Buka Log Perubahan</Link>
-            </Button>
+            </Tombol>
           </div>
         </CardContent>
       </Card>
@@ -238,7 +238,7 @@ export default function SeedWizard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <dl className="grid gap-2 text-sm sm:grid-cols-[16rem_1fr]">
+            <dl className="grid gap-2 text-pendukung sm:grid-cols-[16rem_1fr]">
               {baris.map((b) => (
                 <React.Fragment key={b.label}>
                   <dt className="text-muted-foreground">{b.label}</dt>
@@ -252,13 +252,13 @@ export default function SeedWizard() {
         {ringkasan.error.length > 0 ? (
           <div
             role="alert"
-            className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+            className="hc-permukaan rounded-kartu border border-destructive/40 bg-destructive/5 p-4 text-pendukung"
           >
             <p className="font-medium">
               GAGAL — {ringkasan.error.length} masalah yang harus dibereskan di
               Excel dulu. Tidak ada yang akan ditulis.
             </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 font-mono text-xs">
+            <ul className="mt-2 list-disc space-y-1 pl-5 font-mono text-mikro font-normal">
               {ringkasan.error.map((issue, i) => (
                 <li key={`${issue.kode}-${issue.baris ?? "berkas"}-${i}`}>{baristIssue(issue)}</li>
               ))}
@@ -267,12 +267,12 @@ export default function SeedWizard() {
         ) : null}
 
         {ringkasan.peringatan.length > 0 ? (
-          <div className="rounded-md border bg-muted/30 p-4 text-sm">
+          <div className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
             <p className="font-medium">
               Peringatan ({ringkasan.peringatan.length}) — data tetap masuk,
               dibereskan lewat halaman {TERMS.perluDibereskan}.
             </p>
-            <ul className="mt-2 max-h-80 list-disc space-y-1 overflow-y-auto pl-5 font-mono text-xs">
+            <ul className="mt-2 max-h-80 list-disc space-y-1 overflow-y-auto pl-5 font-mono text-mikro font-normal">
               {ringkasan.peringatan.map((issue, i) => (
                 <li key={`${issue.kode}-${issue.baris ?? "berkas"}-${i}`}>{baristIssue(issue)}</li>
               ))}
@@ -308,19 +308,19 @@ export default function SeedWizard() {
                   onCheckedChange={(value) => setPaham(value === true)}
                   disabled={isPending}
                 />
-                <Label htmlFor="seed-paham" className="text-sm font-normal leading-snug">
+                <Label htmlFor="seed-paham" className="text-pendukung font-normal leading-snug">
                   Saya paham {TERMS.seed} hanya dijalankan sekali, semuanya masuk
                   satu {TERMS.batch} yang bisa dikembalikan utuh, dan setelah ini
                   Excel tidak dipakai lagi.
                 </Label>
               </div>
               {kegagalan ? (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className="text-pendukung text-destructive">
                   {kegagalan}
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-2">
-                <Button
+                <Tombol
                   onClick={jalankan}
                   disabled={
                     !bolehJalankan({
@@ -331,17 +331,17 @@ export default function SeedWizard() {
                   }
                 >
                   {isPending ? "Sedang menulis…" : `Jalankan ${TERMS.seed}`}
-                </Button>
-                <Button variant="outline" onClick={mulaiUlang} disabled={isPending}>
+                </Tombol>
+                <Tombol nada="sekunder" onClick={mulaiUlang} disabled={isPending}>
                   Pilih file lain
-                </Button>
+                </Tombol>
               </div>
             </CardContent>
           </Card>
         ) : (
-          <Button variant="outline" onClick={mulaiUlang}>
+          <Tombol nada="sekunder" onClick={mulaiUlang}>
             Pilih file lain
-          </Button>
+          </Tombol>
         )}
       </div>
     );
@@ -369,31 +369,31 @@ export default function SeedWizard() {
           />
         </div>
         {sedangMembaca ? (
-          <p className="text-sm text-muted-foreground">Sedang membaca file…</p>
+          <p className="text-pendukung text-muted-foreground">Sedang membaca file…</p>
         ) : null}
         {bacaan && !bacaan.sheetName ? (
           <div className="space-y-2">
-            <p className="text-sm">{bacaan.catatanSheet}</p>
+            <p className="text-pendukung">{bacaan.catatanSheet}</p>
             <div className="flex flex-wrap gap-2">
               {bacaan.sheetNames.map((nama) => (
-                <Button
+                <Tombol
                   key={nama}
-                  variant="outline"
-                  size="sm"
+                  nada="sekunder"
+                  ukuran="ringkas"
                   onClick={() => onPilihSheet(nama)}
                   disabled={sedangMembaca}
                 >
                   {nama}
-                </Button>
+                </Tombol>
               ))}
             </div>
           </div>
         ) : null}
         {bacaan?.catatanSheet && bacaan.sheetName ? (
-          <p className="text-sm text-muted-foreground">{bacaan.catatanSheet}</p>
+          <p className="text-pendukung text-muted-foreground">{bacaan.catatanSheet}</p>
         ) : null}
         {kegagalan ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-pendukung text-destructive">
             {kegagalan}
           </p>
         ) : null}

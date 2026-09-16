@@ -33,9 +33,9 @@ export default function DaftarTerpotongAlert({
   return (
     <div
       role="alert"
-      className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+      className="hc-permukaan rounded-kartu border border-destructive/40 bg-destructive/5 p-4 text-pendukung"
     >
-      <p className="font-medium">{judul}</p>
+      <p className="text-label text-foreground">{judul}</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
         {daftar.map((satu) => (
           <li key={satu.nama}>

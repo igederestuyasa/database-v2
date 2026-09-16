@@ -6,7 +6,8 @@ import { formatWaktu } from "@/components/revisions/revisionDiff";
 import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
 import DetailCard from "@/components/shared/DetailCard";
-import { Badge } from "@/components/ui/badge";
+import Info from "@/components/hc/Info";
+import StatusLabel from "@/components/hc/StatusLabel";
 import { requirePageSession } from "@/lib/auth/session";
 import { countEmployeesByJabatan, getJabatanById } from "@/lib/db/jabatan";
 import { NAV_LABELS, STATUS_LABELS, TERMS } from "@/lib/i18n/terms";
@@ -95,31 +96,31 @@ export default async function Page({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-4">
+      <header className="space-y-4 pt-6">
         <Link
           href="/jabatan"
-          className="inline-block text-sm text-muted-foreground underline-offset-4 hover:underline"
+          className="inline-block text-pendukung text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           ← Kembali ke daftar {NAV_LABELS.jabatan}
         </Link>
 
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-balance text-judul-halaman text-foreground">
               {jabatan.nama}
             </h1>
-            <Badge variant={nonaktif ? "secondary" : "default"}>
+            <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
               {labelStatusJabatan(jabatan.status)}
-            </Badge>
+            </StatusLabel>
           </div>
-          <p className="font-mono text-sm text-muted-foreground">
+          <p className="text-pendukung tabular-nums text-muted-foreground">
             {jabatan.kode}
           </p>
         </div>
 
         {nonaktif ? (
-          <div className="rounded-md border bg-muted/40 p-4 text-sm">
-            <p className="font-medium">
+          <div className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
+            <p className="text-label text-foreground">
               {TERMS.jabatan} ini berstatus{" "}
               {STATUS_LABELS.nonaktif.toLowerCase()}.
             </p>
@@ -144,15 +145,17 @@ export default async function Page({
             fields={fields}
           />
 
-          <p className="text-xs text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(jabatan.created_at)} · Terakhir diubah{" "}
-            {formatWaktu(jabatan.updated_at)}. Setiap perubahan tercatat di
-            Riwayat Revisi di samping.
-            {isAdmin
-              ? ` Ubah, Gabungkan dan ${
-                  nonaktif ? "Aktifkan" : "Nonaktifkan"
-                } ada di halaman ${NAV_LABELS.jabatan}.`
-              : ""}
+            {formatWaktu(jabatan.updated_at)}
+            {isAdmin ? (
+              <Info label="Di mana mengubah data ini">
+                Ubah, Gabungkan dan{" "}
+                {nonaktif ? "Aktifkan" : "Nonaktifkan"} ada di halaman{" "}
+                {NAV_LABELS.jabatan}. Setiap perubahan tercatat di Riwayat Revisi di
+                samping.
+              </Info>
+            ) : null}
           </p>
         </div>
 

@@ -18,7 +18,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   Form,
   FormControl,
@@ -160,27 +160,27 @@ export function LoginForm({ allowedDomain, next }: LoginFormProps) {
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={pending}>
+        <Tombol type="submit" className="w-full" disabled={pending}>
           {pending ? "Memproses…" : "Masuk"}
-        </Button>
+        </Tombol>
 
         <div className="flex items-center gap-3 py-1">
           <span className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">atau</span>
+          <span className="text-mikro font-normal text-muted-foreground">atau</span>
           <span className="h-px flex-1 bg-border" />
         </div>
 
-        <Button
+        <Tombol
           type="button"
-          variant="outline"
+          nada="sekunder"
           className="w-full"
           onClick={onMagicLink}
           disabled={pending}
         >
           Kirim tautan masuk ke email
-        </Button>
+        </Tombol>
 
-        <p className="text-xs text-muted-foreground" aria-live="polite">
+        <p className="text-mikro font-normal text-muted-foreground" aria-live="polite">
           {linkSentTo
             ? `Tautan masuk sudah dikirim ke ${linkSentTo}. Buka tautannya di peramban ini, berlakunya terbatas.`
             : `Belum punya kata sandi? Pakai tautan masuk — hanya email kantor (@${allowedDomain}) yang diterima.`}

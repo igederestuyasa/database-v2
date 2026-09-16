@@ -24,7 +24,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,7 +83,7 @@ export function RevertRevisionButton({
 
   if (!operation) {
     return (
-      <span className="text-xs text-muted-foreground" role="note">
+      <span className="text-mikro font-normal text-muted-foreground" role="note">
         Tidak bisa dikembalikan. {alasanTidakBisa}
       </span>
     );
@@ -141,21 +141,21 @@ export function RevertRevisionButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <Button
+      <Tombol
         type="button"
-        variant="outline"
-        size="sm"
+        nada="sekunder"
+        ukuran="ringkas"
         onClick={() => setOpen(true)}
         aria-label={`${UI.kembalikan} Revisi #${revision.id}`}
       >
         {UI.kembalikan}
-      </Button>
+      </Tombol>
 
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Kembalikan ke versi sebelum Revisi ini?</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-pendukung text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">{rowTitle}</span> —
                 Revisi #{revision.id}.

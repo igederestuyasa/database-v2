@@ -65,14 +65,14 @@ export function fieldJumlahPemegang(
     return {
       label,
       value: `0 ${TERMS.karyawan}`,
-      catatan: `Belum ada ${TERMS.karyawan} yang memegang ${TERMS.jabatan} ini.`,
     };
   }
   return {
     label,
     value: `${jumlah.semua} ${TERMS.karyawan}`,
     href: hrefKaryawanDenganJabatan(jabatanId),
-    catatan: `${jumlah.aktif} di antaranya aktif. Satu ${TERMS.jabatan} boleh dipegang banyak ${TERMS.karyawan} sekaligus — ini bukan ${TERMS.formasi}.`,
+    catatan: `${jumlah.aktif} di antaranya aktif`,
+    info: `Satu ${TERMS.jabatan} boleh dipegang banyak ${TERMS.karyawan} sekaligus — ini bukan ${TERMS.formasi}.`,
   };
 }
 
@@ -94,7 +94,7 @@ export function buildJabatanFields({
     {
       label: columnLabel("jabatan", "kode"),
       value: jabatan.kode,
-      catatan: "Kode tetap; nama boleh berubah kapan saja.",
+      info: "Kode tetap; nama boleh berubah kapan saja.",
     },
     {
       label: columnLabel("jabatan", "status"),

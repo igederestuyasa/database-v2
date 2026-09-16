@@ -6,7 +6,8 @@ import { formatWaktu } from "@/components/revisions/revisionDiff";
 import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
 import DetailCard from "@/components/shared/DetailCard";
-import { Badge } from "@/components/ui/badge";
+import Info from "@/components/hc/Info";
+import StatusLabel from "@/components/hc/StatusLabel";
 import { requirePageSession } from "@/lib/auth/session";
 import { countEmployeesByLookup, getLookupById } from "@/lib/db/lookups";
 import { NAV_LABELS, STATUS_LABELS, TERMS } from "@/lib/i18n/terms";
@@ -101,30 +102,30 @@ export default async function Page({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-4">
+      <header className="space-y-4 pt-6">
         <Link
           href={hrefTabMasterData(lookup.tipe)}
-          className="inline-block text-sm text-muted-foreground underline-offset-4 hover:underline"
+          className="inline-block text-pendukung text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           ← Kembali ke {NAV_LABELS["master-data"]}: {tipeLabel}
         </Link>
 
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-balance text-judul-halaman text-foreground">
               {lookup.label}
             </h1>
-            <Badge variant="outline">{tipeLabel}</Badge>
-            <Badge variant={nonaktif ? "secondary" : "default"}>
+            <StatusLabel>{tipeLabel}</StatusLabel>
+            <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
               {labelStatusLookup(lookup.status)}
-            </Badge>
+            </StatusLabel>
           </div>
-          <p className="font-mono text-sm text-muted-foreground">{lookup.kode}</p>
+          <p className="text-pendukung tabular-nums text-muted-foreground">{lookup.kode}</p>
         </div>
 
         {nonaktif ? (
-          <div className="rounded-md border bg-muted/40 p-4 text-sm">
-            <p className="font-medium">
+          <div className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
+            <p className="text-label text-foreground">
               {TERMS.lookup} ini berstatus {STATUS_LABELS.nonaktif.toLowerCase()}.
             </p>
             <p className="mt-1 text-muted-foreground">
@@ -148,15 +149,17 @@ export default async function Page({
             fields={fields}
           />
 
-          <p className="text-xs text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(lookup.created_at)} · Terakhir diubah{" "}
-            {formatWaktu(lookup.updated_at)}. Setiap perubahan tercatat di
-            Riwayat Revisi di samping.
-            {isAdmin
-              ? ` Ubah, Urutan, Gabungkan dan ${
-                  nonaktif ? "Aktifkan" : "Nonaktifkan"
-                } ada di halaman ${NAV_LABELS["master-data"]}.`
-              : ""}
+            {formatWaktu(lookup.updated_at)}
+            {isAdmin ? (
+              <Info label="Di mana mengubah data ini">
+                Ubah, Urutan, Gabungkan dan{" "}
+                {nonaktif ? "Aktifkan" : "Nonaktifkan"} ada di halaman{" "}
+                {NAV_LABELS["master-data"]}. Setiap perubahan tercatat di Riwayat Revisi di
+                samping.
+              </Info>
+            ) : null}
           </p>
         </div>
 

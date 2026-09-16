@@ -150,3 +150,93 @@ describe("batas server/client — modul server tidak diimpor Client Component", 
     expect(isClientModule('"use server";\nexport async function a() {}')).toBe(false);
   });
 });
+
+/**
+ * Arah sebaliknya: komponen `lucide-react` tidak boleh menyeberang dari Server
+ * Component ke Client Component.
+ *
+ * `lucide-react` tidak membawa `"use client"`, jadi di sebuah Server Component
+ * ikonnya adalah fungsi biasa. Me-RENDER-nya di sana (`<Users />`) benar dan
+ * biasa. Yang tidak boleh menyerahkannya sebagai NILAI — `ikon: Users`,
+ * `icon={Users}` — karena begitu nilai itu jadi prop sebuah Client Component,
+ * React menolaknya: "Functions cannot be passed directly to Client
+ * Components".
+ *
+ * Kegagalannya mahal dan tidak kelihatan dari mana-mana: `npm run lint`,
+ * `npm run typecheck`, dan `npm run build` semuanya hijau, lalu SETIAP halaman
+ * di bawah layout yang melakukannya berubah jadi halaman error saat dibuka —
+ * persis yang terjadi ketika `app/(app)/layout.tsx` menaruh komponen ikon di
+ * `NAV_ITEMS`. Karena itu aturannya sesempit mungkin tapi dijaga di sini:
+ * di Server Component, nama yang diimpor dari `lucide-react` hanya boleh
+ * muncul sebagai tag JSX. Kalau sebuah tujuan perlu ikon, seberangkan NAMA-nya
+ * dan petakan ke komponennya di dalam modul klien (lihat `SidebarNav`).
+ */
+describe("batas server/client — ikon lucide tidak diserahkan sebagai nilai", () => {
+  const files = SCANNED_DIRS.flatMap((dir) => walk(path.join(ROOT, dir)));
+  const serverFiles = files.filter(
+    (file) => !isClientModule(readFileSync(file, "utf8")),
+  );
+
+  /** Nama yang diimpor sebagai nilai dari `lucide-react`, tanpa `import type`. */
+  function lucideValueNames(source: string): string[] {
+    const stripped = stripComments(source);
+    const pattern = /import\s+(type\s+)?\{([^}]*)\}\s*from\s*["']lucide-react["']/g;
+    const out: string[] = [];
+    for (const [, typeKeyword, clause] of stripped.matchAll(pattern)) {
+      if (typeKeyword) continue;
+      for (const raw of clause.split(",")) {
+        const name = raw.trim();
+        if (!name || name.startsWith("type ")) continue;
+        out.push((name.split(/\s+as\s+/).pop() ?? name).trim());
+      }
+    }
+    return out;
+  }
+
+  /** Kemunculan `nama` yang BUKAN `<nama` atau `</nama`, di luar baris import. */
+  function pemakaianBukanTag(source: string, nama: string): number[] {
+    const stripped = stripComments(source).replace(
+      /import\s+(?:type\s+)?\{[^}]*\}\s*from\s*["']lucide-react["']\s*;?/g,
+      "",
+    );
+    const baris: number[] = [];
+    for (const match of stripped.matchAll(new RegExp(`\\b${nama}\\b`, "g"))) {
+      const sebelum = stripped.slice(0, match.index);
+      if (/<\/?\s*$/.test(sebelum)) continue;
+      baris.push(sebelum.split("\n").length);
+    }
+    return baris;
+  }
+
+  it("menemukan Server Component untuk dipindai (kalau nol, pemindainya yang rusak)", () => {
+    expect(serverFiles.length).toBeGreaterThan(10);
+  });
+
+  it("tidak satu pun Server Component memakai ikon lucide selain sebagai tag JSX", () => {
+    const violations: string[] = [];
+    for (const file of serverFiles) {
+      const source = readFileSync(file, "utf8");
+      for (const nama of lucideValueNames(source)) {
+        for (const line of pemakaianBukanTag(source, nama)) {
+          violations.push(
+            `${path.relative(ROOT, file)}:${line} menyerahkan \`${nama}\` sebagai nilai — ` +
+              "seberangkan nama ikonnya, bukan komponennya",
+          );
+        }
+      }
+    }
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("membedakan render dari penyerahan nilai", () => {
+    const render = 'import { Users } from "lucide-react";\nconst a = <Users className="h-4" />;';
+    expect(lucideValueNames(render)).toEqual(["Users"]);
+    expect(pemakaianBukanTag(render, "Users")).toEqual([]);
+
+    const serah = 'import { Users } from "lucide-react";\nconst a = { ikon: Users };';
+    expect(pemakaianBukanTag(serah, "Users")).toEqual([2]);
+
+    const tipeSaja = 'import type { LucideIcon } from "lucide-react";';
+    expect(lucideValueNames(tipeSaja)).toEqual([]);
+  });
+});

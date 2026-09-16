@@ -110,14 +110,14 @@ export function fieldJumlahPemakai(
     return {
       label,
       value: `0 ${TERMS.karyawan}`,
-      catatan: `Belum ada ${TERMS.karyawan} yang memakai nilai ini.`,
     };
   }
   return {
     label,
     value: `${jumlah.semua} ${TERMS.karyawan}`,
     href: hrefKaryawanDenganLookup(lookup),
-    catatan: `${jumlah.aktif} di antaranya aktif, lewat kolom ${LOOKUP_TYPE_TO_EMPLOYEE_COLUMN[lookup.tipe]}.`,
+    catatan: `${jumlah.aktif} di antaranya aktif`,
+    info: `Terhubung lewat kolom ${LOOKUP_TYPE_TO_EMPLOYEE_COLUMN[lookup.tipe]} di ${TERMS.karyawan}.`,
   };
 }
 
@@ -139,7 +139,7 @@ export function buildLookupFields({
     {
       label: columnLabel("lookups", "kode"),
       value: lookup.kode,
-      catatan: "Kode tetap; label boleh berubah kapan saja.",
+      info: "Kode tetap; label boleh berubah kapan saja.",
     },
     {
       label: columnLabel("lookups", "tipe"),
@@ -149,7 +149,7 @@ export function buildLookupFields({
     {
       label: columnLabel("lookups", "urutan"),
       value: lookup.urutan === null ? KOSONG : String(lookup.urutan),
-      catatan:
+      info:
         lookup.urutan === null
           ? "Tanpa urutan — tampil paling bawah di dropdown, diurutkan menurut Label."
           : "Angka kecil tampil lebih dulu di dropdown.",

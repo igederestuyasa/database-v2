@@ -17,7 +17,7 @@ import * as React from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   Form,
   FormDescription,
@@ -191,7 +191,7 @@ export function ApiKeyForm({
           name="allowed_fields"
           render={({ field }) => (
             <FormItem>
-              <p className="text-sm font-medium leading-none">
+              <p className="text-pendukung font-medium leading-none">
                 Kolom yang boleh diambil
               </p>
               <FormDescription>
@@ -214,13 +214,13 @@ export function ApiKeyForm({
         {kolomTidakDikenal.length > 0 ? (
           <div
             role="alert"
-            className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
+            className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-pendukung"
           >
             <p className="font-medium">
               {kolomTidakDikenal.length} kolom tersimpan sudah tidak ada lagi.
             </p>
             <p className="mt-1 text-muted-foreground">
-              <span className="font-mono text-xs">
+              <span className="font-mono text-mikro font-normal">
                 {kolomTidakDikenal.join(", ")}
               </span>{" "}
               bukan kolom <code>v_employees_api</code> lagi, jadi tidak ada
@@ -231,26 +231,26 @@ export function ApiKeyForm({
         ) : null}
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-          <p className="mr-auto text-xs text-muted-foreground">
+          <p className="mr-auto text-mikro font-normal text-muted-foreground">
             {jumlahKolom} kolom dipilih
           </p>
           {onBatal ? (
-            <Button
+            <Tombol
               type="button"
-              variant="outline"
+              nada="sekunder"
               onClick={onBatal}
               disabled={form.formState.isSubmitting}
             >
               {UI.batal}
-            </Button>
+            </Tombol>
           ) : null}
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Tombol type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting
               ? "Menyimpan…"
               : sedangUbah
                 ? UI.simpan
                 : `Buat ${TERMS.apiKey}`}
-          </Button>
+          </Tombol>
         </div>
       </form>
     </Form>
