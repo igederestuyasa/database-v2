@@ -712,9 +712,16 @@ as $fn$
 declare
   v_domain text;
 begin
-  -- Configure with:
-  --   alter database postgres set app.allowed_email_domain = 'hutamakarya.com';
-  -- Keep it identical to ALLOWED_EMAIL_DOMAIN in the app environment.
+  -- Precedence: the `app.allowed_email_domain` setting when one is present,
+  -- otherwise the literal below. The setting can be installed with
+  --   alter database <db> set app.allowed_email_domain = '...';
+  -- on a self-managed Postgres (db/local/00-shim.sql does it for the local
+  -- harness), but NOT on Supabase: its `postgres` role is not a superuser,
+  -- and since PostgreSQL 15 only a superuser may store a custom `app.*`
+  -- parameter that way, so the statement fails there with 42501. On Supabase
+  -- the literal IS the configuration — change it here, and keep it identical
+  -- to DEFAULT_ALLOWED_EMAIL_DOMAIN in lib/auth/domain.ts (a test checks
+  -- that) and to ALLOWED_EMAIL_DOMAIN in the app environment.
   v_domain := lower(coalesce(
     nullif(current_setting('app.allowed_email_domain', true), ''),
     'hutamakarya.com'

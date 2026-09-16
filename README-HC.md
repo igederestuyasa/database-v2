@@ -259,15 +259,21 @@ yang dipakai — semuanya lewat layar web keduanya.
    jalan atau belum. Harus lewat SQL Editor, bukan dari aplikasi: file pertama
    memasang penjaga di tabel pengguna Supabase, dan hanya SQL Editor yang punya
    izin untuk itu.
-3. Masih di SQL Editor, jalankan satu baris ini supaya database tahu domain
-   email kantor:
+3. Domain email kantor **sudah tertanam** di file pertama: fungsi
+   `handle_new_user` di `0001_init.sql` memakai `hutamakarya.com` kalau tidak
+   ada pengaturan lain. **Tidak ada yang perlu dijalankan** di langkah ini.
+   Versi lama panduan ini menyuruh menjalankan
+   `alter database postgres set app.allowed_email_domain = …`; di Supabase
+   perintah itu ditolak dengan `42501: permission denied to set parameter`,
+   karena akun `postgres` di sana bukan superuser. Aplikasi tidak
+   membutuhkannya — kalau pesan itu muncul, abaikan dan lanjut ke langkah 4.
 
-   ```sql
-   alter database postgres set app.allowed_email_domain = 'hutamakarya.com';
-   ```
-
-   Nilainya harus **sama persis** dengan `ALLOWED_EMAIL_DOMAIN` di langkah
-   Vercel. Kalau lupa, database memakai `hutamakarya.com` sebagai bawaan.
+   Kalau domain kantornya **bukan** `hutamakarya.com`, ganti di tiga tempat
+   dan pastikan ketiganya **sama persis**: kata `hutamakarya.com` di dalam
+   fungsi `handle_new_user` pada `0001_init.sql` (lalu tempel ulang file itu;
+   aman dijalankan ulang), `DEFAULT_ALLOWED_EMAIL_DOMAIN` di
+   `lib/auth/domain.ts` (`npm test` menolak kalau keduanya berbeda), dan
+   `ALLOWED_EMAIL_DOMAIN` di langkah 6.
 4. Buka **Authentication**:
    - **URL Configuration → Site URL**: alamat aplikasi di Vercel, misalnya
      `https://hc-core.vercel.app`.
@@ -347,57 +353,36 @@ SQL tidak diperlukan lagi selamanya.
 Seed adalah pemasukan data awal dari file Excel "Demografi Karyawan - Posisi",
 **sekali jalan**. Sesudahnya Excel pensiun.
 
-Berbeda dari 8a dan 8b, langkah ini **tidak bisa dari peramban**: ia dijalankan
-dari satu komputer yang punya Node.js, salinan repositori ini, dan sudah
-menjalankan `npm ci` sekali. Kalau tidak ada komputer seperti itu, ini
-pekerjaan orang teknis — mintalah, jangan dipaksa.
+Seed dijalankan **dari aplikasi**, di peramban, tanpa alat teknis apa pun:
 
-Seed membutuhkan **sambungan Postgres langsung**, bukan alamat API yang dipakai
-aplikasi. Di Supabase: **Settings → Database → "Direct connection"**. Salin
-teks sambungannya ke variabel `HC_SEED_DB_URL`:
+1. Masuk sebagai **admin** (8b). Buka halaman **Karyawan**. Selama belum ada
+   satu pun Karyawan, di atas daftar ada kotak «Belum ada Karyawan sama sekali»
+   dengan tombol **Jalankan Seed awal**. Tekan.
+2. **Pilih file Excel**-nya. File dibaca di peramban Anda dan **tidak diunggah
+   ke mana pun**; yang dikirim ke server nanti hanya daftar yang akan dibuat,
+   setelah Anda memeriksanya. Sheet «Demografi Karyawan - Posisi» dipilih
+   otomatis; kalau tidak ada, halaman menyebutkan sheet yang tersedia dan Anda
+   memilih.
+3. **Baca pratinjaunya.** Belum ada yang ditulis. Di bagian *Kolom* ada tiga
+   angka: *dipetakan*, *diabaikan (rumus)*, dan **tidak dikenal**. Kolom rumus
+   memang sengaja diabaikan (No, Age, Range, Gen, semua "Masa", PG-JG,
+   Keterangan Naik PG/JG) — itu normal. Tapi setiap kolom yang disebut **tidak
+   dikenal** adalah kolom yang **tidak akan masuk sama sekali**. Periksa
+   daftarnya satu per satu: kalau ada kolom penting di situ, berhenti dan minta
+   bantuan teknis sebelum lanjut. Baca juga daftar *Peringatan* — Karyawan
+   tanpa unit atau tanpa jabatan akan muncul di halaman Perlu Dibereskan, dan
+   itu memang disengaja. Kalau halaman menulis **GAGAL** dengan daftar masalah,
+   tidak ada tombol Jalankan: perbaiki Excel-nya dulu, lalu pilih ulang filenya.
+4. Isi **Keterangan** kalau mau (bawaannya "Seed awal dari <nama file>"),
+   centang **Saya paham**, lalu tekan **Jalankan Seed**. Semuanya masuk sebagai
+   **satu** tindakan: gagal di tengah berarti tidak ada satu baris pun yang
+   tertulis, dan halaman mengatakannya.
+5. **Catat "Batch id"** yang ditampilkan di layar selesai, bersama jumlah
+   Karyawan yang masuk. Kalau hasil Seed ternyata salah, buka halaman **Log
+   Perubahan**, cari Batch tersebut, dan tekan **Kembalikan seluruh Batch**.
 
-```
-HC_SEED_DB_URL=postgresql://postgres:....@db.xxxxxxxx.supabase.co:5432/postgres
-```
-
-Alamat `https://xxxxxxxx.supabase.co` yang dipakai aplikasi **tidak akan
-bekerja** di sini, dan itu bukan kesalahan pengetikan Anda — Seed perlu
-memasukkan ±1.475 Karyawan sebagai **satu** tindakan yang bisa dibatalkan utuh,
-dan hanya sambungan langsung yang bisa melakukannya.
-
-Lalu, dengan urutan ini:
-
-**1. Coba dulu tanpa menulis apa pun.**
-
-```
-npx tsx scripts/seed-from-excel.ts "Demografi Karyawan - Posisi.xlsx" --dry-run
-```
-
-Perintah ini tidak menyentuh database sama sekali. Ia melaporkan berapa Unit
-Organisasi, Jabatan, Lookup, dan Karyawan yang akan dibuat.
-
-**2. Baca daftar "Tidak dikenal".** Di bagian *Kolom*, ada tiga angka:
-*Dipetakan*, *Diabaikan (rumus)*, dan **Tidak dikenal**. Kolom rumus memang
-sengaja diabaikan (No, Age, Range, Gen, semua "Masa", PG-JG, Keterangan Naik
-PG/JG) — itu normal. Tapi setiap kolom yang disebut **Tidak dikenal** adalah
-kolom yang **tidak akan masuk sama sekali**. Periksa daftarnya satu per satu:
-kalau ada kolom penting di situ, berhenti dan minta bantuan teknis sebelum
-lanjut. Baca juga daftar *Peringatan* di bawahnya — Karyawan tanpa unit atau
-tanpa jabatan akan muncul di halaman Perlu Dibereskan, dan itu memang disengaja.
-
-**3. Jalankan sungguhan** (perintah yang sama, tanpa `--dry-run`).
-
-**4. Catat "Batch id" yang dicetak di akhir.** Perintahnya menutup dengan
-ringkasan seperti:
-
-```
-  Batch id        : e64a1e19-3221-4185-9956-f007808b5c0f
-  Keterangan      : Seed awal dari Demografi Karyawan - Posisi.xlsx
-  Karyawan        : 1475
-```
-
-Simpan baris **Batch id** itu. Kalau hasil Seed ternyata salah, buka halaman
-**Log Perubahan**, cari Batch tersebut, dan tekan **Kembalikan seluruh Batch**.
+Setelah Seed berjalan, halaman Seed tidak menawarkan apa-apa lagi; ia hanya
+mengatakan Seed sudah dijalankan dan menunjuk ke Log Perubahan.
 
 > **Yang dilakukan pengembalian itu, tepatnya:** seluruh isi Seed ditandai
 > **nonaktif** — bukan dihapus. Di aplikasi ini memang tidak ada yang pernah
@@ -406,17 +391,26 @@ Simpan baris **Batch id** itu. Kalau hasil Seed ternyata salah, buka halaman
 > Isi Data Pribadi Sensitif juga tetap tersimpan apa adanya.
 >
 > Akibat praktisnya: **Seed tidak bisa dijalankan ulang dengan file lain begitu
-> saja.** Perintah Seed menolak berjalan kalau tabel Karyawan sudah berisi, dan
+> saja.** Seed menolak berjalan kalau tabel Karyawan sudah berisi, dan
 > memaksanya akan bentrok dengan Personnel Number yang sudah terpakai. Kalau
 > file yang salah terlanjur masuk dan Anda perlu mengulang dari nol, itu
 > pekerjaan teknis — hubungi yang memasang aplikasi; jangan dipaksa sendiri.
 >
-> Karena itu langkah 1 dan 2 di atas (`--dry-run` dan membaca daftar "Tidak
-> dikenal") bukan formalitas: **di situlah tempat membatalkan yang murah.**
+> Karena itu langkah 3 di atas (membaca pratinjau) bukan formalitas: **di
+> situlah tempat membatalkan yang murah.**
 
-Kalau Seed gagal di tengah jalan, tidak ada satu baris pun yang tertulis;
-perintahnya membatalkan seluruhnya sendiri dan mengatakannya. Yang perlu
-kehati-hatian adalah Seed yang **berhasil** dengan file yang keliru.
+**Alternatif untuk orang teknis: skrip.** Logika yang sama tersedia sebagai
+perintah di komputer yang punya Node.js dan salinan repositori ini. Butuh
+**sambungan Postgres langsung** (Supabase: **Connect → Session pooler**, port
+5432, bukan alamat API aplikasi) di variabel `HC_SEED_DB_URL`, lalu:
+
+```
+npx tsx scripts/seed-from-excel.ts "Demografi Karyawan - Posisi.xlsx" --dry-run
+npx tsx scripts/seed-from-excel.ts "Demografi Karyawan - Posisi.xlsx"
+```
+
+Laporan `--dry-run` berisi angka yang sama dengan pratinjau di halaman, dan
+hasilnya sama: satu Batch `seed` yang bisa dikembalikan utuh.
 
 ---
 

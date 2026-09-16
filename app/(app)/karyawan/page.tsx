@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
+import EmptyState from "@/components/hc/EmptyState";
+import Tombol from "@/components/hc/Tombol";
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
 import { requirePageSession } from "@/lib/auth/session";
 import { listEmployees } from "@/lib/db/employees";
@@ -16,6 +19,7 @@ import type { VEmployee } from "@/lib/types/db";
 import KaryawanClient from "./_components/KaryawanClient";
 import {
   KARYAWAN_PER_PAGE,
+  hitungFilterAktif,
   parseKaryawanFilters,
   sortOption,
   type KaryawanFilters,
@@ -107,6 +111,28 @@ export default async function Page({ searchParams }: PageProps) {
             judul="Pilihan filter belum lengkap."
             keterangan={`Ada pilihan yang tidak muncul di daftar filter — dan ${TERMS.karyawan} yang seharusnya ketemu lewat pilihan itu ikut tidak terlihat. Pakai kotak pencarian dulu, dan laporkan ini supaya batasnya dinaikkan.`}
           />
+
+
+          {/*
+            Satu-satunya saat halaman Seed adalah langkah berikutnya yang
+            benar: admin, tabel kosong, dan tidak ada filter yang mungkin
+            menyembunyikan siapa pun (PRD #23). Dari main, dibentuk ulang
+            sebagai EmptyState HC Panel.
+          */}
+          {user.role === "admin" &&
+          !galatHierarki &&
+          (daftar?.total ?? 0) === 0 &&
+          hitungFilterAktif(filters) === 0 ? (
+            <EmptyState
+              judul={`Belum ada ${TERMS.karyawan} sama sekali`}
+              ajakan={`Data awal masuk lewat ${TERMS.seed} dari file Excel, sekali saja. Semuanya tercatat sebagai satu ${TERMS.batch} yang bisa dikembalikan utuh.`}
+              aksi={
+                <Tombol asChild>
+                  <Link href="/karyawan/seed">Jalankan {TERMS.seed} awal</Link>
+                </Tombol>
+              }
+            />
+          ) : null}
 
           {galatHierarki ? (
             <div

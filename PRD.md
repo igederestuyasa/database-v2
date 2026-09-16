@@ -52,9 +52,12 @@ Satu aplikasi web internal yang menjadi **satu-satunya sumber kebenaran** data k
 21. User login dengan email kantor; ada dua role: admin (semua aksi) dan viewer (hanya baca).
 22. Tabel data pribadi sensitif (agama, tanggal & tempat lahir, status pernikahan) disiapkan terpisah, kolomnya boleh kosong, hanya bisa dibaca dan diubah oleh admin, dan tidak pernah keluar lewat API.
 
+**Seed lewat web**
+23. Admin bisa menjalankan seed awal (#1) dari halaman web tanpa alat teknis: memilih file Excel, membaca pratinjau (apa yang akan dibuat, kolom tidak dikenal, peringatan), lalu menjalankannya; hasilnya satu batch `seed` yang bisa dibalikkan utuh (#16). Hanya berjalan sekali, selama tabel karyawan masih kosong.
+
 ## 5. Nice-to-Have (bukan MVP)
 
-- Batch add karyawan lewat upload Excel (setelah seed awal).
+- Batch add karyawan **berulang** lewat upload Excel setelah seed awal (menambah/memperbarui di atas data yang ada). Seed awal sekali-jalan lewat web sudah ada: #23.
 - SSO Microsoft Entra (menggantikan login email) — diselesaikan di level portal HC, bukan per aplikasi.
 - Formasi/kursi: jabatan × unit dengan kuota, sebagai dasar FTE dan WLA.
 - Rumus kelayakan kenaikan PG/JG ("Memenuhi Syarat") dari Excel dipindahkan menjadi aturan bisnis di aplikasi.

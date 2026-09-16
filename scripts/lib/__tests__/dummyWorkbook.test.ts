@@ -18,7 +18,9 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 
-import { HEADER_ROW, SHEET_NAME, errorsOf, planSeed } from "../excelMapping";
+import { HEADER_ROW, SHEET_NAME, errorsOf, planSeed } from "../../../lib/seed/excelMapping";
+import { buildSeedPayload, seedPayloadSchema } from "../../../lib/seed/payload";
+import { ringkasSeedPlan } from "../../../lib/seed/ringkasan";
 import {
   DUMMY_FORMULA_HEADERS,
   DUMMY_HEADERS,
@@ -273,6 +275,48 @@ describe("laporan dry run", () => {
 
   it("tidak menulis 'GAGAL' untuk workbook yang bersih dari error", () => {
     expect(report).not.toContain("GAGAL");
+  });
+});
+
+describe("payload untuk seed_from_payload (PRD #23)", () => {
+  const payload = buildSeedPayload(PLAN);
+
+  it("lolos skema server apa adanya, tanpa karakter NUL", () => {
+    expect(seedPayloadSchema.safeParse(payload).success).toBe(true);
+    expect(JSON.stringify(payload)).not.toContain("\\u0000");
+  });
+
+  it("membawa jumlah baris yang sama dengan rencananya", () => {
+    expect(payload.org_units).toHaveLength(PLAN.orgUnits.length);
+    expect(payload.jabatan).toHaveLength(PLAN.jabatan.length);
+    expect(payload.lookups).toHaveLength(PLAN.lookups.length);
+    expect(payload.employees).toHaveLength(PLAN.employees.length);
+  });
+
+  it("untuk 1.500 baris tetap di bawah 2 MB — batas Server Action 4 MB (ADR-008)", () => {
+    const besar = planSeed(buildDummyRows({ rows: 1500 }));
+    expect(errorsOf(besar)).toEqual([]);
+    const bytes = Buffer.byteLength(JSON.stringify(buildSeedPayload(besar)), "utf8");
+    expect(bytes).toBeLessThan(2 * 1024 * 1024);
+  });
+
+  it("ringkasan halaman web menyebut angka yang sama dengan laporan CLI", () => {
+    const r = ringkasSeedPlan(PLAN);
+    const report = formatReport(PLAN, {
+      file: FILE,
+      sheet: SHEET_NAME,
+      headerRow: HEADER_ROW,
+      date1904: false,
+    });
+    expect(report).toContain(
+      `Karyawan         : ${r.akanDibuat.karyawan.total} (${r.akanDibuat.karyawan.nonaktif} nonaktif)`,
+    );
+    expect(report).toContain(`Unit Organisasi  : ${r.akanDibuat.unitOrganisasi.total} (`);
+    expect(report).toContain(`Lookup           : ${r.akanDibuat.lookup.total} (`);
+    expect(report).toContain(`Diabaikan (rumus): ${r.kolom.diabaikan.length}`);
+    expect(report).toContain(`Tidak dikenal    : ${r.kolom.tidakDikenal.length}`);
+    expect(report).toContain(`Peringatan (${r.peringatan.length})`);
+    expect(r.bisaDijalankan).toBe(true);
   });
 });
 

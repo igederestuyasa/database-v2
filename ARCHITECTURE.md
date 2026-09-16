@@ -9,7 +9,7 @@
 | Hosting | Vercel | ADR-001 |
 | UI | Tailwind CSS + shadcn/ui | komponen tabel/form/dialog siap pakai, cepat dibangun |
 | Tabel & form | TanStack Table + react-hook-form + zod | pencarian/filter di tabel besar, validasi satu skema untuk client & server |
-| Excel (seed) | SheetJS (`xlsx`) di script Node | hanya untuk seed awal |
+| Excel (seed) | SheetJS (`xlsx`) di skrip Node **dan** di peramban admin (halaman Seed, `import()` dinamis) | hanya untuk seed awal; tidak pernah dijalankan di server (ADR-008) |
 | API eksternal | Next.js Route Handlers di `app/api/v1/` | ADR-004 |
 
 Tidak ada ORM. Akses database memakai `@supabase/supabase-js` dan SQL migration polos di `supabase/migrations/`.
@@ -24,6 +24,7 @@ hc-core/
 │   │   ├── _lib/                    # helper sisi server yang dipakai banyak page (riwayat.ts, bacaAman.ts)
 │   │   ├── karyawan/                # daftar + filter (_components/)
 │   │   │   ├── baru/                # form tambah
+│   │   │   ├── seed/                # Seed awal lewat web (PRD #23): wizard di _components/
 │   │   │   └── [id]/                # detail + form edit + riwayat revisi
 │   │   ├── struktur/                # pohon unit organisasi + CRUD + merge (_lib/strukturData)
 │   │   │   └── [id]/                # detail unit + riwayat revisi (baca saja)
@@ -51,9 +52,10 @@ hc-core/
 │   ├── api/                         # auth.ts (validasi key), fields.ts (whitelist), response.ts (envelope)
 │   ├── derived/                     # perhitungan usia, masa kerja (dipakai view & UI)
 │   ├── validation/                  # skema zod per entitas; uuid.ts (satu regex uuid)
+│   ├── seed/                        # excelMapping.ts (murni; dipakai skrip CLI + halaman Seed), payload.ts (kontrak RPC seed_from_payload), ringkasan.ts (angka pratinjau)
 │   └── entityOptions.ts             # baris → opsi EntityPicker (murni; server boleh memanggil)
 ├── scripts/
-│   └── seed-from-excel.ts           # seed awal, dijalankan sekali
+│   └── seed-from-excel.ts           # seed awal lewat skrip (alternatif orang teknis), dijalankan sekali
 ├── supabase/
 │   └── migrations/                  # SQL migration bernomor; sumber kebenaran skema
 ├── docs/adr/
@@ -250,19 +252,17 @@ data, dan data tidak dipercaya.
 5. Response envelope `{ data, meta: { page, per_page, total } }`.
 
 ### E. Seed awal dari Excel
-1. `scripts/seed-from-excel.ts <file.xlsx>` membaca sheet "Demografi Karyawan - Posisi", header baris 4, mengabaikan kolom rumus.
-2. Membuat `lookups`, `jabatan`, `org_units` dari nilai unik **apa adanya** (trim saja), hierarki: Business Unit → Divisi → Bagian → Sub Bagian; kalau Sub Bagian == Bagian, tidak dibuat node anak; Bagian yang diawali "Proyek" bertipe `proyek`.
-3. Insert `employees` + `employee_private` (DOB/tempat lahir/agama/status nikah masuk ke private).
-4. Semua dalam satu batch `seed` → bisa di-revert utuh kalau seed salah.
+1. Dua pintu, satu logika. Halaman `/karyawan/seed` (PRD #23, admin saja) atau `scripts/seed-from-excel.ts <file.xlsx>` membaca sheet "Demografi Karyawan - Posisi", header baris 4, mengabaikan kolom rumus — keduanya lewat `lib/seed/excelMapping.ts:planSeed()`, yang murni dan diuji. Di halaman web, Excel dibaca **di peramban admin** (SheetJS lewat `import()` dinamis); file tidak pernah diunggah ke server.
+2. Rencana membuat `lookups`, `jabatan`, `org_units` dari nilai unik **apa adanya** (trim saja), hierarki: Business Unit → Divisi → Bagian → Sub Bagian; kalau Sub Bagian == Bagian, tidak dibuat node anak; Bagian yang diawali "Proyek" bertipe `proyek`.
+3. Pratinjau (`--dry-run` di skrip, langkah kedua wizard di web) menampilkan angka yang sama: yang akan dibuat, kolom tidak dikenal, Peringatan, error. Ada error → tidak ada yang ditulis.
+4. Penulisan: `employees` + `employee_private` (DOB/tempat lahir/agama/status nikah masuk ke private) dalam **satu transaksi** = satu batch `seed` → bisa di-revert utuh kalau seed salah.
 
-Seed **tidak** memakai supabase-js. Script sekali jalan ini memegang koneksinya
-sendiri, jadi ia menyambung langsung ke Postgres lewat `pg` (sudah jadi
-devDependency) dan membuka satu transaksi sungguhan:
-`lib/revisions/seedBatch.ts:runSeedBatch()` → `BEGIN` → `begin_batch('seed', …,
-p_local => true)` → semua insert → `COMMIT`. ~1.475 Karyawan jadi **satu** Batch
-`seed`, `app.batch_id` tetap ber-scope transaksi (tidak ada yang bisa bocor ke
-koneksi lain), dan satu baris gagal me-rollback seluruh Seed alih-alih
-meninggalkan separuh perusahaan di database (ADR-006).
+Bagaimana satu transaksi itu dipegang berbeda per pintu, dan itulah isi ADR-006 dan ADR-008:
+
+- **Halaman web** mengirim `SeedPayload` (`lib/seed/payload.ts`: empat daftar, rujukan berupa index 0-based, ±1,0 MB untuk 1.500 Karyawan) ke Server Action `jalankanSeed()`, yang memvalidasinya dengan zod lalu memanggil **satu** RPC `seed_from_payload()` di `0002_batch_operations.sql`. Satu panggilan = satu transaksi = satu `app.batch_id` = satu Batch, persis pola merge/revert; gagal di tengah me-rollback semuanya termasuk baris `batches`-nya. `p_force` ada untuk test dan orang teknis, tidak pernah dikirim halaman.
+- **Skrip** tidak memakai supabase-js. Ia memegang koneksinya sendiri lewat `pg` (devDependency) dan membuka satu transaksi sungguhan: `lib/revisions/seedBatch.ts:runSeedBatch()` → `BEGIN` → `begin_batch('seed', …, p_local => true)` → semua insert → `COMMIT`.
+
+Keduanya menolak berjalan kalau `employees` sudah berisi (skrip: `--force`; fungsi: `p_force`), karena Seed memang sekali jalan (PRD §3).
 
 ## 5. Auth & Permission
 

@@ -923,7 +923,280 @@ comment on function public.revert_batch(uuid, text) is
   'Membalikkan satu Batch utuh dalam satu Batch jenis "revert" baru, lalu mengisi batches.reverted_by_batch_id. Menolak Batch yang sudah pernah dibalikkan (PRD #16).';
 
 -- ----------------------------------------------------------------------------
--- 4. Grants
+-- 4. Seed awal lewat web (PRD #23, ADR-008)
+--
+-- Satu payload jsonb (bentuknya: lib/seed/payload.ts, SeedPayload) menjadi
+-- SATU Batch jenis 'seed'. Rujukan di payload adalah INDEX 0-based ke array
+-- di payload itu sendiri (induk Unit Organisasi, unit/jabatan seorang
+-- Karyawan, Lookup per tipe); fungsi ini memetakan index → id lewat tiga
+-- array, dalam urutan yang dipaksa FK: lookups → jabatan → org_units (induk
+-- selalu lebih dulu di array) → employees → UPDATE employee_private. Baris
+-- employee_private dibuat trigger zz_autocreate_private saat employees
+-- di-INSERT, jadi di sini hanya diisi, persis seperti skrip CLI.
+--
+-- Penjaga sekali-jalan sama dengan scripts/seed-from-excel.ts: menolak kalau
+-- public.employees sudah berisi, kecuali p_force (dipakai test dan orang
+-- teknis; halaman web tidak pernah mengirimnya). Dua admin yang menekan
+-- "Jalankan" bersamaan diserialkan pg_advisory_xact_lock, sehingga yang kedua
+-- membaca tabel yang sudah terisi dan ditolak.
+--
+-- Semua pemeriksaan bentuk payload dilakukan SEBELUM Batch dibuka: payload
+-- cacat tidak boleh meninggalkan Batch kosong di Log Perubahan.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.seed_from_payload(
+  p_payload     jsonb,
+  p_keterangan  text    default null,
+  p_force       boolean default false
+)
+returns jsonb
+language plpgsql
+set search_path = public, pg_catalog
+as $fn$
+declare
+  v_prev        text;
+  v_batch_id    uuid;
+  v_first_rev   bigint;
+  v_existing    bigint;
+  v_n           bigint;
+  v_n_org       integer;
+  v_n_jab       integer;
+  v_n_lk        integer;
+  v_n_emp       integer;
+  v_lookups     integer := 0;
+  v_jabatan     integer := 0;
+  v_org_units   integer := 0;
+  v_employees   integer := 0;
+  v_private     integer := 0;
+  v_revisions   bigint  := 0;
+  v_lookup_ids  uuid[]  := '{}';
+  v_jab_ids     uuid[]  := '{}';
+  v_org_ids     uuid[]  := '{}';
+  v_unit        jsonb;
+  v_i           integer;
+  v_parent      integer;
+  v_parent_id   uuid;
+  v_new_id      uuid;
+begin
+  perform public.assert_admin('menjalankan Seed');
+
+  -- 1. Bentuk payload — sebelum apa pun ditulis atau dibuka.
+  if p_payload is null
+     or jsonb_typeof(p_payload -> 'org_units') is distinct from 'array'
+     or jsonb_typeof(p_payload -> 'jabatan')   is distinct from 'array'
+     or jsonb_typeof(p_payload -> 'lookups')   is distinct from 'array'
+     or jsonb_typeof(p_payload -> 'employees') is distinct from 'array' then
+    raise exception 'Payload Seed tidak berbentuk: butuh empat daftar org_units, jabatan, lookups, dan employees.'
+      using errcode = '22023';
+  end if;
+
+  v_n_org := jsonb_array_length(p_payload -> 'org_units');
+  v_n_jab := jsonb_array_length(p_payload -> 'jabatan');
+  v_n_lk  := jsonb_array_length(p_payload -> 'lookups');
+  v_n_emp := jsonb_array_length(p_payload -> 'employees');
+
+  if v_n_emp = 0 then
+    raise exception 'Payload Seed tidak memuat satu pun Karyawan.'
+      using errcode = '22023';
+  end if;
+
+  -- Induk Unit Organisasi harus sudah muncul lebih dulu di array-nya.
+  if exists (
+    select 1
+      from jsonb_array_elements(p_payload -> 'org_units') with ordinality as u(elem, ord)
+     where u.elem ->> 'parent' is not null
+       and (u.elem ->> 'parent')::integer >= (u.ord - 1)
+  ) then
+    raise exception 'Payload Seed rusak: ada Unit Organisasi yang menunjuk induk yang belum didefinisikan sebelumnya.'
+      using errcode = '22023';
+  end if;
+
+  -- Setiap rujukan Karyawan harus jatuh di dalam daftarnya.
+  if exists (
+    select 1
+      from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+     where coalesce((e.elem ->> 'org')::integer, -1) >= v_n_org
+        or coalesce((e.elem ->> 'jab')::integer, -1) >= v_n_jab
+        or exists (
+             select 1
+               from jsonb_each_text(coalesce(e.elem -> 'lk', '{}'::jsonb)) as k(tipe, idx)
+              where k.idx::integer >= v_n_lk
+           )
+  ) then
+    raise exception 'Payload Seed rusak: ada Karyawan yang menunjuk Unit Organisasi, Jabatan, atau Lookup di luar daftarnya.'
+      using errcode = '22023';
+  end if;
+
+  -- 2. Sekali jalan. Kunci dulu supaya dua admin tidak lolos bersamaan.
+  perform pg_advisory_xact_lock(hashtext('public.seed_from_payload'));
+  select count(*) into v_existing from public.employees;
+  if v_existing > 0 and not p_force then
+    raise exception 'Tabel Karyawan sudah berisi % baris. Seed hanya dijalankan sekali (PRD §3). Kalau Seed sebelumnya salah, kembalikan Batch-nya dari halaman Log Perubahan.',
+      v_existing
+      using errcode = '55000';
+  end if;
+
+  -- 3. Satu Batch untuk semuanya. Simpan Batch pemanggil (kalau ada) dan
+  --    kembalikan di akhir, seperti fungsi merge/revert di atas.
+  v_prev := nullif(current_setting('app.batch_id', true), '');
+  v_batch_id := public.begin_batch(
+    'seed',
+    coalesce(nullif(btrim(p_keterangan), ''), 'Seed awal lewat web'),
+    true
+  );
+  select coalesce(max(r.id), 0) into v_first_rev from public.revisions r;
+
+  -- 4. Lookup. Dipetakan balik lewat (tipe, kode), yang UNIQUE.
+  insert into public.lookups (tipe, kode, label, urutan)
+  select x.tipe, x.kode, x.label, x.urutan
+    from jsonb_to_recordset(p_payload -> 'lookups')
+         as x(tipe text, kode text, label text, urutan integer);
+  get diagnostics v_lookups = row_count;
+  if v_lookups <> v_n_lk then
+    raise exception 'Gagal menulis Lookup (% dari % baris).', v_lookups, v_n_lk
+      using errcode = '42501';
+  end if;
+  if v_n_lk > 0 then
+    select array_agg(l.id order by e.ord) into v_lookup_ids
+      from jsonb_array_elements(p_payload -> 'lookups') with ordinality as e(elem, ord)
+      join public.lookups l
+        on l.tipe = e.elem ->> 'tipe'
+       and l.kode = e.elem ->> 'kode';
+  end if;
+
+  -- 5. Jabatan. Dipetakan balik lewat kode, yang UNIQUE.
+  insert into public.jabatan (kode, nama)
+  select x.kode, x.nama
+    from jsonb_to_recordset(p_payload -> 'jabatan') as x(kode text, nama text);
+  get diagnostics v_jabatan = row_count;
+  if v_jabatan <> v_n_jab then
+    raise exception 'Gagal menulis Jabatan (% dari % baris).', v_jabatan, v_n_jab
+      using errcode = '42501';
+  end if;
+  if v_n_jab > 0 then
+    select array_agg(j.id order by e.ord) into v_jab_ids
+      from jsonb_array_elements(p_payload -> 'jabatan') with ordinality as e(elem, ord)
+      join public.jabatan j on j.kode = e.elem ->> 'kode';
+  end if;
+
+  -- 6. Unit Organisasi, satu per satu, karena parent_id anak butuh id induk
+  --    yang baru saja dibuat. Induk selalu lebih dulu (diperiksa di langkah 1).
+  for v_i in 0 .. v_n_org - 1 loop
+    v_unit := p_payload -> 'org_units' -> v_i;
+    v_parent := (v_unit ->> 'parent')::integer;
+    v_parent_id := case when v_parent is null then null else v_org_ids[v_parent + 1] end;
+    insert into public.org_units (kode, nama, tipe, parent_id)
+    values (v_unit ->> 'kode', v_unit ->> 'nama', v_unit ->> 'tipe', v_parent_id)
+    returning id into v_new_id;
+    v_org_ids := array_append(v_org_ids, v_new_id);
+  end loop;
+  v_org_units := coalesce(array_length(v_org_ids, 1), 0);
+
+  -- 7. Karyawan, set-based. Kolom persis EMPLOYEE_COLUMNS di skrip CLI.
+  insert into public.employees (
+    personnel_number, nip, full_name, status,
+    org_unit_id, jabatan_id,
+    gender_id, work_contract_id, person_grade_id, job_grade_id, legal_entity_id,
+    klasifikasi_rekrutmen_id, teknik_non_teknik_id, bod_range_id, band_jabatan_id,
+    kategori_penempatan_id, kategori_fungsi_id,
+    keterangan_pj_plt, keterangan_rangkap_1, keterangan_rangkap_2, keterangan, jurusan,
+    nomor_surat_pg, nomor_surat_jg,
+    original_start_date, tanggal_diangkat, tanggal_promosi_pg, tanggal_promosi_jg, tanggal_keluar
+  )
+  select
+    e.elem ->> 'personnel_number',
+    e.elem ->> 'nip',
+    e.elem ->> 'full_name',
+    coalesce(e.elem ->> 'status', 'aktif'),
+    case when e.elem ->> 'org' is null then null else v_org_ids[(e.elem ->> 'org')::integer + 1] end,
+    case when e.elem ->> 'jab' is null then null else v_jab_ids[(e.elem ->> 'jab')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'gender'                is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'gender')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'work_contract'         is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'work_contract')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'person_grade'          is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'person_grade')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'job_grade'             is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'job_grade')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'legal_entity'          is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'legal_entity')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'klasifikasi_rekrutmen' is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'klasifikasi_rekrutmen')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'teknik_non_teknik'     is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'teknik_non_teknik')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'bod_range'             is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'bod_range')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'band_jabatan'          is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'band_jabatan')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'kategori_penempatan'   is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'kategori_penempatan')::integer + 1] end,
+    case when e.elem -> 'lk' ->> 'kategori_fungsi'       is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'kategori_fungsi')::integer + 1] end,
+    e.elem -> 'text' ->> 'keterangan_pj_plt',
+    e.elem -> 'text' ->> 'keterangan_rangkap_1',
+    e.elem -> 'text' ->> 'keterangan_rangkap_2',
+    e.elem -> 'text' ->> 'keterangan',
+    e.elem -> 'text' ->> 'jurusan',
+    e.elem -> 'text' ->> 'nomor_surat_pg',
+    e.elem -> 'text' ->> 'nomor_surat_jg',
+    (e.elem -> 'dates' ->> 'original_start_date')::date,
+    (e.elem -> 'dates' ->> 'tanggal_diangkat')::date,
+    (e.elem -> 'dates' ->> 'tanggal_promosi_pg')::date,
+    (e.elem -> 'dates' ->> 'tanggal_promosi_jg')::date,
+    (e.elem -> 'dates' ->> 'tanggal_keluar')::date
+  from jsonb_array_elements(p_payload -> 'employees') with ordinality as e(elem, ord)
+  order by e.ord;
+  get diagnostics v_employees = row_count;
+  if v_employees <> v_n_emp then
+    raise exception 'Gagal menulis Karyawan (% dari % baris).', v_employees, v_n_emp
+      using errcode = '42501';
+  end if;
+
+  -- 8. Data Pribadi Sensitif: UPDATE ke baris yang dibuat trigger, hanya untuk
+  --    Karyawan yang punya isinya (PRD #22).
+  update public.employee_private ep
+     set date_of_birth  = (x.priv ->> 'date_of_birth')::date,
+         place_of_birth = x.priv ->> 'place_of_birth',
+         religion       = x.priv ->> 'religion',
+         marital_status = x.priv ->> 'marital_status'
+    from (
+      select e.elem ->> 'personnel_number' as personnel_number,
+             e.elem -> 'private'           as priv
+        from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+       where jsonb_typeof(e.elem -> 'private') = 'object'
+    ) x
+    join public.employees emp on emp.personnel_number = x.personnel_number
+   where ep.employee_id = emp.id;
+  get diagnostics v_private = row_count;
+  select count(*) into v_n
+    from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+   where jsonb_typeof(e.elem -> 'private') = 'object';
+  if v_private <> v_n then
+    raise exception 'Gagal mengisi Data Pribadi Sensitif (% dari % baris).', v_private, v_n
+      using errcode = '42501';
+  end if;
+
+  -- 9. Bukti sebelum pulang: semua Revisi yang lahir sejak Batch dibuka ada di
+  --    satu Batch, yaitu Batch ini.
+  select count(*), count(distinct r.batch_id)
+    into v_revisions, v_n
+    from public.revisions r
+   where r.id > v_first_rev;
+  if v_n <> 1 or not exists (
+    select 1 from public.revisions r where r.id > v_first_rev and r.batch_id = v_batch_id
+  ) then
+    raise exception 'Seed menyentuh % Batch, seharusnya tepat satu. Tidak ada yang disimpan.', v_n
+      using errcode = '55000';
+  end if;
+
+  perform set_config('app.batch_id', coalesce(v_prev, ''), true);
+
+  return jsonb_build_object(
+    'batch_id',     v_batch_id,
+    'lookups',      v_lookups,
+    'jabatan',      v_jabatan,
+    'org_units',    v_org_units,
+    'employees',    v_employees,
+    'data_pribadi', v_private,
+    'revisions',    v_revisions
+  );
+end;
+$fn$;
+
+comment on function public.seed_from_payload(jsonb, text, boolean) is
+  'Seed awal dari halaman web: satu payload (lib/seed/payload.ts) menjadi satu Batch jenis "seed" berisi Lookup, Jabatan, Unit Organisasi, Karyawan, dan Data Pribadi Sensitif. Menolak kalau tabel Karyawan sudah berisi, kecuali p_force (PRD #23, ADR-008).';
+
+-- ----------------------------------------------------------------------------
+-- 5. Grants
 --
 -- EXECUTE dicabut dari PUBLIC lebih dulu, karena `create function` memberikan
 -- EXECUTE ke PUBLIC secara default. `anon` tidak pernah dapat: pengunjung yang
@@ -944,6 +1217,7 @@ revoke all on function public.revert_skip_entry(bigint, text, uuid, text) from p
 revoke all on function public.revert_plan_for_batch(uuid) from public;
 revoke all on function public.apply_revert(jsonb) from public;
 revoke all on function public.revert_batch(uuid, text) from public;
+revoke all on function public.seed_from_payload(jsonb, text, boolean) from public;
 
 grant execute on function public.assert_admin(text) to authenticated, service_role;
 grant execute on function public.merge_org_unit(uuid, uuid, text) to authenticated, service_role;
@@ -954,5 +1228,6 @@ grant execute on function public.revert_skip_entry(bigint, text, uuid, text) to 
 grant execute on function public.revert_plan_for_batch(uuid) to authenticated, service_role;
 grant execute on function public.apply_revert(jsonb) to authenticated, service_role;
 grant execute on function public.revert_batch(uuid, text) to authenticated, service_role;
+grant execute on function public.seed_from_payload(jsonb, text, boolean) to authenticated, service_role;
 
 reset client_min_messages;
