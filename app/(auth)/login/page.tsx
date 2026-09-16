@@ -15,6 +15,7 @@ import { safeNextPath } from "@/lib/auth/redirect";
 import { readSession } from "@/lib/auth/session";
 import { isSupabaseConfigured, readAllowedEmailDomain } from "@/lib/env";
 import { ROLE_LABELS } from "@/lib/i18n/terms";
+import Logo from "@/components/hc/Logo";
 import { cn } from "@/lib/utils";
 
 import { SignOutButton } from "@/components/SignOutButton";
@@ -49,11 +50,13 @@ export default async function LoginPage({
   const state = configured ? await readSession() : { status: "tamu" as const };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">Masuk ke HC Core</CardTitle>
-          <CardDescription>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-5 py-12">
+      <Logo ukuran={48} />
+
+      <Card className="hc-permukaan w-full max-w-sm rounded-panel border-border shadow-none">
+        <CardHeader className="space-y-2">
+          <CardTitle className="text-judul-panel">Masuk ke HC Core</CardTitle>
+          <CardDescription className="text-pendukung">
             Database central data Karyawan PT Hutama Karya (Persero).
           </CardDescription>
         </CardHeader>
@@ -63,7 +66,7 @@ export default async function LoginPage({
             <p
               role="status"
               className={cn(
-                "rounded-md border px-3 py-2 text-sm",
+                "rounded-bidang border px-3 py-2 text-pendukung",
                 notice.tone === "error"
                   ? "border-destructive/40 bg-destructive/10 text-destructive"
                   : "border-border bg-muted text-muted-foreground",
@@ -74,16 +77,16 @@ export default async function LoginPage({
           ) : null}
 
           {!configured ? (
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-pendukung text-muted-foreground">
               <p className="font-medium text-foreground">
                 Aplikasi belum terhubung ke Supabase.
               </p>
               <p>
-                <code className="rounded bg-muted px-1">
+                <code className="rounded-sm bg-muted px-1 font-mono text-mikro font-normal">
                   NEXT_PUBLIC_SUPABASE_URL
                 </code>{" "}
                 dan{" "}
-                <code className="rounded bg-muted px-1">
+                <code className="rounded-sm bg-muted px-1 font-mono text-mikro font-normal">
                   NEXT_PUBLIC_SUPABASE_ANON_KEY
                 </code>{" "}
                 belum diisi, jadi belum ada yang bisa masuk. Hubungi admin HC
@@ -91,7 +94,7 @@ export default async function LoginPage({
               </p>
             </div>
           ) : state.status === "masuk" ? (
-            <div className="space-y-3 text-sm">
+            <div className="space-y-3 text-pendukung">
               <p className="text-muted-foreground">
                 Anda sudah masuk sebagai{" "}
                 <span className="font-medium text-foreground">

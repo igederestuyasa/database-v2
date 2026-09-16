@@ -52,8 +52,8 @@ import {
   Users,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import StatusLabel from "@/components/hc/StatusLabel";
+import Tombol from "@/components/hc/Tombol";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -312,11 +312,11 @@ function EntityCard({
   return (
     <div
       className={cn(
-        "min-w-0 flex-1 rounded-md border p-3",
+        "min-w-0 flex-1 rounded-kartu border border-border p-3",
         emphasis ? "border-primary/40 bg-primary/5" : "bg-muted/40",
       )}
     >
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{peran}</p>
+      <p className="text-mikro font-normal text-muted-foreground">{peran}</p>
       {option ? (
         <>
           <p className="mt-1 break-words font-medium leading-snug">{option.label}</p>
@@ -324,7 +324,7 @@ function EntityCard({
           <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {option.keterangan ? <span className="break-words">{option.keterangan}</span> : null}
             {option.status === "nonaktif" ? (
-              <Badge variant="outline">{STATUS_LABELS.nonaktif}</Badge>
+              <StatusLabel>{STATUS_LABELS.nonaktif}</StatusLabel>
             ) : null}
           </div>
         </>
@@ -509,7 +509,7 @@ export function MergeDialog({
               ))}
             </ul>
 
-            <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            <div className="rounded-kartu border border-border bg-muted p-3 text-pendukung">
               <p className="flex items-center gap-2 font-medium">
                 <Undo2 aria-hidden="true" className="h-4 w-4" />
                 Bisa dikembalikan
@@ -527,9 +527,9 @@ export function MergeDialog({
             </div>
 
             <DialogFooter>
-              <Button type="button" onClick={() => onOpenChange(false)}>
+              <Tombol type="button" onClick={() => onOpenChange(false)}>
                 Tutup
-              </Button>
+              </Tombol>
             </DialogFooter>
           </>
         ) : (
@@ -571,13 +571,13 @@ export function MergeDialog({
                   aria-describedby="merge-tujuan-petunjuk"
                   invalid={advice?.langkah === "pilih"}
                 />
-                <p id="merge-tujuan-petunjuk" className="text-xs text-muted-foreground">
+                <p id="merge-tujuan-petunjuk" className="text-mikro font-normal text-muted-foreground">
                   {petunjukTujuan
                     ? `${petunjukTujuan} Tujuan dipilih dari daftar — tidak bisa diketik bebas.`
                     : "Tujuan dipilih dari daftar — tidak bisa diketik bebas."}
                 </p>
                 {target?.status === "nonaktif" ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-500">
+                  <p className="text-mikro font-normal text-peringatan">
                     Tujuan yang dipilih berstatus {STATUS_LABELS.nonaktif}. Pastikan ini memang
                     yang Anda maksud.
                   </p>
@@ -588,7 +588,7 @@ export function MergeDialog({
             {/* The number is why this dialog exists, so it is the loudest thing on it. */}
             <div
               className={cn(
-                "rounded-md border p-4",
+                "rounded-kartu border border-border p-4",
                 jumlah === 0
                   ? "bg-muted/40"
                   : "border-destructive/40 bg-destructive/5 text-destructive",
@@ -624,7 +624,7 @@ export function MergeDialog({
                 </ul>
 
                 {perluCentang ? (
-                  <div className="flex items-start gap-3 rounded-md border p-3">
+                  <div className="flex items-start gap-3 rounded-kartu border border-border p-3">
                     <Checkbox
                       id="merge-paham"
                       checked={paham}
@@ -647,7 +647,7 @@ export function MergeDialog({
             {failure && advice ? (
               <div
                 role="alert"
-                className="flex gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive"
+                className="flex gap-2 rounded-kartu border border-destructive/50 bg-destructive/5 p-3 text-pendukung text-destructive"
               >
                 <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0 space-y-1">
@@ -658,23 +658,23 @@ export function MergeDialog({
             ) : null}
 
             <DialogFooter>
-              <Button
+              <Tombol
                 type="button"
-                variant="outline"
+                nada="sekunder"
                 disabled={isPending}
                 onClick={step === "pilih" ? () => onOpenChange(false) : kembaliKePilih}
               >
                 {step === "pilih" ? UI.batal : "Kembali"}
-              </Button>
+              </Tombol>
 
               {step === "pilih" ? (
-                <Button type="button" disabled={!target} onClick={lanjutKeKonfirmasi}>
+                <Tombol type="button" disabled={!target} onClick={lanjutKeKonfirmasi}>
                   Lanjutkan
-                </Button>
+                </Tombol>
               ) : (
-                <Button
+                <Tombol
                   type="button"
-                  variant="destructive"
+                  nada="utama"
                   disabled={
                     !target || isPending || (perluCentang && !paham) || advice?.bolehUlangi === false
                   }
@@ -688,7 +688,7 @@ export function MergeDialog({
                   ) : (
                     "Gabungkan sekarang"
                   )}
-                </Button>
+                </Tombol>
               )}
             </DialogFooter>
           </>

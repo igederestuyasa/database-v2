@@ -19,7 +19,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   Dialog,
   DialogContent,
@@ -180,33 +180,33 @@ export function RenameDialog({
               {...form.register("nama")}
             />
             {target.kode ? (
-              <p className="text-xs text-muted-foreground">Kode: {target.kode}</p>
+              <p className="text-mikro font-normal text-muted-foreground">Kode: {target.kode}</p>
             ) : null}
             {form.formState.errors.nama ? (
-              <p className="text-sm text-destructive" role="alert">
+              <p className="text-pendukung font-medium text-destructive" role="alert">
                 {form.formState.errors.nama.message}
               </p>
             ) : null}
           </div>
 
           {pesanGagal && !form.formState.errors.nama ? (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="text-pendukung font-medium text-destructive" role="alert">
               {pesanGagal}
             </p>
           ) : null}
 
           <DialogFooter>
-            <Button
+            <Tombol
               type="button"
-              variant="outline"
+              nada="sekunder"
               onClick={() => onOpenChange(false)}
               disabled={form.formState.isSubmitting}
             >
               {UI.batal}
-            </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            </Tombol>
+            <Tombol type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Menyimpan…" : UI.simpan}
-            </Button>
+            </Tombol>
           </DialogFooter>
         </form>
       </DialogContent>

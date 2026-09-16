@@ -126,7 +126,7 @@ export function EntityPicker({
             aria-describedby={aria["aria-describedby"]}
             disabled={disabled}
             className={cn(
-              "w-full justify-between font-normal",
+              "h-11 w-full justify-between rounded-bidang text-isi font-normal",
               !selected && "text-muted-foreground",
               invalid && "border-destructive",
               className,
@@ -183,7 +183,7 @@ export function EntityPicker({
                         {option.label}
                       </span>
                       {option.keterangan ? (
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block truncate text-mikro font-normal text-muted-foreground">
                           {option.keterangan}
                         </span>
                       ) : null}
