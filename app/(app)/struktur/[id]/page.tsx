@@ -6,7 +6,7 @@ import { formatWaktu } from "@/components/revisions/revisionDiff";
 import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
 import DetailCard from "@/components/shared/DetailCard";
-import { Badge } from "@/components/ui/badge";
+import StatusLabel from "@/components/hc/StatusLabel";
 import { requirePageSession } from "@/lib/auth/session";
 import {
   countEmployeesByOrgUnit,
@@ -123,10 +123,10 @@ export default async function Page({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-4">
+      <header className="space-y-4 pt-6">
         <Link
           href="/struktur"
-          className="inline-block text-sm text-muted-foreground underline-offset-4 hover:underline"
+          className="inline-block text-pendukung text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           {/* The sidebar calls this page "Struktur Organisasi"; "Unit
               Organisasi" is one node in it (CONTEXT.md), so naming the page
@@ -137,7 +137,7 @@ export default async function Page({
 
         {leluhur.length > 0 ? (
           <nav aria-label={`Induk ${TERMS.unitOrganisasi}`}>
-            <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
+            <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-pendukung text-muted-foreground">
               {leluhur.map((row) => (
                 <li key={row.id} className="flex items-center gap-1.5">
                   <Link
@@ -155,18 +155,18 @@ export default async function Page({
 
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">{unit.nama}</h1>
-            <Badge variant="outline">{labelTipeUnit(unit.tipe)}</Badge>
-            <Badge variant={nonaktif ? "secondary" : "default"}>
+            <h1 className="text-balance text-judul-halaman text-foreground">{unit.nama}</h1>
+            <StatusLabel>{labelTipeUnit(unit.tipe)}</StatusLabel>
+            <StatusLabel nada={nonaktif ? "netral" : "sukses"}>
               {labelStatusUnit(unit.status)}
-            </Badge>
+            </StatusLabel>
           </div>
-          <p className="font-mono text-sm text-muted-foreground">{unit.kode}</p>
+          <p className="text-pendukung tabular-nums text-muted-foreground">{unit.kode}</p>
         </div>
 
         {rantaiGagal ? (
-          <div role="alert" className="rounded-md border bg-muted/40 p-4 text-sm">
-            <p className="font-medium">Rantai induk belum bisa ditampilkan.</p>
+          <div role="alert" className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
+            <p className="text-label text-foreground">Rantai induk belum bisa ditampilkan.</p>
             <p className="mt-1 text-muted-foreground">
               Hierarki di atas unit ini tidak berhasil dibaca lengkap, jadi tidak
               ditampilkan sama sekali — rantai yang bolong akan terlihat seperti
@@ -177,8 +177,8 @@ export default async function Page({
         ) : null}
 
         {nonaktif ? (
-          <div className="rounded-md border bg-muted/40 p-4 text-sm">
-            <p className="font-medium">
+          <div className="hc-permukaan rounded-kartu border border-border bg-card p-4 text-pendukung">
+            <p className="text-label text-foreground">
               {TERMS.unitOrganisasi} ini berstatus{" "}
               {STATUS_LABELS.nonaktif.toLowerCase()}.
             </p>
@@ -203,7 +203,7 @@ export default async function Page({
             fields={fields}
           />
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(unit.created_at)} · Terakhir diubah{" "}
             {formatWaktu(unit.updated_at)}. Setiap perubahan tercatat di Riwayat
             Revisi di samping.
