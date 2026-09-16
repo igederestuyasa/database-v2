@@ -64,6 +64,7 @@ Satu aplikasi web internal yang menjadi **satu-satunya sumber kebenaran** data k
 - Export ke Excel.
 - Endpoint API selain GET (konsumen menulis balik).
 - Riwayat posisi eksplisit (valid_from / valid_to per penugasan) — untuk MVP histori diturunkan dari log revisi.
+- Foto karyawan menggantikan ikon generatif di kartu item dan panel detail. Fotonya di Supabase Storage (bukan di database — kolomnya cuma path pendek, mis. `employees.foto_path`); ikon generatif tetap jadi *fallback* permanen, bukan placeholder yang dibuang, karena `ItemCard`/`DetailPanel` juga dipakai unit organisasi, jabatan, lookup, dan API key yang tidak akan pernah punya foto, dan karena tidak semua karyawan akan punya foto. Titik pasangnya cuma dua: `components/hc/ItemCard.tsx` dan `components/hc/DetailPanel.tsx`. Perlu diputuskan lebih dulu, dan ini keputusan kebijakan bukan teknis: foto wajah adalah data pribadi (UU PDP) — apakah ia ikut aturan admin-saja seperti fitur 22, dan apakah konsumen API boleh mengambilnya.
 
 ## 6. Non-Goals
 
