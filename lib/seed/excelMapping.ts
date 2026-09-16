@@ -1,10 +1,11 @@
 /**
- * scripts/lib/excelMapping.ts — the Excel half of the Seed (PRD #1).
+ * lib/seed/excelMapping.ts — the Excel half of the Seed (PRD #1).
  *
  * PURE ON PURPOSE. Workbook rows in, typed records out. No `pg`, no
  * supabase-js, no `xlsx`, no filesystem, no clock. `scripts/seed-from-excel.ts`
  * does the I/O; everything that can be *wrong* lives here, where
- * `scripts/lib/__tests__/` can look at it.
+ * `lib/seed/excelMapping.test.ts` can look at it. The CLI in `scripts/` and the
+ * Seed page in the browser both import it; neither may add I/O here.
  *
  * That split is the whole point of the unit. The Seed runs once, against a
  * workbook this repository has never seen, and writes ~1.475 Karyawan. A column
@@ -40,7 +41,7 @@
 import {
   LOOKUP_TYPES,
   type LookupType,
-} from "../../lib/validation/lookupTypes";
+} from "../validation/lookupTypes";
 
 /** The only sheet the Seed reads (PRD #1, ARCHITECTURE.md §4E). */
 export const SHEET_NAME = "Demografi Karyawan - Posisi";

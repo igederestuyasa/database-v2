@@ -38,7 +38,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as XLSX from "xlsx";
 
-import { HEADER_ROW, SHEET_NAME } from "./lib/excelMapping";
+import { HEADER_ROW, SHEET_NAME } from "../lib/seed/excelMapping";
 
 /**
  * The header row, in sheet order, exactly as the layout is documented.

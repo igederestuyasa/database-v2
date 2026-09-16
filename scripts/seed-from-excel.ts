@@ -17,7 +17,7 @@
  * including the `batches` row — instead of leaving half a company behind.
  *
  * This script therefore does the I/O and nothing clever. Every decision that
- * could be quietly wrong lives in `scripts/lib/excelMapping.ts`, which is pure
+ * could be quietly wrong lives in `lib/seed/excelMapping.ts`, which is pure
  * and unit-tested: a column mapped to the wrong field throws nothing, looks
  * fine, and lands on 1.475 people.
  *
@@ -61,7 +61,7 @@ import {
   type PlannedEmployee,
   type SeedIssue,
   type SeedPlan,
-} from "./lib/excelMapping";
+} from "../lib/seed/excelMapping";
 
 // ---------------------------------------------------------------------------
 // CLI
