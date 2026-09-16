@@ -265,16 +265,17 @@ describe("pemetaan header → kolom", () => {
     ]);
   });
 
-  it("menunjuk berkas pemetaan yang benar-benar ada", () => {
+  it("menyuruh pembacanya ke template, bukan ke berkas kode", () => {
     const plan = buildHeaderPlan([...MINIMAL_HEADERS, "Catatan HC"]);
-    const pesan = plan.issues.find(
-      (i) => i.kode === "kolom_tidak_dikenal",
-    )?.pesan;
-    // Berkasnya pernah pindah dari scripts/lib/ ke lib/seed/ (ADR-008). Pesan
-    // ini dibaca staf HC non-teknis; menunjuk berkas yang tidak ada membuat
-    // mereka mencari sesuatu yang tidak bisa ditemukan.
-    expect(pesan).toContain("lib/seed/excelMapping.ts");
-    expect(pesan).not.toContain("scripts/lib/excelMapping.ts");
+    const pesan =
+      plan.issues.find((i) => i.kode === "kolom_tidak_dikenal")?.pesan ?? "";
+    // Pesan ini muncul di pratinjau halaman Impor dan dibaca staf HC
+    // non-teknis. Dulu ia menyuruh mereka menyunting sebuah berkas .ts — dan
+    // berkas yang ditunjuknya bahkan sudah pindah sekali tanpa ada yang sadar.
+    // Sejak ada template yang bisa diunduh (PRD #24), jalan keluarnya ada di
+    // layar yang sama dengan pesannya.
+    expect(pesan).toContain("template");
+    expect(pesan).not.toMatch(/\.ts\b/);
   });
 
   it("melaporkan kolom yang tidak dikenal, bukan menebaknya", () => {

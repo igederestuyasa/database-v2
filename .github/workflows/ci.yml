@@ -76,13 +76,16 @@ jobs:
 
       - run: npm run db:local
 
-      # Dua test ber-database: lib/derived/sql.test.ts (lib/derived vs
-      # v_employees) dan tests/seedFromPayload.sql.test.ts (workbook dummy →
-      # seed_from_payload → satu Batch seed). Di `npm test` biasa keduanya
-      # melewati diri sendiri kalau tidak ada Postgres (job `cek` di atas). Di
+      # Tiga test ber-database: lib/derived/sql.test.ts (lib/derived vs
+      # v_employees), tests/seedFromPayload.sql.test.ts (workbook dummy →
+      # seed_from_payload → satu Batch seed), dan
+      # tests/importFromPayload.sql.test.ts (impor berulang: kunci
+      # personnel_number, sel kosong tidak mengosongkan, baris yang tidak
+      # berubah tidak disentuh). Di `npm test` biasa ketiganya melewati diri
+      # sendiri kalau tidak ada Postgres (job `cek` di atas). Di
       # sini databasenya ada, dan db-local.sh sudah membuat role superuser
       # untuk OS user pemanggil (`runner`), jadi test masuk lewat socket
-      # peer-auth tanpa konfigurasi. `grep` memastikan keduanya benar-benar
+      # peer-auth tanpa konfigurasi. `grep` memastikan ketiganya benar-benar
       # jalan, bukan dilewati.
       - uses: actions/setup-node@v4
         with:
@@ -91,7 +94,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Test ber-database (kolom turunan, seed_from_payload)
+      - name: Test ber-database (kolom turunan, seed_from_payload, import_from_payload)
         # NO_COLOR: di runner, CI=true membuat vitest tetap mencetak kode warna
         # ANSI meski di-pipe, dan run kedua workflow ini gagal hanya karena grep
         # tidak menemukan "Tests  2 passed" di sela kode warna — testnya sendiri
@@ -100,6 +103,6 @@ jobs:
         env:
           NO_COLOR: "1"
         run: |
-          npx vitest run lib/derived/sql.test.ts tests/seedFromPayload.sql.test.ts 2>&1 | tee sql-test.log
-          grep -qE "Test Files.*2 passed.*\(2\)" sql-test.log
-          grep -qE "Tests.*4 passed.*\(4\)" sql-test.log
+          npx vitest run lib/derived/sql.test.ts tests/seedFromPayload.sql.test.ts tests/importFromPayload.sql.test.ts 2>&1 | tee sql-test.log
+          grep -qE "Test Files.*3 passed.*\(3\)" sql-test.log
+          grep -qE "Tests.*11 passed.*\(11\)" sql-test.log

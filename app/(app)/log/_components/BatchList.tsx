@@ -69,6 +69,7 @@ const NADA_JENIS: Record<BatchJenis, NadaStatus> = {
   merge: "peringatan",
   rename: "netral",
   seed: "peringatan",
+  impor: "peringatan",
   revert: "peringatan",
 };
 

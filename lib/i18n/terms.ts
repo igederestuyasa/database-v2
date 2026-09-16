@@ -27,7 +27,8 @@ export const TERMS = {
   batch: "Batch", // avoid: transaksi, commit, sesi
   revert: "Revert", // avoid: undo, rollback, restore
   merge: "Merge", // avoid: gabung (di kode), dedup
-  seed: "Seed", // avoid: import, migrasi data, sync
+  seed: "Seed", // avoid: migrasi data, sync. Sekali jalan, tabel kosong.
+  impor: "Impor", // upload Excel berulang di atas data yang sudah ada (PRD #24)
   perluDibereskan: "Perlu Dibereskan", // avoid: anomali, data quality issue
   temuan: "Temuan", // satu baris di halaman Perlu Dibereskan
   konsumen: "Konsumen", // avoid: client, aplikasi eksternal, integrasi
@@ -80,6 +81,7 @@ export const BATCH_TYPE_LABELS = {
   merge: "Merge",
   rename: "Ganti Nama",
   seed: "Seed",
+  impor: "Impor",
   revert: "Revert",
 } as const;
 

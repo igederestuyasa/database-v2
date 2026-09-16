@@ -425,10 +425,6 @@ export async function countEmployeesPerOrgUnit(client: DbClient): Promise<Placem
 
 /**
  * How many Karyawan exist at all, aktif or not.
- *
- * The Seed page's one question (PRD #23): an empty table is the only state in
- * which the Seed may run, and `seed_from_payload()` refuses otherwise — this
- * read is what lets the page say so before the admin picks a file.
  */
 export async function countEmployees(client: DbClient): Promise<number> {
   const { count, error } = await client
@@ -436,4 +432,45 @@ export async function countEmployees(client: DbClient): Promise<number> {
     .select("id", { count: "exact", head: true });
   if (error) throw new DbError("Gagal menghitung Karyawan", error);
   return count ?? 0;
+}
+
+/**
+ * Setiap `personnel_number` yang sudah ada, untuk pratinjau halaman Impor
+ * (PRD #24).
+ *
+ * Impor memakai Personnel Number sebagai kunci, jadi pratinjaunya hanya bisa
+ * mengatakan "N baru, M diperbarui" kalau ia tahu nomor mana yang sudah
+ * terdaftar. Perbandingannya terjadi di peramban, terhadap daftar ini —
+ * bukan satu permintaan per baris.
+ *
+ * Satu kolom pendek untuk ±1.500 orang adalah ~20 KB; itu sebabnya daftar ini
+ * boleh dibaca utuh sementara pembacaan lain di berkas ini berhati-hati soal
+ * halaman. Kalau `db-max-rows` PostgREST memotongnya, `IncompleteReadError`
+ * dilempar daripada mengembalikan daftar pendek — sebab daftar yang pendek
+ * akan membuat pratinjau menjanjikan "baru" untuk orang yang sudah ada, dan
+ * itu kebohongan yang baru ketahuan setelah tombolnya ditekan.
+ */
+export async function listPersonnelNumbers(client: DbClient): Promise<string[]> {
+  const semua: string[] = [];
+  let seharusnya: number | null = null;
+
+  for (let offset = 0; offset <= MAX_TALLY_ROWS * 4; offset += TALLY_PAGE) {
+    const { data, error, count } = await client
+      .from("employees")
+      .select("personnel_number", offset === 0 ? { count: "exact" } : undefined)
+      // Urutan stabil: tanpa ini, paging PostgREST bisa mengulang satu baris
+      // dan melewatkan yang lain.
+      .order("id")
+      .range(offset, offset + TALLY_PAGE - 1);
+    if (error) throw new DbError("Gagal membaca daftar Personnel Number", error);
+    if (offset === 0) seharusnya = count;
+
+    for (const row of data ?? []) semua.push(row.personnel_number);
+    if ((data?.length ?? 0) < TALLY_PAGE) break;
+  }
+
+  if (seharusnya !== null && semua.length < seharusnya) {
+    throw new IncompleteReadError("Personnel Number", semua.length, seharusnya);
+  }
+  return semua;
 }

@@ -247,6 +247,7 @@ describe("0002_batch_operations.sql — ADR-006", () => {
     "apply_revert",
     "revert_batch",
     "seed_from_payload",
+    "import_from_payload",
   ];
 
   /** Body of one `create or replace function public.<name>(` block. */

@@ -1195,6 +1195,436 @@ $fn$;
 comment on function public.seed_from_payload(jsonb, text, boolean) is
   'Seed awal dari halaman web: satu payload (lib/seed/payload.ts) menjadi satu Batch jenis "seed" berisi Lookup, Jabatan, Unit Organisasi, Karyawan, dan Data Pribadi Sensitif. Menolak kalau tabel Karyawan sudah berisi, kecuali p_force (PRD #23, ADR-008).';
 
+
+-- ----------------------------------------------------------------------------
+-- 4b. Impor Karyawan berulang dari Excel (PRD #24)
+-- ----------------------------------------------------------------------------
+
+/*
+  import_from_payload — payload yang SAMA dengan Seed, tapi boleh dijalankan
+  berkali-kali di atas data yang sudah ada.
+
+  BEDANYA DENGAN seed_from_payload
+  ---------------------------------------------------------------------------
+  Seed menolak jalan kalau tabel Karyawan sudah berisi, dan meng-INSERT semua
+  yang ada di payload. Impor tidak menolak apa pun: ia memakai
+  `personnel_number` sebagai kunci — itu memang business key Karyawan
+  (CLAUDE.md) — lalu menambah yang belum ada dan memperbarui yang sudah ada.
+  Pada database kosong keduanya menghasilkan hal yang persis sama.
+
+  TIGA JANJI YANG MEMBUAT FUNGSI INI AMAN DIJALANKAN BERULANG
+  ---------------------------------------------------------------------------
+
+  1. **Sel kosong di Excel tidak pernah mengosongkan data yang sudah ada.**
+     Setiap kolom ditulis sebagai `coalesce(excluded.kolom, employees.kolom)`.
+     File yang cuma berisi kolom Jabatan tidak akan menghapus tanggal lahir
+     seluruh perusahaan. Untuk MENGOSONGKAN sebuah kolom, pakai form Ubah
+     Karyawan — di sana kosong memang berarti kosong, dan itu satu orang yang
+     sengaja, bukan 1.475 orang karena satu kolom lupa diisi.
+
+  2. **Baris yang tidak berubah tidak disentuh sama sekali.** Klausa `where`
+     pada `do update` membandingkan nilai lama dengan nilai baru; kalau sama,
+     baris itu tidak di-UPDATE. Bukan cuma soal Revisi — `log_revision()`
+     memang sudah melewatkan UPDATE yang tidak mengubah apa pun — tapi soal
+     `updated_at`, yang kalau ikut bergerak akan membuat 1.475 orang tampak
+     "terakhir diubah hari ini" padahal tidak ada yang berubah.
+
+  3. **Satu impor = satu transaksi = satu Batch jenis `impor`** (ADR-006),
+     yang bisa dikembalikan utuh dari Log Perubahan seperti Batch mana pun.
+     Gagal di tengah berarti tidak ada yang tertulis.
+
+  DATA REFERENSI DICOCOKKAN LEWAT KODE, DAN TIDAK PERNAH DIUBAH
+  ---------------------------------------------------------------------------
+  Unit Organisasi, Jabatan, dan Lookup yang kode-nya sudah ada dipakai ulang
+  apa adanya: label, nama, tipe, dan induknya TIDAK ditimpa isi Excel. Impor
+  hanya boleh menambah Data Referensi yang benar-benar baru. Kalau Excel
+  menulis "Divisi QHSSE" untuk kode yang di database bernama "Divisi QHSSE "
+  (dengan spasi), yang menang database — dan selisihnya diberesi lewat halaman
+  Perlu Dibereskan + Merge, bukan diam-diam oleh sebuah impor (ADR-002).
+*/
+create or replace function public.import_from_payload(
+  p_payload     jsonb,
+  p_keterangan  text default null
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $fn$
+declare
+  v_prev            text;
+  v_batch_id        uuid;
+  v_first_rev       bigint;
+  v_n               bigint;
+  v_n_org           integer;
+  v_n_jab           integer;
+  v_n_lk            integer;
+  v_n_emp           integer;
+  v_lookups_baru    integer := 0;
+  v_jabatan_baru    integer := 0;
+  v_org_baru        integer := 0;
+  v_emp_cocok       integer := 0;
+  v_emp_tersentuh   integer := 0;
+  v_emp_baru        integer := 0;
+  v_emp_ubah        integer := 0;
+  v_private         integer := 0;
+  v_revisions       bigint  := 0;
+  v_lookup_ids      uuid[]  := '{}';
+  v_jab_ids         uuid[]  := '{}';
+  v_org_ids         uuid[]  := '{}';
+  v_unit            jsonb;
+  v_i               integer;
+  v_parent          integer;
+  v_parent_id       uuid;
+  v_new_id          uuid;
+begin
+  perform public.assert_admin('menjalankan Impor');
+
+  -- 1. Bentuk payload — sebelum apa pun ditulis atau dibuka.
+  if p_payload is null
+     or jsonb_typeof(p_payload -> 'org_units') is distinct from 'array'
+     or jsonb_typeof(p_payload -> 'jabatan')   is distinct from 'array'
+     or jsonb_typeof(p_payload -> 'lookups')   is distinct from 'array'
+     or jsonb_typeof(p_payload -> 'employees') is distinct from 'array' then
+    raise exception 'Payload Impor tidak berbentuk: butuh empat daftar org_units, jabatan, lookups, dan employees.'
+      using errcode = '22023';
+  end if;
+
+  v_n_org := jsonb_array_length(p_payload -> 'org_units');
+  v_n_jab := jsonb_array_length(p_payload -> 'jabatan');
+  v_n_lk  := jsonb_array_length(p_payload -> 'lookups');
+  v_n_emp := jsonb_array_length(p_payload -> 'employees');
+
+  if v_n_emp = 0 then
+    raise exception 'File ini tidak memuat satu pun Karyawan.'
+      using errcode = '22023';
+  end if;
+
+  -- Induk Unit Organisasi harus sudah muncul lebih dulu di array-nya.
+  if exists (
+    select 1
+      from jsonb_array_elements(p_payload -> 'org_units') with ordinality as u(elem, ord)
+     where u.elem ->> 'parent' is not null
+       and (u.elem ->> 'parent')::integer >= u.ord - 1
+  ) then
+    raise exception 'Urutan Unit Organisasi salah: induk harus muncul sebelum anaknya.'
+      using errcode = '22023';
+  end if;
+
+  -- Satu Personnel Number tidak boleh muncul dua kali DI DALAM satu file:
+  -- `on conflict` di bawah tidak bisa menangani dua baris yang bertabrakan
+  -- sesama mereka ("cannot affect row a second time"), dan pesan itu tidak
+  -- memberi tahu siapa pun nomor mana yang kembar.
+  select count(*) into v_n
+    from (
+      select e.elem ->> 'personnel_number' as pn
+        from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+       group by 1
+      having count(*) > 1
+    ) d;
+  if v_n > 0 then
+    raise exception 'Ada % Personnel Number yang muncul lebih dari sekali di file ini. Setiap orang harus satu baris.', v_n
+      using errcode = '22023';
+  end if;
+
+  -- 2. Satu impor pada satu waktu. Dua admin yang meng-upload bersamaan akan
+  --    saling menunggu, bukan saling menimpa.
+  perform pg_advisory_xact_lock(hashtext('public.import_from_payload'));
+
+  -- 3. Berapa yang sudah ada SEBELUM apa pun ditulis — dasar hitungan
+  --    "baru" versus "diperbarui" di akhir.
+  select count(*) into v_emp_cocok
+    from public.employees emp
+   where emp.personnel_number in (
+     select e.elem ->> 'personnel_number'
+       from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+   );
+  v_emp_baru := v_n_emp - v_emp_cocok;
+
+  -- 4. Satu Batch untuk semuanya.
+  v_prev := nullif(current_setting('app.batch_id', true), '');
+  v_batch_id := public.begin_batch(
+    'impor',
+    coalesce(nullif(btrim(p_keterangan), ''), 'Impor Karyawan dari Excel'),
+    true
+  );
+  select coalesce(max(r.id), 0) into v_first_rev from public.revisions r;
+
+  -- 5. Lookup: tambah yang kodenya belum ada, lalu petakan SEMUANYA (baru
+  --    maupun lama) balik ke indeks payload.
+  insert into public.lookups (tipe, kode, label, urutan)
+  select x.tipe, x.kode, x.label, x.urutan
+    from jsonb_to_recordset(p_payload -> 'lookups')
+         as x(tipe text, kode text, label text, urutan integer)
+   where not exists (
+     select 1 from public.lookups l where l.tipe = x.tipe and l.kode = x.kode
+   );
+  get diagnostics v_lookups_baru = row_count;
+  if v_n_lk > 0 then
+    select array_agg(l.id order by e.ord) into v_lookup_ids
+      from jsonb_array_elements(p_payload -> 'lookups') with ordinality as e(elem, ord)
+      join public.lookups l
+        on l.tipe = e.elem ->> 'tipe'
+       and l.kode = e.elem ->> 'kode';
+    if coalesce(array_length(v_lookup_ids, 1), 0) <> v_n_lk then
+      raise exception 'Gagal memetakan Lookup (% dari % baris).',
+        coalesce(array_length(v_lookup_ids, 1), 0), v_n_lk
+        using errcode = '42501';
+    end if;
+  end if;
+
+  -- 6. Jabatan, pola yang sama.
+  insert into public.jabatan (kode, nama)
+  select x.kode, x.nama
+    from jsonb_to_recordset(p_payload -> 'jabatan') as x(kode text, nama text)
+   where not exists (select 1 from public.jabatan j where j.kode = x.kode);
+  get diagnostics v_jabatan_baru = row_count;
+  if v_n_jab > 0 then
+    select array_agg(j.id order by e.ord) into v_jab_ids
+      from jsonb_array_elements(p_payload -> 'jabatan') with ordinality as e(elem, ord)
+      join public.jabatan j on j.kode = e.elem ->> 'kode';
+    if coalesce(array_length(v_jab_ids, 1), 0) <> v_n_jab then
+      raise exception 'Gagal memetakan Jabatan (% dari % baris).',
+        coalesce(array_length(v_jab_ids, 1), 0), v_n_jab
+        using errcode = '42501';
+    end if;
+  end if;
+
+  -- 7. Unit Organisasi, satu per satu: parent_id anak butuh id induknya, dan
+  --    induk yang sudah ada di database dipakai ulang apa adanya.
+  for v_i in 0 .. v_n_org - 1 loop
+    v_unit := p_payload -> 'org_units' -> v_i;
+    v_new_id := null;
+    select o.id into v_new_id from public.org_units o where o.kode = v_unit ->> 'kode';
+    if v_new_id is null then
+      v_parent := (v_unit ->> 'parent')::integer;
+      v_parent_id := case when v_parent is null then null else v_org_ids[v_parent + 1] end;
+      insert into public.org_units (kode, nama, tipe, parent_id)
+      values (v_unit ->> 'kode', v_unit ->> 'nama', v_unit ->> 'tipe', v_parent_id)
+      returning id into v_new_id;
+      v_org_baru := v_org_baru + 1;
+    end if;
+    v_org_ids := array_append(v_org_ids, v_new_id);
+  end loop;
+
+  -- 8. Karyawan — satu statement untuk tambah DAN perbarui.
+  --
+  -- `on conflict (personnel_number) do update` memakai business key Karyawan
+  -- sebagai kunci. `coalesce(excluded.x, employees.x)` adalah janji nomor 1 di
+  -- kepala berkas ini: kolom yang kosong di Excel mempertahankan isi lama.
+  -- Klausa `where` di bawahnya adalah janji nomor 2: kalau seluruh nilai baru
+  -- sama dengan yang sudah ada, barisnya tidak di-UPDATE sama sekali.
+  with masuk as (
+    select
+      e.elem ->> 'personnel_number' as personnel_number,
+      e.elem ->> 'nip'              as nip,
+      e.elem ->> 'full_name'        as full_name,
+      coalesce(e.elem ->> 'status', 'aktif') as status,
+      case when e.elem ->> 'org' is null then null else v_org_ids[(e.elem ->> 'org')::integer + 1] end as org_unit_id,
+      case when e.elem ->> 'jab' is null then null else v_jab_ids[(e.elem ->> 'jab')::integer + 1] end as jabatan_id,
+      case when e.elem -> 'lk' ->> 'gender'                is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'gender')::integer + 1] end                as gender_id,
+      case when e.elem -> 'lk' ->> 'work_contract'         is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'work_contract')::integer + 1] end         as work_contract_id,
+      case when e.elem -> 'lk' ->> 'person_grade'          is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'person_grade')::integer + 1] end          as person_grade_id,
+      case when e.elem -> 'lk' ->> 'job_grade'             is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'job_grade')::integer + 1] end             as job_grade_id,
+      case when e.elem -> 'lk' ->> 'legal_entity'          is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'legal_entity')::integer + 1] end          as legal_entity_id,
+      case when e.elem -> 'lk' ->> 'klasifikasi_rekrutmen' is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'klasifikasi_rekrutmen')::integer + 1] end as klasifikasi_rekrutmen_id,
+      case when e.elem -> 'lk' ->> 'teknik_non_teknik'     is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'teknik_non_teknik')::integer + 1] end     as teknik_non_teknik_id,
+      case when e.elem -> 'lk' ->> 'bod_range'             is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'bod_range')::integer + 1] end             as bod_range_id,
+      case when e.elem -> 'lk' ->> 'band_jabatan'          is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'band_jabatan')::integer + 1] end          as band_jabatan_id,
+      case when e.elem -> 'lk' ->> 'kategori_penempatan'   is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'kategori_penempatan')::integer + 1] end   as kategori_penempatan_id,
+      case when e.elem -> 'lk' ->> 'kategori_fungsi'       is null then null else v_lookup_ids[(e.elem -> 'lk' ->> 'kategori_fungsi')::integer + 1] end       as kategori_fungsi_id,
+      e.elem -> 'text' ->> 'keterangan_pj_plt'     as keterangan_pj_plt,
+      e.elem -> 'text' ->> 'keterangan_rangkap_1'  as keterangan_rangkap_1,
+      e.elem -> 'text' ->> 'keterangan_rangkap_2'  as keterangan_rangkap_2,
+      e.elem -> 'text' ->> 'keterangan'            as keterangan,
+      e.elem -> 'text' ->> 'jurusan'               as jurusan,
+      e.elem -> 'text' ->> 'nomor_surat_pg'        as nomor_surat_pg,
+      e.elem -> 'text' ->> 'nomor_surat_jg'        as nomor_surat_jg,
+      (e.elem -> 'dates' ->> 'original_start_date')::date as original_start_date,
+      (e.elem -> 'dates' ->> 'tanggal_diangkat')::date    as tanggal_diangkat,
+      (e.elem -> 'dates' ->> 'tanggal_promosi_pg')::date  as tanggal_promosi_pg,
+      (e.elem -> 'dates' ->> 'tanggal_promosi_jg')::date  as tanggal_promosi_jg,
+      (e.elem -> 'dates' ->> 'tanggal_keluar')::date      as tanggal_keluar,
+      e.ord as ord
+    from jsonb_array_elements(p_payload -> 'employees') with ordinality as e(elem, ord)
+  )
+  insert into public.employees (
+    personnel_number, nip, full_name, status,
+    org_unit_id, jabatan_id,
+    gender_id, work_contract_id, person_grade_id, job_grade_id, legal_entity_id,
+    klasifikasi_rekrutmen_id, teknik_non_teknik_id, bod_range_id, band_jabatan_id,
+    kategori_penempatan_id, kategori_fungsi_id,
+    keterangan_pj_plt, keterangan_rangkap_1, keterangan_rangkap_2, keterangan, jurusan,
+    nomor_surat_pg, nomor_surat_jg,
+    original_start_date, tanggal_diangkat, tanggal_promosi_pg, tanggal_promosi_jg, tanggal_keluar
+  )
+  select
+    m.personnel_number, m.nip, m.full_name, m.status,
+    m.org_unit_id, m.jabatan_id,
+    m.gender_id, m.work_contract_id, m.person_grade_id, m.job_grade_id, m.legal_entity_id,
+    m.klasifikasi_rekrutmen_id, m.teknik_non_teknik_id, m.bod_range_id, m.band_jabatan_id,
+    m.kategori_penempatan_id, m.kategori_fungsi_id,
+    m.keterangan_pj_plt, m.keterangan_rangkap_1, m.keterangan_rangkap_2, m.keterangan, m.jurusan,
+    m.nomor_surat_pg, m.nomor_surat_jg,
+    m.original_start_date, m.tanggal_diangkat, m.tanggal_promosi_pg, m.tanggal_promosi_jg, m.tanggal_keluar
+  from masuk m
+  order by m.ord
+  on conflict (personnel_number) do update
+     set nip                      = coalesce(excluded.nip,                      public.employees.nip),
+         full_name                = coalesce(excluded.full_name,                public.employees.full_name),
+         status                   = coalesce(excluded.status,                   public.employees.status),
+         org_unit_id              = coalesce(excluded.org_unit_id,              public.employees.org_unit_id),
+         jabatan_id               = coalesce(excluded.jabatan_id,               public.employees.jabatan_id),
+         gender_id                = coalesce(excluded.gender_id,                public.employees.gender_id),
+         work_contract_id         = coalesce(excluded.work_contract_id,         public.employees.work_contract_id),
+         person_grade_id          = coalesce(excluded.person_grade_id,          public.employees.person_grade_id),
+         job_grade_id             = coalesce(excluded.job_grade_id,             public.employees.job_grade_id),
+         legal_entity_id          = coalesce(excluded.legal_entity_id,          public.employees.legal_entity_id),
+         klasifikasi_rekrutmen_id = coalesce(excluded.klasifikasi_rekrutmen_id, public.employees.klasifikasi_rekrutmen_id),
+         teknik_non_teknik_id     = coalesce(excluded.teknik_non_teknik_id,     public.employees.teknik_non_teknik_id),
+         bod_range_id             = coalesce(excluded.bod_range_id,             public.employees.bod_range_id),
+         band_jabatan_id          = coalesce(excluded.band_jabatan_id,          public.employees.band_jabatan_id),
+         kategori_penempatan_id   = coalesce(excluded.kategori_penempatan_id,   public.employees.kategori_penempatan_id),
+         kategori_fungsi_id       = coalesce(excluded.kategori_fungsi_id,       public.employees.kategori_fungsi_id),
+         keterangan_pj_plt        = coalesce(excluded.keterangan_pj_plt,        public.employees.keterangan_pj_plt),
+         keterangan_rangkap_1     = coalesce(excluded.keterangan_rangkap_1,     public.employees.keterangan_rangkap_1),
+         keterangan_rangkap_2     = coalesce(excluded.keterangan_rangkap_2,     public.employees.keterangan_rangkap_2),
+         keterangan               = coalesce(excluded.keterangan,               public.employees.keterangan),
+         jurusan                  = coalesce(excluded.jurusan,                  public.employees.jurusan),
+         nomor_surat_pg           = coalesce(excluded.nomor_surat_pg,           public.employees.nomor_surat_pg),
+         nomor_surat_jg           = coalesce(excluded.nomor_surat_jg,           public.employees.nomor_surat_jg),
+         original_start_date      = coalesce(excluded.original_start_date,      public.employees.original_start_date),
+         tanggal_diangkat         = coalesce(excluded.tanggal_diangkat,         public.employees.tanggal_diangkat),
+         tanggal_promosi_pg       = coalesce(excluded.tanggal_promosi_pg,       public.employees.tanggal_promosi_pg),
+         tanggal_promosi_jg       = coalesce(excluded.tanggal_promosi_jg,       public.employees.tanggal_promosi_jg),
+         tanggal_keluar           = coalesce(excluded.tanggal_keluar,           public.employees.tanggal_keluar)
+   where (
+           public.employees.nip, public.employees.full_name, public.employees.status,
+           public.employees.org_unit_id, public.employees.jabatan_id,
+           public.employees.gender_id, public.employees.work_contract_id,
+           public.employees.person_grade_id, public.employees.job_grade_id,
+           public.employees.legal_entity_id, public.employees.klasifikasi_rekrutmen_id,
+           public.employees.teknik_non_teknik_id, public.employees.bod_range_id,
+           public.employees.band_jabatan_id, public.employees.kategori_penempatan_id,
+           public.employees.kategori_fungsi_id,
+           public.employees.keterangan_pj_plt, public.employees.keterangan_rangkap_1,
+           public.employees.keterangan_rangkap_2, public.employees.keterangan,
+           public.employees.jurusan, public.employees.nomor_surat_pg,
+           public.employees.nomor_surat_jg,
+           public.employees.original_start_date, public.employees.tanggal_diangkat,
+           public.employees.tanggal_promosi_pg, public.employees.tanggal_promosi_jg,
+           public.employees.tanggal_keluar
+         )
+         is distinct from (
+           coalesce(excluded.nip,                      public.employees.nip),
+           coalesce(excluded.full_name,                public.employees.full_name),
+           coalesce(excluded.status,                   public.employees.status),
+           coalesce(excluded.org_unit_id,              public.employees.org_unit_id),
+           coalesce(excluded.jabatan_id,               public.employees.jabatan_id),
+           coalesce(excluded.gender_id,                public.employees.gender_id),
+           coalesce(excluded.work_contract_id,         public.employees.work_contract_id),
+           coalesce(excluded.person_grade_id,          public.employees.person_grade_id),
+           coalesce(excluded.job_grade_id,             public.employees.job_grade_id),
+           coalesce(excluded.legal_entity_id,          public.employees.legal_entity_id),
+           coalesce(excluded.klasifikasi_rekrutmen_id, public.employees.klasifikasi_rekrutmen_id),
+           coalesce(excluded.teknik_non_teknik_id,     public.employees.teknik_non_teknik_id),
+           coalesce(excluded.bod_range_id,             public.employees.bod_range_id),
+           coalesce(excluded.band_jabatan_id,          public.employees.band_jabatan_id),
+           coalesce(excluded.kategori_penempatan_id,   public.employees.kategori_penempatan_id),
+           coalesce(excluded.kategori_fungsi_id,       public.employees.kategori_fungsi_id),
+           coalesce(excluded.keterangan_pj_plt,        public.employees.keterangan_pj_plt),
+           coalesce(excluded.keterangan_rangkap_1,     public.employees.keterangan_rangkap_1),
+           coalesce(excluded.keterangan_rangkap_2,     public.employees.keterangan_rangkap_2),
+           coalesce(excluded.keterangan,               public.employees.keterangan),
+           coalesce(excluded.jurusan,                  public.employees.jurusan),
+           coalesce(excluded.nomor_surat_pg,           public.employees.nomor_surat_pg),
+           coalesce(excluded.nomor_surat_jg,           public.employees.nomor_surat_jg),
+           coalesce(excluded.original_start_date,      public.employees.original_start_date),
+           coalesce(excluded.tanggal_diangkat,         public.employees.tanggal_diangkat),
+           coalesce(excluded.tanggal_promosi_pg,       public.employees.tanggal_promosi_pg),
+           coalesce(excluded.tanggal_promosi_jg,       public.employees.tanggal_promosi_jg),
+           coalesce(excluded.tanggal_keluar,           public.employees.tanggal_keluar)
+         );
+  get diagnostics v_emp_tersentuh = row_count;
+  v_emp_ubah := v_emp_tersentuh - v_emp_baru;
+  if v_emp_ubah < 0 then
+    raise exception 'Hitungan Impor tidak masuk akal (% tersentuh, % baru). Tidak ada yang disimpan.',
+      v_emp_tersentuh, v_emp_baru
+      using errcode = '55000';
+  end if;
+
+  -- 9. Data Pribadi Sensitif (PRD #22). Barisnya sudah ada untuk semua
+  --    Karyawan — dibuat trigger saat INSERT — jadi satu UPDATE melayani yang
+  --    baru maupun yang lama. `coalesce` dan `is distinct from` di sini
+  --    memegang janji yang sama dengan langkah 8.
+  update public.employee_private ep
+     set date_of_birth  = coalesce((x.priv ->> 'date_of_birth')::date, ep.date_of_birth),
+         place_of_birth = coalesce(x.priv ->> 'place_of_birth',        ep.place_of_birth),
+         religion       = coalesce(x.priv ->> 'religion',              ep.religion),
+         marital_status = coalesce(x.priv ->> 'marital_status',        ep.marital_status)
+    from (
+      select e.elem ->> 'personnel_number' as personnel_number,
+             e.elem -> 'private'           as priv
+        from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+       where jsonb_typeof(e.elem -> 'private') = 'object'
+    ) x
+    join public.employees emp on emp.personnel_number = x.personnel_number
+   where ep.employee_id = emp.id
+     and (ep.date_of_birth, ep.place_of_birth, ep.religion, ep.marital_status)
+         is distinct from (
+           coalesce((x.priv ->> 'date_of_birth')::date, ep.date_of_birth),
+           coalesce(x.priv ->> 'place_of_birth',        ep.place_of_birth),
+           coalesce(x.priv ->> 'religion',              ep.religion),
+           coalesce(x.priv ->> 'marital_status',        ep.marital_status)
+         );
+  get diagnostics v_private = row_count;
+
+  -- 10. Bukti sebelum pulang: semua Revisi yang lahir sejak Batch dibuka ada
+  --     di satu Batch, yaitu Batch ini. Impor yang tidak mengubah apa pun sah
+  --     dan menghasilkan nol Revisi — Batch-nya sendiri dibersihkan di bawah.
+  select count(*), count(distinct r.batch_id)
+    into v_revisions, v_n
+    from public.revisions r
+   where r.id > v_first_rev;
+
+  -- Impor yang tidak mengubah apa pun BATAL, bukan sukses-dengan-nol.
+  -- Bukan kerewelan: `begin_batch` sudah menulis satu baris `batches`, dan
+  -- Batch tanpa Revisi adalah baris kosong di Log Perubahan yang tidak bisa
+  -- dihapus lagi (CLAUDE.md melarang DELETE pada `batches`, dan
+  -- scripts/verify-schema.sql menegakkan "tidak ada Batch kosong"). Membatalkan
+  -- transaksinya membuang Batch itu bersamaan, dan tidak ada yang hilang —
+  -- memang tidak ada yang berubah.
+  if v_revisions = 0 then
+    raise exception 'File ini tidak mengubah apa pun: % Karyawan di dalamnya sudah ada dengan isi yang sama persis.', v_n_emp
+      using errcode = '55000';
+  end if;
+
+  if v_n <> 1 or not exists (
+    select 1 from public.revisions r where r.id > v_first_rev and r.batch_id = v_batch_id
+  ) then
+    raise exception 'Impor menyentuh % Batch, seharusnya tepat satu. Tidak ada yang disimpan.', v_n
+      using errcode = '55000';
+  end if;
+
+  perform set_config('app.batch_id', coalesce(v_prev, ''), true);
+
+  return jsonb_build_object(
+    'batch_id',            v_batch_id,
+    'karyawan_baru',       v_emp_baru,
+    'karyawan_diperbarui', v_emp_ubah,
+    'karyawan_tetap',      v_n_emp - v_emp_tersentuh,
+    'lookups_baru',        v_lookups_baru,
+    'jabatan_baru',        v_jabatan_baru,
+    'org_units_baru',      v_org_baru,
+    'data_pribadi',        v_private,
+    'revisions',           v_revisions
+  );
+end;
+$fn$;
+
+comment on function public.import_from_payload(jsonb, text) is
+  'Impor Karyawan berulang dari Excel (PRD #24): payload yang sama dengan Seed, dicocokkan lewat personnel_number. Menambah yang belum ada, memperbarui yang berubah, tidak menyentuh yang sama, dan tidak pernah mengosongkan kolom karena sel Excel kosong. Satu panggilan = satu Batch jenis "impor" yang bisa dikembalikan utuh.';
+
 -- ----------------------------------------------------------------------------
 -- 5. Grants
 --
@@ -1218,6 +1648,7 @@ revoke all on function public.revert_plan_for_batch(uuid) from public;
 revoke all on function public.apply_revert(jsonb) from public;
 revoke all on function public.revert_batch(uuid, text) from public;
 revoke all on function public.seed_from_payload(jsonb, text, boolean) from public;
+revoke all on function public.import_from_payload(jsonb, text) from public;
 
 grant execute on function public.assert_admin(text) to authenticated, service_role;
 grant execute on function public.merge_org_unit(uuid, uuid, text) to authenticated, service_role;
@@ -1229,5 +1660,6 @@ grant execute on function public.revert_plan_for_batch(uuid) to authenticated, s
 grant execute on function public.apply_revert(jsonb) to authenticated, service_role;
 grant execute on function public.revert_batch(uuid, text) to authenticated, service_role;
 grant execute on function public.seed_from_payload(jsonb, text, boolean) to authenticated, service_role;
+grant execute on function public.import_from_payload(jsonb, text) to authenticated, service_role;
 
 reset client_min_messages;

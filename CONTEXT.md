@@ -61,8 +61,12 @@ Menggabungkan satu Data Referensi (asal) ke yang lain (tujuan): semua Karyawan y
 _Avoid_: gabung (di kode), dedup, hapus duplikat
 
 **Seed**:
-Batch sekali jalan yang memasukkan data awal dari file Excel. Setelah Seed, Excel tidak dipakai lagi.
-_Avoid_: import (menyiratkan berulang), migrasi data, sync
+Batch sekali jalan yang memasukkan data awal dari file Excel, waktu database masih kosong. Istilah historis: sejak Impor ada, ini nama untuk unggahan pertama saja.
+_Avoid_: migrasi data, sync
+
+**Impor**:
+Mengunggah Excel ke database yang sudah berisi, berulang kali. Personnel Number adalah kuncinya: yang belum ada ditambah, yang sudah ada diperbarui pada kolom yang berubah. Sel Excel yang kosong tidak mengosongkan data yang sudah ada. Satu Impor = satu Batch jenis `impor` yang bisa dikembalikan utuh.
+_Avoid_: sinkronisasi, migrasi data, upload massal, update massal
 
 **Perlu Dibereskan**:
 Halaman yang mendaftar temuan data kotor (nama mirip, unit tanpa induk, karyawan tanpa unit/jabatan). Istilah untuk temuannya: **Temuan**.

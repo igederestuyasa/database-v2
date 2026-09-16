@@ -108,7 +108,7 @@ Dua istilah yang dipakai di layar:
 - **Revisi** — satu perubahan pada satu baris. Berisi keadaan **sebelum** dan
   **sesudah**, siapa, dan kapan.
 - **Batch** — sekumpulan Revisi yang terjadi karena **satu tindakan**. Satu
-  penyimpanan, satu penggabungan, satu seed awal — masing-masing satu Batch.
+  penyimpanan, satu penggabungan, satu impor Excel — masing-masing satu Batch.
 
 ### Mengembalikan satu perubahan pada seorang Karyawan
 
@@ -131,7 +131,7 @@ mengembalikan pun masih bisa dikembalikan lagi.
 ### Mengembalikan satu tindakan utuh
 
 Kalau yang salah bukan satu kolom melainkan satu tindakan besar — satu
-penggabungan yang keliru, atau seed awal yang salah file:
+penggabungan yang keliru, atau impor yang salah file:
 
 1. Buka halaman **Log Perubahan**.
 2. Cari barisnya (paling baru di atas; setiap baris menyebutkan jenis tindakan,
@@ -239,7 +239,7 @@ dan mana yang sebenarnya sudah tidak memanggil apa-apa lagi.
 Langkah-langkah berikut dilakukan **satu kali di awal**, oleh orang yang
 memasang aplikasinya. Semuanya ditulis di sini supaya tidak hilang bersama
 orang yang memasangnya. Urutannya penting: 8a dulu (memasang), lalu 8b (admin
-pertama), lalu 8c (Seed).
+pertama), lalu 8c (Impor data Karyawan dari Excel).
 
 ### 8a. Memasang aplikasi
 
@@ -305,7 +305,7 @@ yang dipakai — semuanya lewat layar web keduanya.
    | `ALLOWED_EMAIL_DOMAIN` | `hutamakarya.com` (sama dengan langkah 3) |
 
    `HC_SEED_DB_URL` (bagian 8c) **tidak** dipasang di Vercel — itu hanya untuk
-   komputer yang menjalankan Seed.
+   komputer yang menjalankan skrip seed.
 7. Deploy, lalu buka `https://<alamat-vercel>/login`. Halaman **Masuk** harus
    tampil. Kalau yang tampil adalah kalimat "belum dikonfigurasi", periksa
    kembali keempat variabel di langkah 6.
@@ -348,55 +348,75 @@ SQL tidak diperlukan lagi selamanya.
 > Sebaiknya segera buat **admin kedua** lewat halaman Pengguna. Kalau hanya ada
 > satu admin dan akun itu hilang, jalan satu-satunya kembali ke SQL di atas.
 
-### 8c. Menjalankan Seed awal dari Excel
+### 8c. Memasukkan data Karyawan dari Excel (Impor)
 
-Seed adalah pemasukan data awal dari file Excel "Demografi Karyawan - Posisi",
-**sekali jalan**. Sesudahnya Excel pensiun.
+Impor adalah cara memasukkan data Karyawan dari file Excel. **Boleh dijalankan
+berkali-kali** — untuk memasukkan data pertama kali, dan seterusnya setiap kali
+ada karyawan baru atau perubahan massal.
 
-Seed dijalankan **dari aplikasi**, di peramban, tanpa alat teknis apa pun:
+**Tiga hal yang menentukan, baca ini dulu:**
 
-1. Masuk sebagai **admin** (8b). Buka halaman **Karyawan**. Selama belum ada
-   satu pun Karyawan, di atas daftar ada kotak «Belum ada Karyawan sama sekali»
-   dengan tombol **Jalankan Seed awal**. Tekan.
-2. **Pilih file Excel**-nya. File dibaca di peramban Anda dan **tidak diunggah
+- **Personnel Number adalah kuncinya.** Nomor yang belum ada di database akan
+  **ditambah**. Nomor yang sudah ada akan **diperbarui** — hanya pada kolom yang
+  isinya memang berbeda. Orang yang tidak ada di file sama sekali tidak
+  disentuh.
+- **Kolom yang Anda kosongkan di Excel TIDAK menghapus data yang sudah ada.**
+  File berisi tiga kolom tidak akan mengosongkan kolom-kolom lain. Untuk
+  benar-benar mengosongkan sebuah kolom, pakai tombol **Ubah** di halaman
+  Karyawan orang itu.
+- **Nama kolom yang menentukan, bukan urutannya.** Kolom boleh digeser,
+  dibuang, atau ditambah. Yang tidak boleh salah adalah nama di baris header.
+
+#### Langkahnya
+
+1. Masuk sebagai **admin** (8b). Buka halaman **Karyawan**, lalu tombol
+   **Impor dari Excel**. (Kalau daftar Karyawan masih kosong, tombolnya ada di
+   kotak besar di tengah halaman.)
+2. **Belum punya filenya? Tekan «Unduh template Excel» dulu.** Template itu
+   sudah berisi nama-nama kolom yang persis dikenali aplikasi, plus satu baris
+   contoh yang boleh Anda hapus atau timpa. Memakai template menghilangkan
+   seluruh tebak-tebakan di langkah 4.
+3. **Pilih file Excel**-nya. File dibaca di peramban Anda dan **tidak diunggah
    ke mana pun**; yang dikirim ke server nanti hanya daftar yang akan dibuat,
    setelah Anda memeriksanya. Sheet «Demografi Karyawan - Posisi» dipilih
    otomatis; kalau tidak ada, halaman menyebutkan sheet yang tersedia dan Anda
    memilih.
-3. **Baca pratinjaunya.** Belum ada yang ditulis. Di bagian *Kolom* ada tiga
-   angka: *dipetakan*, *diabaikan (rumus)*, dan **tidak dikenal**. Kolom rumus
-   memang sengaja diabaikan (No, Age, Range, Gen, semua "Masa", PG-JG,
-   Keterangan Naik PG/JG) — itu normal. Tapi setiap kolom yang disebut **tidak
-   dikenal** adalah kolom yang **tidak akan masuk sama sekali**. Periksa
-   daftarnya satu per satu: kalau ada kolom penting di situ, berhenti dan minta
-   bantuan teknis sebelum lanjut. Baca juga daftar *Peringatan* — Karyawan
-   tanpa unit atau tanpa jabatan akan muncul di halaman Perlu Dibereskan, dan
-   itu memang disengaja. Kalau halaman menulis **GAGAL** dengan daftar masalah,
-   tidak ada tombol Jalankan: perbaiki Excel-nya dulu, lalu pilih ulang filenya.
-4. Isi **Keterangan** kalau mau (bawaannya "Seed awal dari <nama file>"),
-   centang **Saya paham**, lalu tekan **Jalankan Seed**. Semuanya masuk sebagai
+4. **Baca pratinjaunya.** Belum ada yang ditulis.
+   - Baris **Dicocokkan ke database** memberi tahu berapa orang di file ini
+     yang baru dan berapa yang sudah terdaftar. Kalau angkanya jauh dari
+     dugaan Anda — misalnya semuanya "baru" padahal harusnya perbaikan data
+     lama — berhenti: kemungkinan besar kolom Personnel Number-nya salah.
+   - Di bagian *Kolom* ada tiga angka: *dipetakan*, *diabaikan (rumus)*, dan
+     **tidak dikenal**. Kolom rumus memang sengaja diabaikan (No, Age, Range,
+     Gen, semua "Masa", PG-JG, Keterangan Naik PG/JG) — itu normal. Tapi setiap
+     kolom yang disebut **tidak dikenal** adalah kolom yang **tidak akan masuk
+     sama sekali**. Periksa daftarnya satu per satu: kalau ada kolom penting di
+     situ, perbaiki nama headernya agar sama dengan template, lalu pilih ulang
+     filenya.
+   - Baca juga daftar *Peringatan* — Karyawan tanpa unit atau tanpa jabatan
+     akan muncul di halaman Perlu Dibereskan, dan itu memang disengaja.
+   - Kalau halaman menulis **GAGAL** dengan daftar masalah, tidak ada tombol
+     Jalankan: perbaiki Excel-nya dulu.
+5. Isi **Keterangan** kalau mau (bawaannya "Impor dari <nama file>"), centang
+   **Saya paham**, lalu tekan **Jalankan Impor**. Semuanya masuk sebagai
    **satu** tindakan: gagal di tengah berarti tidak ada satu baris pun yang
    tertulis, dan halaman mengatakannya.
-5. **Catat "Batch id"** yang ditampilkan di layar selesai, bersama jumlah
-   Karyawan yang masuk. Kalau hasil Seed ternyata salah, buka halaman **Log
-   Perubahan**, cari Batch tersebut, dan tekan **Kembalikan seluruh Batch**.
+6. **Baca layar selesai.** Ada tiga angka: berapa Karyawan **baru**, berapa
+   **diperbarui**, berapa **tidak berubah**. Catat **Batch id**-nya. Kalau
+   hasilnya ternyata salah, buka halaman **Log Perubahan**, cari Batch
+   tersebut, dan tekan **Kembalikan seluruh Batch** — yang dibalikkan hanya
+   perubahan dari Impor itu, bukan yang lain.
 
-Setelah Seed berjalan, halaman Seed tidak menawarkan apa-apa lagi; ia hanya
-mengatakan Seed sudah dijalankan dan menunjuk ke Log Perubahan.
-
-> **Yang dilakukan pengembalian itu, tepatnya:** seluruh isi Seed ditandai
-> **nonaktif** — bukan dihapus. Di aplikasi ini memang tidak ada yang pernah
-> dihapus, jadi setelah dikembalikan, daftar Karyawan terlihat kosong pada
-> penyaring "aktif" tetapi ±1.475 orangnya masih ada di penyaring "nonaktif".
-> Isi Data Pribadi Sensitif juga tetap tersimpan apa adanya.
+> **Kalau file yang sama diunggah dua kali** tidak terjadi apa-apa: halaman
+> menolak dengan kalimat "File ini tidak mengubah apa pun", dan tidak ada yang
+> tertulis. Mengulang Impor itu aman.
 >
-> Akibat praktisnya: **Seed tidak bisa dijalankan ulang dengan file lain begitu
-> saja.** Seed menolak berjalan kalau tabel Karyawan sudah berisi, dan
-> memaksanya akan bentrok dengan Personnel Number yang sudah terpakai. Kalau
-> file yang salah terlanjur masuk dan Anda perlu mengulang dari nol, itu
-> pekerjaan teknis — hubungi yang memasang aplikasi; jangan dipaksa sendiri.
+> **Yang dilakukan pengembalian Batch, tepatnya:** baris yang ditambahkan Impor
+> ditandai **nonaktif** — bukan dihapus — dan baris yang diperbarui
+> dikembalikan ke nilai sebelumnya. Di aplikasi ini memang tidak ada yang
+> pernah dihapus. Isi Data Pribadi Sensitif juga tetap tersimpan.
 >
-> Karena itu langkah 3 di atas (membaca pratinjau) bukan formalitas: **di
+> Karena itu langkah 4 di atas (membaca pratinjau) bukan formalitas: **di
 > situlah tempat membatalkan yang murah.**
 
 **Alternatif untuk orang teknis: skrip.** Logika yang sama tersedia sebagai

@@ -157,15 +157,23 @@ $fn$;
 create table if not exists public.batches (
   id                    uuid primary key default gen_random_uuid(),
   jenis                 text not null
-                          check (jenis in ('edit','create','deactivate','merge','rename','seed','revert')),
+                          check (jenis in ('edit','create','deactivate','merge','rename','seed','impor','revert')),
   keterangan            text,
   actor_id              uuid references auth.users (id),
   reverted_by_batch_id  uuid references public.batches (id),
   created_at            timestamptz not null default now()
 );
 
+-- `create table if not exists` di atas TIDAK menyentuh CHECK pada database yang
+-- tabelnya sudah ada, jadi jenis yang ditambahkan belakangan ('impor', PRD #24)
+-- dipasang ulang di sini. Idempoten: aman dijalankan berapa kali pun, baik pada
+-- database kosong maupun yang sudah berisi.
+alter table public.batches drop constraint if exists batches_jenis_check;
+alter table public.batches add constraint batches_jenis_check
+  check (jenis in ('edit','create','deactivate','merge','rename','seed','impor','revert'));
+
 comment on table public.batches is
-  'Batch: sekumpulan Revisi yang terjadi karena satu tindakan (satu simpan, satu merge, satu seed, satu revert). Satuan yang bisa di-revert utuh.';
+  'Batch: sekumpulan Revisi yang terjadi karena satu tindakan (satu simpan, satu merge, satu seed, satu impor, satu revert). Satuan yang bisa di-revert utuh.';
 
 create index if not exists batches_created_at_idx on public.batches (created_at desc);
 create index if not exists batches_jenis_idx on public.batches (jenis);
@@ -466,7 +474,7 @@ declare
   v_actor  uuid;
 begin
   if p_jenis is null
-     or p_jenis not in ('edit','create','deactivate','merge','rename','seed','revert') then
+     or p_jenis not in ('edit','create','deactivate','merge','rename','seed','impor','revert') then
     raise exception 'Jenis batch tidak dikenal: %', coalesce(p_jenis, '(null)')
       using errcode = '22023';
   end if;

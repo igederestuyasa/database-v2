@@ -9,8 +9,8 @@ Database central data karyawan PT Hutama Karya (±1.500 orang) dengan UI CRUD, l
 - `API-CONTRACT.md` — kontrak `/api/v1`; jangan ubah bentuk response v1.
 - `ROADMAP.md` — fase & exit criteria; kerjakan fase berurutan.
 - `CONTEXT.md` — glosarium; pakai istilah di sana di UI, nama file, dan diskusi.
-- `README-HC.md` — panduan pemakaian untuk staf HC non-teknis (ROADMAP Fase 5). Termasuk langkah sekali-jalan: memasang aplikasi, menaikkan admin pertama lewat SQL, dan Seed awal lewat halaman `/karyawan/seed` (skrip dengan `HC_SEED_DB_URL` tinggal alternatif orang teknis).
-- `docs/adr/` — ADR-001..007; keputusan yang tidak boleh "diperbaiki" tanpa ADR baru.
+- `README-HC.md` — panduan pemakaian untuk staf HC non-teknis (ROADMAP Fase 5). Termasuk langkah sekali-jalan: memasang aplikasi, menaikkan admin pertama lewat SQL, dan Impor Excel lewat halaman `/karyawan/impor` (skrip dengan `HC_SEED_DB_URL` tinggal alternatif orang teknis).
+- `docs/adr/` — ADR-001..009; keputusan yang tidak boleh "diperbaiki" tanpa ADR baru.
 
 ## Stack
 Next.js 15 App Router + TypeScript · Supabase (Postgres, Auth, RLS) · Vercel · Tailwind + shadcn/ui · TanStack Table · react-hook-form + zod · SheetJS (seed saja: skrip CLI dan halaman Seed **di peramban** lewat `import()` dinamis, tidak pernah di server). Tanpa ORM.
@@ -21,7 +21,7 @@ Next.js 15 App Router + TypeScript · Supabase (Postgres, Auth, RLS) · Vercel �
 - `npm test` — cek nama kolom (`check:columns`) + seluruh unit test. `vitest.config.ts` mengumpulkan `*.test.ts` dari `app/**`, `lib/**`, `components/**`, `scripts/**`, dan `tests/**` — test yang dituliskan bersebelahan dengan `page.tsx` **ikut terkumpul**; jangan persempit daftarnya lagi.
 - `npm run db:local` — start Postgres lokal, pasang `db/local/00-shim.sql` + semua `supabase/migrations/*.sql`, jalankan `scripts/verify-schema.sql`
 - `npm run gen:types` — regenerate `lib/types/db.ts` & `lib/schema/columns.generated.ts` dari database lokal (menggantikan `supabase gen types`, yang tidak bisa jalan di sini — lihat ADR-005)
-- `npx tsx scripts/seed-from-excel.ts <file.xlsx>` — seed awal lewat skrip, sekali saja (jalur utama: halaman `/karyawan/seed`, PRD #23)
+- `npx tsx scripts/seed-from-excel.ts <file.xlsx>` — seed awal lewat skrip, sekali saja (jalur utama: halaman `/karyawan/impor`, PRD #23/#24)
 
 Supabase CLI (`supabase db push`, `supabase gen types`) **tidak tersedia** dan `supabase.com` diblokir proxy. Skema diverifikasi terhadap PostgreSQL 16 lokal; lihat ADR-005.
 
@@ -43,7 +43,9 @@ Satu konvensi untuk `app/`: folder route hanya berisi file konvensi Next (`page`
 - Log revisi ditulis oleh **trigger**, bukan kode. Tabel data baru wajib dipasangi trigger `log_revision` di migration yang sama. **Tujuh** tabel ter-log: enam tabel data di atas **plus `profiles`** (perubahan role wajib teraudit). `profiles` sengaja tidak ikut larangan DELETE karena cascade dari `auth.users` — jangan samakan kedua daftar itu.
 - Siapa boleh membaca satu baris `revisions` mengikuti siapa boleh membaca baris yang diceritakannya: revisi `employee_private`/`api_keys` admin saja, revisi `profiles` admin atau pemiliknya, sisanya semua yang login.
 - Revert selalu membuat revisi baru. Jangan pernah `UPDATE`/`DELETE` tabel `revisions` atau `batches` selain mengisi `reverted_by_batch_id`.
-- Seed menulis semuanya dalam **satu** transaksi supaya ±1.475 Karyawan jadi **satu** Batch `seed` (ADR-006). Dua jalur, satu logika: halaman `/karyawan/seed` membaca Excel **di peramban** lalu memanggil satu RPC `seed_from_payload` (ADR-008); skrip `scripts/seed-from-excel.ts` memakai koneksi `pg` langsung (`lib/revisions/seedBatch.ts`, hanya boleh di-import `scripts/**`). Pemetaan Excel ada di `lib/seed/excelMapping.ts` (murni) dan dipakai keduanya; `xlsx` tidak pernah dijalankan di server.
+- Excel masuk lewat **satu** transaksi supaya ±1.475 Karyawan jadi **satu** Batch (ADR-006). Dua jalur, satu logika: halaman `/karyawan/impor` membaca Excel **di peramban** lalu memanggil satu RPC `import_from_payload` (ADR-008, ADR-009); skrip `scripts/seed-from-excel.ts` memakai koneksi `pg` langsung (`lib/revisions/seedBatch.ts`, hanya boleh di-import `scripts/**`). Pemetaan Excel ada di `lib/seed/excelMapping.ts` (murni) dan dipakai keduanya; `xlsx` tidak pernah dijalankan di server.
+- **Impor boleh diulang** (PRD #24, ADR-009). Kuncinya `personnel_number`; sel Excel yang kosong **tidak pernah** mengosongkan kolom yang sudah terisi (`coalesce`), dan baris yang nilainya sama tidak di-UPDATE sama sekali supaya `updated_at`-nya tidak bergerak. Untuk mengosongkan sebuah kolom: form Ubah Karyawan. Data Referensi dicocokkan lewat kode dan tidak pernah ditimpa isi Excel — varian dibereskan lewat Merge (ADR-002). Template Excel-nya dibangkitkan dari `lib/seed/template.ts` dan dipatok dua arah terhadap `HEADER_TARGETS`; jangan meng-commit berkas .xlsx.
+- `seed_from_payload` masih ada di skema dan masih diuji, tapi **tidak lagi dipanggil halaman mana pun** — `import_from_payload` menggantikannya (ADR-009). Jangan memakainya untuk fitur baru.
 - `lib/supabase/admin.ts` (service role) hanya boleh di-import oleh `app/api/v1/**` dan `scripts/**`. Tidak ada paket `server-only` (ADR-005 §1); gantinya `tests/serverOnlyBoundary.test.ts` menggagalkan `npm test` kalau Client Component mengimpor **nilai** dari `lib/supabase/{admin,server}`, `lib/db/**`, `lib/actions/_guard`, atau `lib/revisions/seedBatch` — `import type` boleh.
 - Route `api/v1` hanya membaca `v_employees_api`, `org_units`, `jabatan`, `lookups`. Tidak pernah `employee_private` / `v_employees_private`.
 - Kolom referensi di `employees` selalu FK (uuid) ke `org_units` / `jabatan` / `lookups`. Jangan tambah kolom teks bebas untuk hal yang punya daftar.

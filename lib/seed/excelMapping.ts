@@ -429,7 +429,7 @@ export function buildHeaderPlan(headerCells: readonly unknown[]): HeaderPlan {
         level: "peringatan",
         kode: "kolom_tidak_dikenal",
         kolom: header,
-        pesan: `Kolom "${header}" tidak dikenal dan tidak disimpan. Tambahkan ejaannya di lib/seed/excelMapping.ts kalau kolom ini memang perlu masuk.`,
+        pesan: `Kolom "${header}" tidak dikenal dan isinya tidak akan masuk. Kalau kolom ini memang perlu, samakan nama headernya dengan template Excel yang bisa diunduh di halaman ini.`,
       });
       return;
     }
@@ -953,7 +953,7 @@ export function planSeed(
         level: "error",
         baris,
         kode: "personnel_number_kosong",
-        pesan: `Baris ${baris} tidak punya Personnel Number — baris ini tidak bisa diseed (Personnel Number adalah business key).`,
+        pesan: `Baris ${baris} tidak punya Personnel Number — baris ini tidak bisa dimasukkan (Personnel Number adalah kuncinya).`,
       });
       return;
     }
@@ -973,7 +973,7 @@ export function planSeed(
         level: "error",
         baris,
         kode: "personnel_number_ganda",
-        pesan: `Personnel Number ${personnelNumber} muncul dua kali (baris ${duplicatePn} dan ${baris}). Kolom ini UNIQUE di database, jadi seluruh Seed akan gagal.`,
+        pesan: `Personnel Number ${personnelNumber} muncul dua kali (baris ${duplicatePn} dan ${baris}). Satu orang harus satu baris, jadi seluruh Impor akan gagal.`,
       });
       return;
     }
@@ -987,7 +987,7 @@ export function planSeed(
           level: "error",
           baris,
           kode: "nip_ganda",
-          pesan: `NIP ${nip} muncul dua kali (baris ${duplicateNip} dan ${baris}). Kolom ini UNIQUE di database, jadi seluruh Seed akan gagal.`,
+          pesan: `NIP ${nip} muncul dua kali (baris ${duplicateNip} dan ${baris}). Kolom ini UNIQUE di database, jadi seluruh Impor akan gagal.`,
         });
         return;
       }
@@ -1154,7 +1154,7 @@ export function planSeed(
           level: "peringatan",
           baris,
           kode: "status_tidak_dikenal",
-          pesan: `Baris ${baris} (${personnelNumber}): status "${statusRaw}" tidak dikenal — diseed sebagai "aktif".`,
+          pesan: `Baris ${baris} (${personnelNumber}): status "${statusRaw}" tidak dikenal — dianggap "aktif".`,
         });
       }
     }
