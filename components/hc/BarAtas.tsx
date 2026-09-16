@@ -7,22 +7,19 @@ import Logo from "./Logo";
 /**
  * Bar atas HC Panel — docs/DESIGN.md §Spasi, bentuk, tata letak.
  *
- * Tinggi 64 di HP, 72 mulai desktop. Kiri logo dan nama app; kanan keterangan
- * ringkas tentang siapa yang sedang masuk, disembunyikan di bawah 640px karena
- * di lebar itu nama app yang harus menang.
+ * HANYA UNTUK LAYAR SEMPIT. Mulai 1024px sidebar mengambil alih seluruh
+ * tugasnya — logo, nama app, dan blok akun semuanya ada di kepala dan kaki
+ * sidebar — jadi pemanggilnya menyembunyikan bar ini dengan `lg:hidden`. Di
+ * bawah lebar itu sidebar tidak dirender sama sekali, dan bar inilah
+ * satu-satunya tempat identitas app dan jalan keluar bisa ada.
  *
- * Bukan navigasi. Di HC Core, delapan tujuan tetap tinggal di sidebar — bar ini
- * hanya memberi tahu "app apa ini, dan saya masuk sebagai siapa".
+ * Bukan navigasi. Delapan tujuan tetap tinggal di sidebar (atau, di layar
+ * sempit, di strip yang bisa digeser di bawah bar ini).
  *
- * MENEMPEL DI ATAS. `sticky top-0`, jadi identitas app dan siapa yang sedang
- * masuk tetap terbaca sepanjang halaman sepanjang Log Perubahan. Karena itu ia
- * butuh `bg-background` sendiri — tanpa latar, isi halaman akan terlihat
- * menembusnya saat digulir — dan `z-40`, di atas isi halaman tapi di bawah
- * dialog dan popover (z-50 di `components/ui/*`), supaya bar tidak pernah
- * menutupi hal yang sedang ditunggu jawabannya.
- *
- * Tingginya `--tinggi-bar`, satu sumber di `app/globals.css`: sidebar memakai
- * angka yang sama untuk `top` dan tingginya sendiri.
+ * MENEMPEL DI ATAS. `sticky top-0` dengan `bg-background` sendiri — tanpa
+ * latar, isi halaman terlihat menembusnya saat digulir — dan `z-40`: di atas
+ * isi halaman tapi di bawah dialog dan popover (z-50 di `components/ui/*`),
+ * supaya bar tidak pernah menutupi hal yang sedang ditunggu jawabannya.
  */
 export function BarAtas({
   nama = "HC Core",
@@ -40,8 +37,8 @@ export function BarAtas({
     <header
       className={cn(
         "sticky top-0 z-40 bg-background",
-        "flex h-[var(--tinggi-bar)] shrink-0 items-center justify-between gap-4",
-        "border-b border-border px-5 lg:px-10",
+        "flex h-16 shrink-0 items-center justify-between gap-4",
+        "border-b border-border px-5",
         className,
       )}
     >
@@ -56,11 +53,7 @@ export function BarAtas({
         <span className="truncate text-isi font-bold text-foreground">{nama}</span>
       </Link>
 
-      {kanan ? (
-        <span className="hidden min-w-0 truncate text-pendukung text-muted-foreground sm:block">
-          {kanan}
-        </span>
-      ) : null}
+      {kanan ? <div className="shrink-0">{kanan}</div> : null}
     </header>
   );
 }

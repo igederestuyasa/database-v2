@@ -17,7 +17,6 @@
  * `log_revision` on `profiles` records it — ADR-005 §12, and the reason
  * application code must not write that row itself.
  */
-import { headers } from "next/headers";
 import { z } from "zod";
 
 import {
@@ -35,7 +34,6 @@ import {
 } from "@/lib/auth/domain";
 import { authErrorMessage } from "@/lib/auth/errors";
 import {
-  LOGIN_CALLBACK_PATH,
   loginHref,
   safeNextPath,
 } from "@/lib/auth/redirect";
@@ -60,13 +58,7 @@ const passwordSchema = z.object({
   next: nextField,
 });
 
-const magicLinkSchema = z.object({
-  email: emailField,
-  next: nextField,
-});
-
 export type PasswordSignInInput = z.input<typeof passwordSchema>;
-export type MagicLinkInput = z.input<typeof magicLinkSchema>;
 
 /** Sign in with email + password. */
 export async function signInWithPassword(
@@ -113,67 +105,28 @@ export async function signInWithPassword(
   }
 }
 
-/**
- * Email a one-time sign-in link.
- *
- * `shouldCreateUser` is left at its default (true): a first-time user IS
- * created by this call, and `on_auth_user_created` then either rejects the
- * address for not being an office email or creates their `profiles` row as
- * `viewer` (ARCHITECTURE.md §5). That is the intended onboarding path — an
- * admin promotes them afterwards on /pengguna.
- */
-export async function requestMagicLink(
-  input: MagicLinkInput,
-): Promise<ActionResult<{ email: string }>> {
-  const parsed = magicLinkSchema.safeParse(input);
-  if (!parsed.success) return actionInvalid(parsed.error);
+/*
+  TIDAK ADA `requestMagicLink()` DI SINI, DAN JANGAN DIBUAT LAGI.
 
-  const email = normalizeEmail(parsed.data.email);
-  const allowedDomain = readAllowedEmailDomain();
+  Dulu ada: satu Server Action yang memanggil `signInWithOtp()` untuk mengirim
+  tautan masuk sekali pakai. Masalahnya `shouldCreateUser` dibiarkan pada
+  bawaannya — `true` — sehingga panggilan itu MEMBUAT akun kalau alamatnya
+  belum terdaftar. Artinya siapa pun yang punya alamat @domain kantor bisa
+  membuatkan dirinya sendiri akun `viewer` dan langsung membaca data 1.475
+  orang, termasuk kolom yang dipisahkan justru karena sensitif.
 
-  if (!isOfficeEmail(email, allowedDomain)) {
-    return actionFail("VALIDASI", officeEmailMessage(allowedDomain), {
-      email: officeEmailMessage(allowedDomain),
-    });
-  }
+  Untuk database yang tunduk UU PDP (PRD §8), "semua orang di perusahaan boleh
+  masuk" bukan kebijakan yang pernah diputuskan siapa pun — ia cuma bawaan
+  sebuah pemanggilan. Akun sekarang dibuat admin di Supabase (README-HC §8b).
 
-  const configError = supabaseConfigFailure();
-  if (configError) return configError;
+  Menghapusnya, bukan sekadar menyembunyikan tombolnya, karena Server Action
+  adalah endpoint HTTP: selama fungsinya masih diekspor, ia tetap bisa
+  dipanggil tanpa pernah melewati halaman Masuk.
 
-  try {
-    const client = await createClient();
-    const origin = await siteOrigin();
-    const next = safeNextPath(parsed.data.next);
-    const emailRedirectTo = origin
-      ? `${origin}${LOGIN_CALLBACK_PATH}?next=${encodeURIComponent(next)}`
-      : undefined;
-
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: emailRedirectTo ? { emailRedirectTo } : undefined,
-    });
-
-    if (error) {
-      // `context: "pendaftaran"` — this call CAN create the account, so
-      // `handle_new_user()` rejecting the domain is a real possibility here.
-      return actionFail(
-        "GAGAL",
-        authErrorMessage(error, { allowedDomain, context: "pendaftaran" }),
-      );
-    }
-
-    return actionOk({ email });
-  } catch (error) {
-    logError("login", error, { aksi: "requestMagicLink" });
-    return actionFail(
-      "GAGAL",
-      authErrorMessage(asAuthError(error), {
-        allowedDomain,
-        context: "pendaftaran",
-      }),
-    );
-  }
-}
+  Yang TIDAK ikut dihapus: `app/(auth)/login/callback/route.ts` masih menerima
+  `invite` dan `recovery`. Tautan undangan dan tautan setel-ulang kata sandi
+  dikirim dari layar Supabase oleh admin, dan keduanya harus tetap mendarat.
+*/
 
 /**
  * Sign out and clear the session cookies.
@@ -206,31 +159,6 @@ export async function signOut(): Promise<ActionResult<{ redirectTo: string }>> {
       "Gagal keluar. Tutup peramban untuk mengakhiri sesi, lalu coba lagi.",
     );
   }
-}
-
-/**
- * The origin this request arrived on, for the magic link's `emailRedirectTo`.
- *
- * There is no `NEXT_PUBLIC_SITE_URL` in the environment contract (CLAUDE.md
- * lists four variables and this is not one), so it is derived from the request
- * rather than invented.
- *
- * `Origin` is preferred over `Host` because Next already verifies it against
- * the deployment's own host before a Server Action runs. The `Host` fallback is
- * spoofable in principle; what stops a forged value from producing a working
- * link to somebody else's site is Supabase's Redirect URL allow-list, which
- * refuses any `emailRedirectTo` outside the configured origins. Keep that list
- * tight in the Supabase dashboard — it is the real gate here.
- */
-async function siteOrigin(): Promise<string | null> {
-  const headerList = await headers();
-  const origin = headerList.get("origin");
-  if (origin) return origin;
-
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
-  if (!host) return null;
-  const proto = headerList.get("x-forwarded-proto") ?? "https";
-  return `${proto}://${host}`;
 }
 
 /** One message for "the deployment has no Supabase", instead of a raw throw. */

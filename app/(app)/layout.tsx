@@ -4,6 +4,7 @@ import BarAtas, { LewatiKeKonten } from "@/components/hc/BarAtas";
 import KakiHalaman from "@/components/hc/KakiHalaman";
 import Sidebar from "@/components/hc/Sidebar";
 import { SidebarNav, type SidebarNavItem } from "@/components/SidebarNav";
+import { SignOutButton } from "@/components/SignOutButton";
 import { readSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { NAV_LABELS, ROLE_LABELS } from "@/lib/i18n/terms";
@@ -81,14 +82,18 @@ export default async function AppLayout({
       <LewatiKeKonten />
 
       {/*
-        Bar atas memegang logo dan nama app; sidebar di bawahnya memegang
-        tujuan. Sengaja tidak dua-duanya membawa logo — docs/DESIGN.md menaruh
-        identitas app di bar, dan mengulangnya di kepala sidebar hanya membuat
-        dua hal yang harus diubah bersamaan setiap kali nama app berganti.
+        Bar atas HANYA untuk layar sempit.
+
+        Mulai 1024px sidebar memegang semuanya — logo, nama app, tujuan, dan
+        blok akun — jadi bar di atasnya cuma mengulang yang sudah ada dan
+        memakan 72px tinggi layar. Di bawah 1024px sidebar tidak dirender sama
+        sekali, dan tanpa bar ini tidak ada logo DAN tidak ada jalan keluar:
+        tombol Keluar hidup di kaki sidebar yang tidak ada di sana.
       */}
       <BarAtas
         href="/karyawan"
-        kanan={akun ? `${akun.email} · ${ROLE_LABELS[akun.role]}` : undefined}
+        className="lg:hidden"
+        kanan={akun ? <SignOutButton ukuran="ringkas" /> : undefined}
       />
 
       <div className="flex">

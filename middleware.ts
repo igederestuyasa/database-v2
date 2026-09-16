@@ -81,7 +81,10 @@ export async function middleware(request: NextRequest) {
 
   if (!userId && !isPublic) {
     const next = `${pathname}${search}`;
-    return redirectTo(request, loginHref({ next, pesan: "login" }), response);
+    // Tanpa `pesan`: halaman Masuk tidak perlu memberi tahu orang yang sedang
+    // menatap form masuk bahwa ia harus masuk dulu. `next` yang penting —
+    // itulah yang mengembalikannya ke halaman yang ia tuju.
+    return redirectTo(request, loginHref({ next }), response);
   }
 
   // A signed-in visitor is NOT bounced away from /login: that page doubles as

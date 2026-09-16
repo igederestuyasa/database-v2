@@ -5,7 +5,6 @@ import Tombol from "@/components/hc/Tombol";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -54,11 +53,15 @@ export default async function LoginPage({
       <Logo ukuran={48} />
 
       <Card className="hc-permukaan w-full max-w-sm rounded-panel border-border shadow-none">
-        <CardHeader className="space-y-2">
+        {/*
+          Judul saja, tanpa kalimat penjelas.
+
+          "Database central data Karyawan PT Hutama Karya (Persero)" tidak
+          menolong siapa pun yang berdiri di layar ini: yang sampai ke sini
+          sudah tahu app apa ini, dan yang tidak tahu tidak boleh masuk.
+        */}
+        <CardHeader>
           <CardTitle className="text-judul-panel">Masuk ke HC Core</CardTitle>
-          <CardDescription className="text-pendukung">
-            Database central data Karyawan PT Hutama Karya (Persero).
-          </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">

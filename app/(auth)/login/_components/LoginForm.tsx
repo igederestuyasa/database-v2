@@ -3,10 +3,20 @@
 /**
  * The sign-in form (PRD #21).
  *
- * Two ways in, because HC staff have both: a password for accounts an admin
- * set up, and a one-time link by email for everyone else — the link is also
- * what creates a first-time account, which `on_auth_user_created` then either
- * refuses (not an office address) or accepts as a `viewer`.
+ * SATU JALAN MASUK: email kantor dan kata sandi.
+ *
+ * Dulu ada jalan kedua, "Kirim tautan masuk ke email", dan itu dicabut dengan
+ * sengaja. Panggilannya memakai `shouldCreateUser` bawaan — yaitu `true` —
+ * jadi siapa pun yang punya alamat @domain kantor bisa membuatkan dirinya
+ * sendiri akun `viewer` dan langsung membaca data 1.475 orang. Untuk database
+ * yang memuat tanggal lahir, agama, dan status pernikahan (UU PDP, PRD §8),
+ * "semua orang di perusahaan boleh masuk" bukan kebijakan yang pernah
+ * diputuskan siapa pun — ia cuma bawaan sebuah pemanggilan.
+ *
+ * Akun sekarang dibuat admin di Supabase (README-HC §8b) dan tidak ada jalan
+ * lain. Menyembunyikan tombolnya saja tidak cukup untuk itu: Server Action
+ * adalah endpoint HTTP yang bisa dipanggil tanpa melewati halaman ini, jadi
+ * `requestMagicLink()` ikut dihapus dari `lib/actions/auth.ts`.
  *
  * All the deciding happens in `lib/actions/auth.ts`; this component
  * only collects the input, shows what came back, and never sees a raw
@@ -32,7 +42,7 @@ import { toast } from "@/components/ui/sonner";
 import type { ActionFailure } from "@/lib/actions/_guard";
 import { isValidEmailShape, officeEmailPlaceholder } from "@/lib/auth/domain";
 
-import { requestMagicLink, signInWithPassword } from "@/lib/actions/auth";
+import { signInWithPassword } from "@/lib/actions/auth";
 
 const loginFormSchema = z.object({
   email: z
@@ -55,7 +65,6 @@ export type LoginFormProps = {
 export function LoginForm({ allowedDomain, next }: LoginFormProps) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
-  const [linkSentTo, setLinkSentTo] = React.useState<string | null>(null);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
@@ -77,7 +86,6 @@ export function LoginForm({ allowedDomain, next }: LoginFormProps) {
   );
 
   const onSubmit = form.handleSubmit((values) => {
-    setLinkSentTo(null);
     startTransition(async () => {
       const result = await signInWithPassword({
         email: values.email,
@@ -95,26 +103,6 @@ export function LoginForm({ allowedDomain, next }: LoginFormProps) {
       router.refresh();
     });
   });
-
-  const onMagicLink = async () => {
-    setLinkSentTo(null);
-    // The password is irrelevant to this path, so validate only the email.
-    const emailOk = await form.trigger("email");
-    if (!emailOk) return;
-
-    const email = form.getValues("email");
-    startTransition(async () => {
-      const result = await requestMagicLink({ email, next });
-
-      if (!result.ok) {
-        showFailure(result.error);
-        return;
-      }
-
-      setLinkSentTo(result.data.email);
-      toast.success("Tautan masuk sudah dikirim.");
-    });
-  };
 
   return (
     <Form {...form}>
@@ -163,28 +151,6 @@ export function LoginForm({ allowedDomain, next }: LoginFormProps) {
         <Tombol type="submit" className="w-full" disabled={pending}>
           {pending ? "Memproses…" : "Masuk"}
         </Tombol>
-
-        <div className="flex items-center gap-3 py-1">
-          <span className="h-px flex-1 bg-border" />
-          <span className="text-mikro font-normal text-muted-foreground">atau</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
-        <Tombol
-          type="button"
-          nada="sekunder"
-          className="w-full"
-          onClick={onMagicLink}
-          disabled={pending}
-        >
-          Kirim tautan masuk ke email
-        </Tombol>
-
-        <p className="text-mikro font-normal text-muted-foreground" aria-live="polite">
-          {linkSentTo
-            ? `Tautan masuk sudah dikirim ke ${linkSentTo}. Buka tautannya di peramban ini, berlakunya terbatas.`
-            : `Belum punya kata sandi? Pakai tautan masuk — hanya email kantor (@${allowedDomain}) yang diterima.`}
-        </p>
       </form>
     </Form>
   );
