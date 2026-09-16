@@ -704,6 +704,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      seed_from_payload: {
+        Args: {
+          p_payload: Json;
+          p_keterangan?: string;
+          p_force?: boolean;
+        };
+        Returns: Json;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

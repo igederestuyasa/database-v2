@@ -246,6 +246,7 @@ describe("0002_batch_operations.sql — ADR-006", () => {
     "merge_lookup",
     "apply_revert",
     "revert_batch",
+    "seed_from_payload",
   ];
 
   /** Body of one `create or replace function public.<name>(` block. */
@@ -258,7 +259,7 @@ describe("0002_batch_operations.sql — ADR-006", () => {
     return rest.slice(0, rest.indexOf("$fn$;"));
   }
 
-  it("membuat kelima fungsi entry point", () => {
+  it("membuat semua fungsi entry point", () => {
     for (const fn of ENTRY_POINTS) {
       expect(batchOpsSql, `${fn} harus dibuat`).toMatch(
         new RegExp(`create or replace function public\\.${fn}\\(`, "i"),
