@@ -2,50 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Token sistem UI "HC Panel" — docs/DESIGN.md.
+ *
+ * DUA LAPIS, SENGAJA. Lapis pertama adalah 13 token HC Panel dengan namanya
+ * sendiri (`--latar`, `--tinta`, `--merah`, …). Lapis kedua memetakan nama
+ * shadcn/ui ke token itu lewat `var()`, persis seperti tabel pemetaan di
+ * docs/DESIGN.md. Gunanya: `components/ui/*` beku (CLAUDE.md) dan tetap
+ * membaca `--background`, `--primary`, dst. tanpa disentuh sama sekali —
+ * mengganti satu token HC Panel otomatis mengganti setiap peran shadcn yang
+ * menunjuk ke sana, dan tidak ada satu pun nilai warna yang ditulis dua kali.
+ *
+ * Semuanya triplet HSL tanpa `hsl()`, karena `tailwind.config.ts` membungkusnya
+ * sendiri sebagai `hsl(var(--x) / <alpha-value>)` — itulah yang membuat
+ * `bg-card/30` dan kawan-kawannya tetap jalan.
+ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    /* --- Token HC Panel, mode terang --- */
+    --latar: 220 14.3% 95.9%; /* #F3F4F6 */
+    --kartu: 0 0% 99.2%; /* #FDFDFD */
+    --tinta: 220 14.3% 8.2%; /* #121418 */
+    --tinta-hover: 220 12.2% 19.2%; /* #2B2F37 */
+    --redup: 218.8 8.4% 39.8%; /* #5D636E */
+    --garis: 217.5 14.8% 89.4%; /* #E0E3E8 */
+    --garis-kuat: 216.9 12.9% 80.2%; /* #C6CBD3 */
+    --garis-putus: 216 12.6% 76.7%; /* #BCC2CB */
+    --merah: 358.7 84% 41.8%; /* #C41115 */
+    --merah-ikon: 358 72.5% 51.6%; /* #DD2A30 */
+    --merah-latar: 0 75% 93.7%; /* #FBE3E3 */
+    --sukses: 150 60.5% 29.8%; /* #1E7A4C */
+    --peringatan: 39.1 100% 27.1%; /* #8A5A00 */
+
+    /* --- Bayangan. Satu elevasi per layar: hanya kontrol utama. --- */
+    --bayangan-kontrol: 0 1px 2px rgb(18 20 24 / 0.05),
+      0 12px 28px -16px rgb(18 20 24 / 0.28);
+    --bayangan-popover: 0 14px 34px -14px rgb(18 20 24 / 0.35);
+
+    /* --- Bentuk. Tombol, label, dan chip memakai `rounded-full`. --- */
+    --radius-panel: 1.5rem; /* 24 */
+    --radius-kartu: 1rem; /* 16 */
+    --radius-bidang: 0.75rem; /* 12 */
+    /* Dipertahankan karena `tailwind.config.ts` versi lama memakainya, dan
+       supaya `--radius` tidak pernah berbeda dari radius kartu. */
+    --radius: var(--radius-kartu);
+
+    /* --- Kurva gerak --- */
+    --kurva-keluar: cubic-bezier(0.16, 1, 0.3, 1);
+    --kurva-standar: cubic-bezier(0.33, 1, 0.68, 1);
+    --kurva-pantul: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* --- Pemetaan shadcn/ui (docs/DESIGN.md §Token warna) --- */
+    --background: var(--latar);
+    --foreground: var(--tinta);
+    --card: var(--kartu);
+    --card-foreground: var(--tinta);
+    --popover: var(--kartu);
+    --popover-foreground: var(--tinta);
+    --primary: var(--tinta);
+    --primary-foreground: var(--kartu);
+    --secondary: var(--kartu);
+    --secondary-foreground: var(--tinta);
+    --muted: var(--latar);
+    --muted-foreground: var(--redup);
+    --accent: var(--latar);
+    --accent-foreground: var(--tinta);
+    --destructive: var(--merah);
+    --destructive-foreground: var(--kartu);
+    --border: var(--garis);
+    --input: var(--garis-kuat);
+    --ring: var(--tinta);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --latar: 216 16.1% 6.1%; /* #0D0F12 */
+    --kartu: 217.5 16% 9.8%; /* #15181D */
+    --tinta: 214.3 18.9% 92.7%; /* #E9ECF0 */
+    --tinta-hover: 220 23.1% 97.5%; /* #F7F8FA */
+    --redup: 215.3 9.2% 63.7%; /* #9AA1AB */
+    --garis: 215 14% 16.9%; /* #252A31 */
+    --garis-kuat: 215.3 12.8% 26.1%; /* #3A414B */
+    --garis-putus: 216.7 12.7% 27.8%; /* #3E4550 */
+    --merah: 357.9 84.8% 61.2%; /* #F0484E */
+    --merah-ikon: 357.9 84.8% 61.2%; /* #F0484E */
+    /* Satu-satunya token yang membawa alpha sendiri: docs/DESIGN.md menulis
+       `rgb(240 72 78 / .24)` untuk mode gelap. `hsl()` menerima alpha dengan
+       garis miring, jadi nilainya tetap bisa ditulis sebagai satu token. */
+    --merah-latar: 357.9 84.8% 61.2% / 0.24;
+    --sukses: 151.3 49.8% 53.1%; /* #4CC38A */
+    --peringatan: 37.8 72.7% 55.5%; /* #E0A33B */
+
+    --bayangan-kontrol: 0 1px 2px rgb(0 0 0 / 0.4),
+      0 12px 28px -16px rgb(0 0 0 / 0.9);
+
+    /* Peran shadcn tidak ditulis ulang di sini: semuanya `var(--token)`, jadi
+       nilai gelap di atas sudah mengalir ke `--background`, `--primary`, dst. */
   }
 }
 
@@ -53,7 +104,68 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  /**
+   * Angka yang dibandingkan antarbaris harus selebar sama. Ditaruh di sini,
+   * bukan di setiap sel tabel, supaya tidak ada tabel yang kelewat.
+   */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /**
+   * "Lewati ke konten" — tersembunyi sampai di-Tab, lalu muncul sebagai kartu
+   * berbayangan di pojok kiri atas.
+   */
+  .lewati-ke-konten {
+    @apply sr-only;
+  }
+
+  .lewati-ke-konten:focus-visible {
+    @apply not-sr-only fixed left-4 top-4 z-50 rounded-full bg-primary px-4 py-2
+      text-sm font-semibold text-primary-foreground shadow-kontrol
+      outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  /**
+   * Kata ulang berhubung ("masing-masing", "rata-rata") tidak boleh terputus
+   * di ujung baris — docs/DESIGN.md §Tulisan.
+   */
+  .kata-ulang {
+    white-space: nowrap;
+  }
+}
+
+/**
+ * Mode kontras paksa: kartu, panel, dan input kehilangan warna latarnya, jadi
+ * satu-satunya yang menyisakan bentuknya adalah border. Komponen HC Panel
+ * membawa kelas ini; aturannya ditulis sekali di sini.
+ */
+@media (forced-colors: active) {
+  .hc-permukaan {
+    border: 1px solid CanvasText;
+  }
+}
+
+/**
+ * Hormati "kurangi gerak": seluruh animasi dan transisi dimatikan, bukan
+ * dipercepat — docs/DESIGN.md §Gerak.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
