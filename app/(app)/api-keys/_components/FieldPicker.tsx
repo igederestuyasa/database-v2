@@ -35,7 +35,7 @@
  */
 import * as React from "react";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -160,15 +160,15 @@ export function FieldPicker({
         >
           {jumlahTerpilih} dari {TOTAL_API_FIELDS} kolom dipilih
         </p>
-        <Button
+        <Tombol
           type="button"
-          variant="ghost"
-          size="sm"
+          nada="halus"
+          ukuran="ringkas"
           disabled={disabled || jumlahTerpilih === 0}
           onClick={() => ubah([])}
         >
           Kosongkan semua
-        </Button>
+        </Tombol>
       </div>
 
       <div
@@ -201,17 +201,17 @@ export function FieldPicker({
                 <span className="text-xs text-muted-foreground">
                   {terpilihDiGrup} dari {group.fields.length} dipilih
                 </span>
-                <Button
+                <Tombol
                   type="button"
-                  variant="ghost"
-                  size="sm"
+                  nada="halus"
+                  ukuran="ringkas"
                   className="ml-auto h-7 px-2 text-xs"
                   disabled={disabled}
                   onClick={() => toggleGrup(fields, !semuaTampilTerpilih)}
                 >
                   {semuaTampilTerpilih ? "Kosongkan grup" : "Pilih grup"}
                   <span className="sr-only"> {group.label}</span>
-                </Button>
+                </Tombol>
               </div>
 
               <p className="text-xs text-muted-foreground">

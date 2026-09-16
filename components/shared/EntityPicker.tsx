@@ -115,6 +115,13 @@ export function EntityPicker({
       {name ? <input type="hidden" name={name} value={value ?? ""} /> : null}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
+          {/*
+            Sengaja tetap `ui/button` dan BUKAN `Tombol` HC Panel: yang dilihat
+            orang di sini adalah sebuah kolom isian yang bisa dibuka, sejajar
+            dengan Input di sebelahnya — bukan tombol pil. Bentuknya diambil
+            dari token bidang isian lewat className di bawah; yang dipinjam dari
+            Button hanya perilaku fokus dan `asChild`-nya.
+          */}
           <Button
             id={id}
             type="button"

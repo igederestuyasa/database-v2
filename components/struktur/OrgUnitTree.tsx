@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 import StatusLabel from "@/components/hc/StatusLabel";
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -251,14 +251,13 @@ export function OrgUnitTree({
             {isAdmin ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
+                  <Tombol
+                    nada="halus"
+                    className="h-9 w-9 shrink-0 px-0"
                     aria-label={`Aksi untuk ${node.nama}`}
                   >
                     <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-                  </Button>
+                  </Tombol>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => onAction("ubah", node)}>

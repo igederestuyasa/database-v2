@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   Card,
   CardContent,
@@ -102,9 +102,9 @@ export default async function LoginPage({
                 </span>{" "}
                 ({ROLE_LABELS[state.user.role]}).
               </p>
-              <Button asChild className="w-full">
+              <Tombol asChild className="w-full">
                 <Link href={next}>Lanjut ke aplikasi</Link>
-              </Button>
+              </Tombol>
             </div>
           ) : state.status === "tanpa-profil" ? (
             <div className="space-y-3 text-sm text-muted-foreground">

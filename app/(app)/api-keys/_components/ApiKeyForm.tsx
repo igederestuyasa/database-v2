@@ -17,7 +17,7 @@ import * as React from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Button } from "@/components/ui/button";
+import Tombol from "@/components/hc/Tombol";
 import {
   Form,
   FormDescription,
@@ -235,22 +235,22 @@ export function ApiKeyForm({
             {jumlahKolom} kolom dipilih
           </p>
           {onBatal ? (
-            <Button
+            <Tombol
               type="button"
-              variant="outline"
+              nada="sekunder"
               onClick={onBatal}
               disabled={form.formState.isSubmitting}
             >
               {UI.batal}
-            </Button>
+            </Tombol>
           ) : null}
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Tombol type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting
               ? "Menyimpan…"
               : sedangUbah
                 ? UI.simpan
                 : `Buat ${TERMS.apiKey}`}
-          </Button>
+          </Tombol>
         </div>
       </form>
     </Form>
