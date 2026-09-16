@@ -329,11 +329,33 @@ export function KaryawanTable({
           </Select>
 
           {isAdmin ? (
-            <Tombol asChild className="ml-auto">
-              <Link href="/karyawan/baru">
-                {UI.tambah} {TERMS.karyawan}
-              </Link>
-            </Tombol>
+            /*
+              DUA JALAN MASUK, DAN YANG KEDUA HARUS ADA DI SINI.
+
+              Sebelum ini satu-satunya tautan ke halaman Impor duduk di
+              EmptyState halaman Karyawan — yang hanya dirender saat daftarnya
+              KOSONG. Artinya begitu impor pertama berhasil, jalan masuknya
+              lenyap, dan Impor terbaca sebagai fitur sekali pakai. PRD #24
+              justru kebalikannya: "mengunggah Excel BERULANG KALI di atas data
+              yang sudah ada" — memasukkan email seluruh perusahaan, menambah
+              karyawan baru sebulan sekali, memperbaiki satu kolom secara
+              massal. Semua itu terjadi justru ketika daftarnya TIDAK kosong.
+
+              Nadanya sekunder, bukan utama: satu layar satu tombol utama
+              (docs/DESIGN.md), dan yang utama di sini tetap Tambah Karyawan.
+            */
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <Tombol nada="sekunder" asChild>
+                <Link href="/karyawan/impor">
+                  {TERMS.impor} dari Excel
+                </Link>
+              </Tombol>
+              <Tombol asChild>
+                <Link href="/karyawan/baru">
+                  {UI.tambah} {TERMS.karyawan}
+                </Link>
+              </Tombol>
+            </div>
           ) : (
             <span className="ml-auto text-mikro font-normal text-muted-foreground">
               {UI.hanyaAdmin}
