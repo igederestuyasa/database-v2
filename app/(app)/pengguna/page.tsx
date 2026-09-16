@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { countAdmins, listProfiles } from "@/lib/db/profiles";
-import { NAV_LABELS, TERMS, UI } from "@/lib/i18n/terms";
+import { NAV_LABELS, TERMS } from "@/lib/i18n/terms";
 
 import { PenggunaTable, type PenggunaRow } from "./_components/PenggunaTable";
 
@@ -31,19 +30,10 @@ export default async function Page() {
 
   if (user.role !== "admin") {
     return (
-      <div className="mx-auto max-w-2xl py-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {NAV_LABELS.pengguna}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{UI.hanyaAdmin}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Anda masuk sebagai {TERMS.viewer}. Minta admin HC Core kalau Anda
-          perlu mengatur role pengguna.
-        </p>
-        <Button asChild className="mt-6">
-          <Link href="/karyawan">Kembali ke {TERMS.karyawan}</Link>
-        </Button>
-      </div>
+      <HanyaAdmin
+        judul={NAV_LABELS.pengguna}
+        alasan={`Pengaturan role hanya bisa dilakukan ${TERMS.admin}.`}
+      />
     );
   }
 
@@ -66,11 +56,11 @@ export default async function Page() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <header className="space-y-3 pt-6">
+        <h1 className="text-balance text-judul-halaman text-foreground">
           {NAV_LABELS.pengguna}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-subjudul text-subjudul text-muted-foreground">
           {TERMS.admin} boleh mengubah apa pun dan melihat{" "}
           {TERMS.dataPribadiSensitif}; {TERMS.viewer} hanya membaca. Setiap
           perubahan role tercatat sebagai {TERMS.revisi} dan bisa dikembalikan
@@ -80,7 +70,7 @@ export default async function Page() {
 
       <PenggunaTable rows={rows} currentUserId={user.id} />
 
-      <p className="text-xs text-muted-foreground">
+      <p className="max-w-subjudul text-pendukung text-muted-foreground">
         {total} pengguna, {jumlahAdmin} di antaranya {TERMS.admin}. Akun baru
         selalu mulai sebagai {TERMS.viewer}; naikkan di sini kalau perlu.
         {terpotong

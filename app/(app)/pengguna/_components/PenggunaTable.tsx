@@ -14,7 +14,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
+import StatusLabel from "@/components/hc/StatusLabel";
 import {
   Select,
   SelectContent,
@@ -107,33 +107,33 @@ export function PenggunaTable({
 
   if (rows.length === 0) {
     return (
-      <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-kartu border border-dashed border-garis-putus p-8 text-center text-pendukung text-muted-foreground">
         {UI.tidakAdaData}
       </p>
     );
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="hc-permukaan overflow-x-auto rounded-kartu border border-border bg-card">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Email</TableHead>
-            <TableHead className="w-[9rem]">Role</TableHead>
-            <TableHead className="w-[11rem]">Terdaftar</TableHead>
+            <TableHead className="h-11 text-mikro">Email</TableHead>
+            <TableHead className="h-11 w-[11rem] text-mikro">Role</TableHead>
+            <TableHead className="h-11 w-[11rem] text-mikro">Terdaftar</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((row) => {
             const isSelf = row.id === currentUserId;
             return (
-              <TableRow key={row.id}>
+              <TableRow key={row.id} className="text-pendukung hover:bg-muted">
                 <TableCell className="font-medium">
                   <span className="break-all">{row.email}</span>
                   {isSelf ? (
-                    <Badge variant="secondary" className="ml-2 align-middle">
+                    <StatusLabel nada="sukses" className="ml-2 align-middle">
                       Anda
-                    </Badge>
+                    </StatusLabel>
                   ) : null}
                 </TableCell>
                 <TableCell>
@@ -144,7 +144,7 @@ export function PenggunaTable({
                       ubahRole(row, value === "admin" ? "admin" : "viewer")
                     }
                   >
-                    <SelectTrigger aria-label={`Role untuk ${row.email}`}>
+                    <SelectTrigger className="h-11 text-isi" aria-label={`Role untuk ${row.email}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -157,12 +157,12 @@ export function PenggunaTable({
                     </SelectContent>
                   </Select>
                   {isSelf ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-mikro font-normal text-muted-foreground">
                       Role sendiri tidak bisa diturunkan.
                     </p>
                   ) : null}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="text-pendukung tabular-nums text-muted-foreground">
                   {row.dibuat}
                 </TableCell>
               </TableRow>
