@@ -25,12 +25,13 @@ import { useRouter } from "next/navigation";
 
 import { MergeDialog, type MergeEntityKind } from "@/components/shared/MergeDialog";
 import type { EntityOption } from "@/components/shared/EntityPicker";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/hc/EmptyState";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import StatusLabel from "@/components/hc/StatusLabel";
+import Tombol from "@/components/hc/Tombol";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -154,49 +155,45 @@ export function BereskanClient({
     temuan.filter((item) => item.jenis === jenis);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {NAV_LABELS.bereskan}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Daftar {TERMS.temuan} data kotor yang dihitung ulang setiap kali halaman
-          dibuka — tidak ada yang disimpan. Halaman ini selesai ketika kosong.
-        </p>
+    <div className="space-y-12 pb-4">
+      <PembukaLayar
+        salam="Pembersihan data"
+        judul={NAV_LABELS.bereskan}
+        subjudul={`Daftar ${TERMS.temuan} data kotor yang dihitung ulang setiap kali halaman dibuka — tidak ada yang disimpan. Halaman ini selesai ketika kosong.`}
+      >
+        <div className="space-y-3">
+          {total > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusLabel nada="peringatan">
+                {total} {TERMS.temuan}
+              </StatusLabel>
+              {SECTIONS.filter((section) => ringkasan[section.jenis] > 0).map(
+                (section) => (
+                  <StatusLabel key={section.jenis}>
+                    {section.judul}: {ringkasan[section.jenis]}
+                  </StatusLabel>
+                ),
+              )}
+            </div>
+          ) : null}
 
-        {total > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Badge variant="secondary">{total} {TERMS.temuan}</Badge>
-            {SECTIONS.filter((section) => ringkasan[section.jenis] > 0).map((section) => (
-              <Badge key={section.jenis} variant="outline">
-                {section.judul}: {ringkasan[section.jenis]}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
+          {!isAdmin && total > 0 ? (
+            <p className="text-pendukung text-muted-foreground">{UI.hanyaAdmin}</p>
+          ) : null}
 
-        {!isAdmin && total > 0 ? (
-          <p className="text-sm text-muted-foreground">{UI.hanyaAdmin}</p>
-        ) : null}
-
-        {catatan.map((baris) => (
-          <p key={baris} className="text-sm text-muted-foreground">
-            {baris}
-          </p>
-        ))}
-      </header>
+          {catatan.map((baris) => (
+            <p key={baris} className="text-pendukung text-muted-foreground">
+              {baris}
+            </p>
+          ))}
+        </div>
+      </PembukaLayar>
 
       {total === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Tidak ada {TERMS.temuan}.</CardTitle>
-            <CardDescription>
-              {TERMS.dataReferensi} sudah rapi: tidak ada nama mirip, tidak ada{" "}
-              {TERMS.unitOrganisasi} tanpa induk, dan setiap {TERMS.karyawan} aktif
-              punya {TERMS.unitOrganisasi} dan {TERMS.jabatan}.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <EmptyState
+          judul={`Tidak ada ${TERMS.temuan}`}
+          ajakan={`${TERMS.dataReferensi} sudah rapi: tidak ada nama mirip, tidak ada ${TERMS.unitOrganisasi} tanpa induk, dan setiap ${TERMS.karyawan} aktif punya ${TERMS.unitOrganisasi} dan ${TERMS.jabatan}.`}
+        />
       ) : null}
 
       {SECTIONS.map((section) => {
@@ -206,11 +203,17 @@ export function BereskanClient({
         return (
           <section key={section.jenis} className="space-y-3">
             <div className="space-y-1">
-              <h2 className="text-lg font-semibold tracking-tight">
+              {/* Kelompok HC Panel: judul 14/650 dengan jumlahnya, keterangan
+                  ditumpuk di bawah judul. */}
+              <h2 className="text-label font-[650] text-foreground">
                 {section.judul}{" "}
-                <span className="text-muted-foreground">({isi.length})</span>
+                <span className="font-medium text-muted-foreground">
+                  {isi.length}
+                </span>
               </h2>
-              <p className="text-sm text-muted-foreground">{section.keterangan}</p>
+              <p className="text-pendukung text-muted-foreground">
+                {section.keterangan}
+              </p>
             </div>
 
             <div className="space-y-3">
@@ -218,15 +221,15 @@ export function BereskanClient({
                 if (item.jenis === "nama_mirip") {
                   const kandidatnya = kandidatUntuk(item.entitas, item.tipe);
                   return (
-                    <Card key={item.id}>
+                    <Card key={item.id} className="hc-permukaan rounded-kartu border-border shadow-none">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <CardTitle className="flex flex-wrap items-center gap-2 text-judul-item">
                           <span>{ENTITAS_LABELS[item.entitas]}</span>
                           {item.perbedaan.length > 0 ? (
                             item.perbedaan.map((beda) => (
-                              <Badge key={beda} variant="outline">
+                              <StatusLabel key={beda}>
                                 {PERBEDAAN_LABELS[beda]}
-                              </Badge>
+                              </StatusLabel>
                             ))
                           ) : (
                             // No named dimension. Two rows spelled exactly the
@@ -234,9 +237,9 @@ export function BereskanClient({
                             // rows whose difference normalization has no word
                             // for — saying "penulisan berbeda" over identical
                             // strings would read as a bug.
-                            <Badge variant="outline">
+                            <StatusLabel>
                               {item.namaIdentik ? "nama identik" : "penulisan berbeda"}
-                            </Badge>
+                            </StatusLabel>
                           )}
                         </CardTitle>
                       </CardHeader>
@@ -247,11 +250,11 @@ export function BereskanClient({
                           return (
                             <div
                               key={row.id}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2"
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-bidang border border-border px-3 py-2"
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-medium">{row.nama}</p>
-                                <p className="truncate text-xs text-muted-foreground">
+                                <p className="truncate text-pendukung font-semibold">{row.nama}</p>
+                                <p className="truncate text-mikro font-normal text-muted-foreground">
                                   {row.kode}
                                   {row.keterangan ? ` · ${row.keterangan}` : ""}
                                   {typeof jumlah === "number"
@@ -262,9 +265,9 @@ export function BereskanClient({
 
                               {isAdmin ? (
                                 <div className="flex shrink-0 gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
+                                  <Tombol
+                                    ukuran="ringkas"
+                                    nada="sekunder"
                                     onClick={() =>
                                       setRename({
                                         kind: item.entitas,
@@ -275,9 +278,9 @@ export function BereskanClient({
                                     }
                                   >
                                     Ganti nama
-                                  </Button>
-                                  <Button
-                                    size="sm"
+                                  </Tombol>
+                                  <Tombol
+                                    ukuran="ringkas"
                                     onClick={() =>
                                       bukaMerge({
                                         kind: item.entitas,
@@ -294,7 +297,7 @@ export function BereskanClient({
                                     }
                                   >
                                     {TERMS.merge}…
-                                  </Button>
+                                  </Tombol>
                                 </div>
                               ) : null}
                             </div>
@@ -307,11 +310,11 @@ export function BereskanClient({
 
                 if (item.jenis === "unit_senama_induk") {
                   return (
-                    <Card key={item.id}>
+                    <Card key={item.id} className="hc-permukaan rounded-kartu border-border shadow-none">
                       <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{item.unit.nama}</p>
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="truncate text-pendukung font-semibold">{item.unit.nama}</p>
+                          <p className="truncate text-mikro font-normal text-muted-foreground">
                             {item.unit.kode} · induknya “{item.induk.nama}” (
                             {item.induk.kode})
                             {typeof jumlahKaryawan[item.unit.id] === "number"
@@ -321,9 +324,9 @@ export function BereskanClient({
                         </div>
                         {isAdmin ? (
                           <div className="flex shrink-0 gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
+                            <Tombol
+                              ukuran="ringkas"
+                              nada="sekunder"
                               onClick={() =>
                                 setRename({
                                   kind: "org_unit",
@@ -334,9 +337,9 @@ export function BereskanClient({
                               }
                             >
                               Ganti nama
-                            </Button>
-                            <Button
-                              size="sm"
+                            </Tombol>
+                            <Tombol
+                              ukuran="ringkas"
                               onClick={() =>
                                 bukaMerge({
                                   kind: "org_unit",
@@ -355,7 +358,7 @@ export function BereskanClient({
                               }
                             >
                               Gabungkan ke induk…
-                            </Button>
+                            </Tombol>
                           </div>
                         ) : null}
                       </CardContent>
@@ -365,28 +368,28 @@ export function BereskanClient({
 
                 if (item.jenis === "unit_tanpa_induk") {
                   return (
-                    <Card key={item.id}>
+                    <Card key={item.id} className="hc-permukaan rounded-kartu border-border shadow-none">
                       <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{item.unit.nama}</p>
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="truncate text-pendukung font-semibold">{item.unit.nama}</p>
+                          <p className="truncate text-mikro font-normal text-muted-foreground">
                             {item.unit.kode} · {ALASAN_LABELS[item.alasan]}
                           </p>
                         </div>
-                        <Button asChild size="sm" variant="outline" className="shrink-0">
+                        <Tombol asChild ukuran="ringkas" nada="sekunder" className="shrink-0">
                           <Link href="/struktur">Buka {NAV_LABELS.struktur}</Link>
-                        </Button>
+                        </Tombol>
                       </CardContent>
                     </Card>
                   );
                 }
 
                 return (
-                  <Card key={item.id}>
+                  <Card key={item.id} className="hc-permukaan rounded-kartu border-border shadow-none">
                     <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
                       <div className="min-w-0">
-                        <p className="truncate font-medium">{item.karyawan.full_name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="truncate text-pendukung font-semibold">{item.karyawan.full_name}</p>
+                        <p className="truncate text-mikro font-normal text-muted-foreground">
                           {item.karyawan.personnel_number} · belum punya{" "}
                           {item.kekurangan
                             .map((kurang) =>
@@ -395,11 +398,11 @@ export function BereskanClient({
                             .join(" dan ")}
                         </p>
                       </div>
-                      <Button asChild size="sm" variant="outline" className="shrink-0">
+                      <Tombol asChild ukuran="ringkas" nada="sekunder" className="shrink-0">
                         <Link href={`/karyawan/${item.karyawan.id}`}>
                           {UI.lihatDetail}
                         </Link>
-                      </Button>
+                      </Tombol>
                     </CardContent>
                   </Card>
                 );
