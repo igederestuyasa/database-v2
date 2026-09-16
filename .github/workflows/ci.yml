@@ -76,12 +76,14 @@ jobs:
 
       - run: npm run db:local
 
-      # lib/derived/sql.test.ts membandingkan lib/derived dengan v_employees di
-      # database sungguhan, dan di `npm test` biasa ia melewati dirinya sendiri
-      # kalau tidak ada Postgres (job `cek` di atas). Di sini databasenya ada,
-      # dan db-local.sh sudah membuat role superuser untuk OS user pemanggil
-      # (`runner`), jadi test masuk lewat socket peer-auth tanpa konfigurasi.
-      # `grep "2 passed"` memastikan ia benar-benar jalan, bukan dilewati.
+      # Dua test ber-database: lib/derived/sql.test.ts (lib/derived vs
+      # v_employees) dan tests/seedFromPayload.sql.test.ts (workbook dummy →
+      # seed_from_payload → satu Batch seed). Di `npm test` biasa keduanya
+      # melewati diri sendiri kalau tidak ada Postgres (job `cek` di atas). Di
+      # sini databasenya ada, dan db-local.sh sudah membuat role superuser
+      # untuk OS user pemanggil (`runner`), jadi test masuk lewat socket
+      # peer-auth tanpa konfigurasi. `grep` memastikan keduanya benar-benar
+      # jalan, bukan dilewati.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -89,7 +91,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Test kolom turunan terhadap v_employees sungguhan
+      - name: Test ber-database (kolom turunan, seed_from_payload)
         # NO_COLOR: di runner, CI=true membuat vitest tetap mencetak kode warna
         # ANSI meski di-pipe, dan run kedua workflow ini gagal hanya karena grep
         # tidak menemukan "Tests  2 passed" di sela kode warna — testnya sendiri
@@ -98,5 +100,6 @@ jobs:
         env:
           NO_COLOR: "1"
         run: |
-          npx vitest run lib/derived/sql.test.ts 2>&1 | tee sql-test.log
-          grep -qE "Tests.*2 passed.*\(2\)" sql-test.log
+          npx vitest run lib/derived/sql.test.ts tests/seedFromPayload.sql.test.ts 2>&1 | tee sql-test.log
+          grep -qE "Test Files.*2 passed.*\(2\)" sql-test.log
+          grep -qE "Tests.*4 passed.*\(4\)" sql-test.log

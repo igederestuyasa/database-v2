@@ -9,7 +9,7 @@ Aturan main: fase berikutnya baru mulai setelah exit criteria fase sekarang bisa
 ## Fase 1 — Skema, seed, dan baca
 **Scope:** fitur **1, 2, 6, 21, 22** (skema penuh + RLS + trigger revisi & profiles; seed dari Excel; login 2 role; daftar karyawan dengan search/filter; halaman detail read-only dengan kolom turunan).
 Termasuk: migration semua tabel dan view, trigger `log_revision` (walaupun UI belum bisa menulis — supaya seed sudah tercatat sebagai batch), `scripts/seed-from-excel.ts`.
-**Exit criteria:** seed dari Excel asli berhasil masuk ~1.475 karyawan dalam satu batch `seed`; viewer bisa login dan mencari karyawan berdasarkan nama/NIP; admin bisa melihat kolom private, viewer tidak; `select` langsung dari `employee_private` sebagai viewer ditolak RLS.
+**Exit criteria:** seed dari Excel asli berhasil masuk ~1.475 karyawan dalam satu batch `seed` (lewat halaman `/karyawan/seed`, PRD #23, atau skrip `scripts/seed-from-excel.ts`); viewer bisa login dan mencari karyawan berdasarkan nama/NIP; admin bisa melihat kolom private, viewer tidak; `select` langsung dari `employee_private` sebagai viewer ditolak RLS.
 
 ## Fase 2 — Tulis & revert
 **Scope:** fitur **3, 4, 5, 7, 8, 9, 13, 14, 15** (form tambah/edit/nonaktifkan karyawan; CRUD unit organisasi berhierarki, jabatan, lookups; riwayat revisi di halaman detail; revert satu revisi).
@@ -33,7 +33,7 @@ Termasuk: `README-HC.md` berbahasa Indonesia non-teknis (cara login, cara ganti 
 
 ## Setelah MVP (parkiran, bukan komitmen)
 
-- Batch add karyawan via upload Excel.
+- Batch add karyawan **berulang** via upload Excel (seed awal sekali-jalan lewat web sudah ada: PRD #23, ADR-008).
 - SSO Microsoft Entra — di level portal HC.
 - Formasi/kursi (jabatan × unit × kuota) untuk FTE & WLA.
 - Rumus kelayakan kenaikan PG/JG sebagai aturan bisnis.

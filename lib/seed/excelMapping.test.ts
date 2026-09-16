@@ -18,7 +18,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { LOOKUP_TYPES } from "../../../lib/validation/lookupTypes";
+import { LOOKUP_TYPES } from "../validation/lookupTypes";
 import {
   DUPLICATE_HEADER_GROUPS,
   HEADER_ROW,
@@ -38,7 +38,7 @@ import {
   slugKode,
   warningsOf,
   type ColumnTarget,
-} from "../excelMapping";
+} from "./excelMapping";
 
 // ---------------------------------------------------------------------------
 // Helpers

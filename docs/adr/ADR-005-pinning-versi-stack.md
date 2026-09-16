@@ -129,6 +129,8 @@ tepercaya. Tidak pernah diimpor kode runtime, tidak pernah menyentuh input dari
 pengguna atau Konsumen. Kalau nanti muncul kebutuhan upload Excel dari UI
 (PRD §5, di luar MVP), keputusan ini harus ditinjau ulang lebih dulu.
 
+  _Ditinjau ulang di ADR-008 (Seed awal lewat web):_ `xlsx` kini juga dipakai di **peramban admin** untuk membaca file yang admin pilih sendiri, lewat `import()` dinamis di satu halaman. Ia tetap **tidak pernah** dijalankan di server dan tidak pernah menyentuh input Konsumen; yang sampai ke server hanya JSON yang divalidasi zod.
+
 ### 6. Aturan tetap: `export const dynamic = "force-dynamic"`
 
 Setiap `page.tsx` di bawah `app/(app)/**` dan setiap `route.ts` di bawah

@@ -998,14 +998,14 @@ $$;
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
--- 18.1 Kesembilan fungsi ada, SECURITY INVOKER, dan tidak bisa dipanggil anon
+-- 18.1 Kesepuluh fungsi ada, SECURITY INVOKER, dan tidak bisa dipanggil anon
 -- ---------------------------------------------------------------------------
 do $$
 declare
   v_expected text[] := array[
     'assert_admin','merge_org_unit','merge_jabatan','merge_lookup',
     'apply_revert_operation','revert_skip_entry','revert_plan_for_batch',
-    'apply_revert','revert_batch'
+    'apply_revert','revert_batch','seed_from_payload'
   ];
   v_missing  text[];
   v_definer  text[];
@@ -1045,7 +1045,7 @@ begin
     raise exception 'GAGAL: anon bisa mengeksekusi: %', array_to_string(v_anon, ', ');
   end if;
 
-  raise notice 'OK   9 fungsi 0002 ada, semuanya SECURITY INVOKER, anon ditolak';
+  raise notice 'OK   10 fungsi 0002 ada, semuanya SECURITY INVOKER, anon ditolak';
 end
 $$;
 
@@ -1599,6 +1599,230 @@ begin
   raise notice 'OK   tidak satu pun data berubah oleh percobaan viewer';
 end
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 18.8 seed_from_payload(): satu payload → SATU Batch 'seed' (PRD #23, ADR-008)
+--      Payload kecil tulis-tangan berprefix UJI-SEED-. p_force => true karena
+--      tabel Karyawan sudah berisi fixture seksi-seksi sebelumnya. Berjalan
+--      sebagai superuser tanpa JWT (assert_admin lolos), seperti §18.2–18.6.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_payload jsonb := jsonb_build_object(
+    'org_units', jsonb_build_array(
+      jsonb_build_object('kode','UJI-SEED-DIR','nama','Direktorat Uji Seed','tipe','direktorat','parent',null),
+      jsonb_build_object('kode','UJI-SEED-DIV','nama','Divisi Uji Seed','tipe','divisi','parent',0)
+    ),
+    'jabatan', jsonb_build_array(
+      jsonb_build_object('kode','UJI-SEED-JB','nama','Staf Uji Seed')
+    ),
+    'lookups', jsonb_build_array(
+      jsonb_build_object('tipe','gender','kode','UJI-SEED-L','label','Uji Seed L','urutan',1),
+      jsonb_build_object('tipe','job_grade','kode','UJI-SEED-JG1','label','Uji Seed JG 1','urutan',1)
+    ),
+    'employees', jsonb_build_array(
+      jsonb_build_object(
+        'personnel_number','UJI-SEED-0001','nip',null,'full_name','Karyawan Uji Seed Satu','status','aktif',
+        'org',1,'jab',0,'lk',jsonb_build_object('gender',0,'job_grade',1),
+        'text',jsonb_build_object('nomor_surat_pg','SK-UJI-1'),
+        'dates',jsonb_build_object('original_start_date','2015-03-04'),
+        'private',jsonb_build_object('date_of_birth','1990-01-01','place_of_birth','Kota Uji','religion',null,'marital_status',null)
+      ),
+      jsonb_build_object(
+        'personnel_number','UJI-SEED-0002','nip','UJI-SEED-NIP2','full_name','Karyawan Uji Seed Dua','status','nonaktif',
+        'org',0,'jab',null,'lk','{}'::jsonb,'text','{}'::jsonb,'dates','{}'::jsonb,'private',null
+      )
+    )
+  );
+  v_res    jsonb;
+  v_batch  uuid;
+  v_before integer;
+  v_n      integer;
+  v_emp    uuid;
+  v_dir    uuid;
+  v_div    uuid;
+begin
+  select count(*) into v_before from public.batches where jenis = 'seed';
+
+  v_res := public.seed_from_payload(v_payload, 'Uji seed lewat web', true);
+  v_batch := (v_res ->> 'batch_id')::uuid;
+
+  if (v_res ->> 'org_units')::int <> 2 or (v_res ->> 'jabatan')::int <> 1
+     or (v_res ->> 'lookups')::int <> 2 or (v_res ->> 'employees')::int <> 2
+     or (v_res ->> 'data_pribadi')::int <> 1 then
+    raise exception 'GAGAL: hasil seed_from_payload tidak sesuai: %', v_res;
+  end if;
+
+  select count(*) into v_n from public.batches where jenis = 'seed';
+  if v_n <> v_before + 1 then
+    raise exception 'GAGAL: satu seed menghasilkan % Batch seed baru (harus 1)', v_n - v_before;
+  end if;
+  if (select keterangan from public.batches where id = v_batch) <> 'Uji seed lewat web' then
+    raise exception 'GAGAL: keterangan Batch seed tidak tersimpan';
+  end if;
+
+  -- index → id: induk unit, unit/jabatan/lookup Karyawan
+  select id into v_dir from public.org_units where kode = 'UJI-SEED-DIR';
+  select id into v_div from public.org_units where kode = 'UJI-SEED-DIV';
+  if (select parent_id from public.org_units where id = v_div) is distinct from v_dir then
+    raise exception 'GAGAL: induk Unit Organisasi tidak terpetakan dari index';
+  end if;
+  select id into v_emp from public.employees where personnel_number = 'UJI-SEED-0001';
+  if (select org_unit_id from public.employees where id = v_emp) is distinct from v_div then
+    raise exception 'GAGAL: org_unit_id Karyawan tidak terpetakan dari index';
+  end if;
+  if (select jabatan_id from public.employees where id = v_emp)
+     is distinct from (select id from public.jabatan where kode = 'UJI-SEED-JB') then
+    raise exception 'GAGAL: jabatan_id Karyawan tidak terpetakan dari index';
+  end if;
+  if (select gender_id from public.employees where id = v_emp)
+     is distinct from (select id from public.lookups where tipe = 'gender' and kode = 'UJI-SEED-L') then
+    raise exception 'GAGAL: gender_id Karyawan tidak terpetakan dari index';
+  end if;
+  if (select job_grade_id from public.employees where id = v_emp)
+     is distinct from (select id from public.lookups where tipe = 'job_grade' and kode = 'UJI-SEED-JG1') then
+    raise exception 'GAGAL: job_grade_id Karyawan tidak terpetakan dari index';
+  end if;
+  if (select nomor_surat_pg from public.employees where id = v_emp) <> 'SK-UJI-1'
+     or (select original_start_date from public.employees where id = v_emp) <> date '2015-03-04' then
+    raise exception 'GAGAL: kolom teks/tanggal Karyawan tidak tersimpan';
+  end if;
+  if (select status from public.employees where personnel_number = 'UJI-SEED-0002') <> 'nonaktif'
+     or (select org_unit_id from public.employees where personnel_number = 'UJI-SEED-0002') is distinct from v_dir then
+    raise exception 'GAGAL: Karyawan kedua (nonaktif, unit index 0) tidak tersimpan benar';
+  end if;
+
+  -- Data Pribadi Sensitif di-UPDATE ke baris buatan trigger zz_autocreate_private
+  if (select date_of_birth from public.employee_private where employee_id = v_emp) is distinct from date '1990-01-01'
+     or (select place_of_birth from public.employee_private where employee_id = v_emp) is distinct from 'Kota Uji' then
+    raise exception 'GAGAL: Data Pribadi Sensitif tidak terisi lewat seed';
+  end if;
+
+  -- Semua Revisi di satu Batch: 2 unit + 1 jabatan + 2 lookup + 2 Karyawan
+  -- + 2 insert employee_private otomatis + 1 update employee_private = 10.
+  select count(*) into v_n from public.revisions where batch_id = v_batch;
+  if v_n <> 10 then
+    raise exception 'GAGAL: Batch seed memuat % Revisi (harus 10)', v_n;
+  end if;
+  if (v_res ->> 'revisions')::int <> 10 then
+    raise exception 'GAGAL: hasil melaporkan % Revisi (harus 10)', v_res ->> 'revisions';
+  end if;
+
+  raise notice 'OK   seed_from_payload: satu Batch seed, 10 Revisi, index → id terpetakan, Data Pribadi terisi';
+end
+$$;
+
+-- 18.8.b Tabel Karyawan berisi + tanpa p_force → 55000, tanpa Batch tersisa
+do $$
+declare
+  v_before integer;
+  v_n      integer;
+  v_min    jsonb := jsonb_build_object(
+    'org_units', '[]'::jsonb, 'jabatan', '[]'::jsonb, 'lookups', '[]'::jsonb,
+    'employees', jsonb_build_array(jsonb_build_object(
+      'personnel_number','UJI-SEED-X','nip',null,'full_name','X','status','aktif',
+      'org',null,'jab',null,'lk','{}'::jsonb,'text','{}'::jsonb,'dates','{}'::jsonb,'private',null))
+  );
+begin
+  select count(*) into v_before from public.batches;
+  begin
+    perform public.seed_from_payload(v_min, null, false);
+    raise exception 'GAGAL: seed tanpa p_force diterima padahal tabel Karyawan sudah berisi';
+  exception
+    when object_not_in_prerequisite_state then null;
+  end;
+  select count(*) into v_n from public.batches;
+  if v_n <> v_before then
+    raise exception 'GAGAL: penolakan seed (55000) meninggalkan Batch';
+  end if;
+  raise notice 'OK   seed_from_payload menolak (55000) ketika tabel Karyawan sudah berisi, tanpa Batch tersisa';
+end
+$$;
+
+-- 18.8.c Payload tanpa Karyawan / tidak berbentuk → 22023, tanpa Batch
+do $$
+declare
+  v_before integer;
+  v_n      integer;
+begin
+  select count(*) into v_before from public.batches;
+  begin
+    perform public.seed_from_payload(
+      jsonb_build_object('org_units','[]'::jsonb,'jabatan','[]'::jsonb,'lookups','[]'::jsonb,'employees','[]'::jsonb),
+      null, true);
+    raise exception 'GAGAL: payload tanpa Karyawan diterima';
+  exception
+    when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.seed_from_payload('{"employees": 1}'::jsonb, null, true);
+    raise exception 'GAGAL: payload tidak berbentuk diterima';
+  exception
+    when invalid_parameter_value then null;
+  end;
+  select count(*) into v_n from public.batches;
+  if v_n <> v_before then
+    raise exception 'GAGAL: penolakan payload cacat (22023) meninggalkan Batch';
+  end if;
+  raise notice 'OK   seed_from_payload menolak payload kosong/cacat (22023) sebelum membuka Batch';
+end
+$$;
+
+-- 18.8.d Tipe Lookup di luar CHECK → 23514 dari database, dan SELURUH seed
+--        batal termasuk baris Batch-nya (satu statement = satu transaksi)
+do $$
+declare
+  v_before integer;
+  v_n      integer;
+  v_bad    jsonb := jsonb_build_object(
+    'org_units', '[]'::jsonb, 'jabatan', '[]'::jsonb,
+    'lookups', jsonb_build_array(jsonb_build_object('tipe','warna_favorit','kode','UJI-SEED-BAD','label','Biru','urutan',1)),
+    'employees', jsonb_build_array(jsonb_build_object(
+      'personnel_number','UJI-SEED-BAD','nip',null,'full_name','Bad','status','aktif',
+      'org',null,'jab',null,'lk','{}'::jsonb,'text','{}'::jsonb,'dates','{}'::jsonb,'private',null))
+  );
+begin
+  select count(*) into v_before from public.batches;
+  begin
+    perform public.seed_from_payload(v_bad, 'Uji seed gagal', true);
+    raise exception 'GAGAL: Lookup bertipe di luar CHECK diterima';
+  exception
+    when check_violation then null;
+  end;
+  select count(*) into v_n from public.batches;
+  if v_n <> v_before then
+    raise exception 'GAGAL: seed yang gagal di tengah meninggalkan Batch';
+  end if;
+  if exists (select 1 from public.employees where personnel_number = 'UJI-SEED-BAD') then
+    raise exception 'GAGAL: seed yang gagal di tengah meninggalkan Karyawan';
+  end if;
+  raise notice 'OK   seed yang gagal di tengah (23514) tidak meninggalkan apa pun, termasuk Batch-nya';
+end
+$$;
+
+-- 18.8.e Viewer → 42501, sebelum apa pun disentuh
+set request.jwt.claims = '{"sub":"b0000000-0000-4000-8000-000000000002","role":"authenticated"}';
+set role authenticated;
+do $$
+declare
+  v_min jsonb := jsonb_build_object(
+    'org_units', '[]'::jsonb, 'jabatan', '[]'::jsonb, 'lookups', '[]'::jsonb,
+    'employees', jsonb_build_array(jsonb_build_object(
+      'personnel_number','UJI-SEED-V','nip',null,'full_name','V','status','aktif',
+      'org',null,'jab',null,'lk','{}'::jsonb,'text','{}'::jsonb,'dates','{}'::jsonb,'private',null))
+  );
+begin
+  begin
+    perform public.seed_from_payload(v_min, null, true);
+    raise exception 'GAGAL: viewer bisa menjalankan seed_from_payload()';
+  exception
+    when insufficient_privilege then null;
+  end;
+  raise notice 'OK   viewer ditolak seed_from_payload() dengan 42501';
+end
+$$;
+reset role;
+reset request.jwt.claims;
 
 -- ===========================================================================
 -- 19. Tindakan satu-statement menghasilkan TEPAT SATU Batch (ADR-006)

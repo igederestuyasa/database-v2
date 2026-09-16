@@ -25,6 +25,11 @@ next-env.d.ts
 .env.production
 .env.test
 
+# workbook Excel berisi data karyawan asli tidak pernah masuk repo
+# (CLAUDE.md). Fixture test dibangkitkan on the fly oleh make-dummy-xlsx.ts.
+*.xlsx
+*.xlsm
+
 # vercel
 .vercel
 
