@@ -2,15 +2,54 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  History,
+  KeyRound,
+  ListTree,
+  Network,
+  TriangleAlert,
+  UserCog,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
+
+/**
+ * Ikon tujuan, dipilih lewat NAMA — bukan lewat komponennya.
+ *
+ * Sidebar ini Client Component dan yang merakit daftarnya `app/(app)/layout.tsx`,
+ * sebuah Server Component. Prop yang menyeberang batas itu harus bisa
+ * diserialisasi, dan `lucide-react` tidak membawa `"use client"` sendiri: di
+ * Server Component ikonnya jadi fungsi biasa, dan React menolaknya dengan
+ * "Functions cannot be passed directly to Client Components". Layout melempar,
+ * `app/error.tsx` mengambil alih, dan SETIAP halaman di grup ini — termasuk
+ * tujuan setelah login — berubah jadi "Gagal memuat HC Core".
+ *
+ * Karena itu yang menyeberang cuma string, dan pemetaannya ke komponen terjadi
+ * di sini, di sisi klien. Menambah tujuan berarti menambah satu baris di sini
+ * dan satu di layout; TypeScript menolak nama yang tidak ada di tabel ini.
+ */
+const IKON = {
+  orang: Users,
+  jaringan: Network,
+  koper: BriefcaseBusiness,
+  daftar: ListTree,
+  seru: TriangleAlert,
+  riwayat: History,
+  kunci: KeyRound,
+  "atur-orang": UserCog,
+} as const satisfies Record<string, LucideIcon>;
+
+/** Nama ikon yang boleh dipakai `SidebarNavItem.ikon`. */
+export type NamaIkon = keyof typeof IKON;
 
 export type SidebarNavItem = {
   href: string;
   label: string;
   /** Ikon tujuan. Bentuknya, bukan keterangannya, yang menandai tiap tujuan. */
-  ikon: LucideIcon;
+  ikon: NamaIkon;
 };
 
 /**
@@ -50,7 +89,7 @@ export function SidebarNav({
       {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const Ikon = item.ikon;
+        const Ikon = IKON[item.ikon];
 
         return (
           <Link

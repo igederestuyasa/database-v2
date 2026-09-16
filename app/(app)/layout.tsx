@@ -1,14 +1,4 @@
 import Link from "next/link";
-import {
-  BriefcaseBusiness,
-  History,
-  KeyRound,
-  ListTree,
-  Network,
-  TriangleAlert,
-  UserCog,
-  Users,
-} from "lucide-react";
 
 import BarAtas, { LewatiKeKonten } from "@/components/hc/BarAtas";
 import KakiHalaman from "@/components/hc/KakiHalaman";
@@ -30,16 +20,22 @@ export const dynamic = "force-dynamic";
 /**
  * THE SIDEBAR. All eight destinations live here, in this one file, so that no
  * two units ever edit the same nav markup.
+ *
+ * `ikon` adalah NAMA, bukan komponen. File ini Server Component dan
+ * `SidebarNav` Client Component, jadi prop yang menyeberang harus bisa
+ * diserialisasi — komponen `lucide-react` tidak bisa, dan menyerahkannya
+ * membuat layout ini melempar dan seluruh grup `(app)` jadi halaman error.
+ * Tabel nama → ikonnya ada di `components/SidebarNav.tsx`.
  */
 const NAV_ITEMS: readonly SidebarNavItem[] = [
-  { href: "/karyawan", label: NAV_LABELS.karyawan, ikon: Users },
-  { href: "/struktur", label: NAV_LABELS.struktur, ikon: Network },
-  { href: "/jabatan", label: NAV_LABELS.jabatan, ikon: BriefcaseBusiness },
-  { href: "/master-data", label: NAV_LABELS["master-data"], ikon: ListTree },
-  { href: "/bereskan", label: NAV_LABELS.bereskan, ikon: TriangleAlert },
-  { href: "/log", label: NAV_LABELS.log, ikon: History },
-  { href: "/api-keys", label: NAV_LABELS["api-keys"], ikon: KeyRound },
-  { href: "/pengguna", label: NAV_LABELS.pengguna, ikon: UserCog },
+  { href: "/karyawan", label: NAV_LABELS.karyawan, ikon: "orang" },
+  { href: "/struktur", label: NAV_LABELS.struktur, ikon: "jaringan" },
+  { href: "/jabatan", label: NAV_LABELS.jabatan, ikon: "koper" },
+  { href: "/master-data", label: NAV_LABELS["master-data"], ikon: "daftar" },
+  { href: "/bereskan", label: NAV_LABELS.bereskan, ikon: "seru" },
+  { href: "/log", label: NAV_LABELS.log, ikon: "riwayat" },
+  { href: "/api-keys", label: NAV_LABELS["api-keys"], ikon: "kunci" },
+  { href: "/pengguna", label: NAV_LABELS.pengguna, ikon: "atur-orang" },
 ];
 
 /**
