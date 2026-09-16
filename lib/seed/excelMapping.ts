@@ -38,10 +38,7 @@
  * `nomor_surat_pg/_jg`, CLAUDE.md). An object keyed by header silently keeps
  * one of each. Positions keep both.
  */
-import {
-  LOOKUP_TYPES,
-  type LookupType,
-} from "../validation/lookupTypes";
+import { LOOKUP_TYPES, type LookupType } from "../validation/lookupTypes";
 
 /** The only sheet the Seed reads (PRD #1, ARCHITECTURE.md §4E). */
 export const SHEET_NAME = "Demografi Karyawan - Posisi";
@@ -174,12 +171,15 @@ export const HEADER_TARGETS: ReadonlyArray<
 
   // --- hierarchy (ARCHITECTURE.md §4E: BU -> Divisi -> Bagian -> Sub Bagian)
   [
-    ["business unit", "unit bisnis"],
+    ["business unit", "business unit name", "unit bisnis"],
     { kind: "org", level: "business_unit" },
   ],
   [["divisi", "division"], { kind: "org", level: "divisi" }],
   [["bagian"], { kind: "org", level: "bagian" }],
-  [["sub bagian", "subbagian", "sub bag"], { kind: "org", level: "sub_bagian" }],
+  [
+    ["sub bagian", "subbagian", "sub bag"],
+    { kind: "org", level: "sub_bagian" },
+  ],
   [["jabatan", "nama jabatan"], { kind: "jabatan" }],
 
   // --- lookups (the 11 tipe of lib/validation/lookupTypes.ts) --------------
@@ -190,21 +190,23 @@ export const HEADER_TARGETS: ReadonlyArray<
   ],
   [["person grade", "pg"], { kind: "lookup", tipe: "person_grade" }],
   [["job grade", "jg"], { kind: "lookup", tipe: "job_grade" }],
-  [["legal entity"], { kind: "lookup", tipe: "legal_entity" }],
   [
-    ["klasifikasi rekrutmen", "klasifikasi rekruitmen"],
+    ["legal entity", "company legal entity name", "legal entity name"],
+    { kind: "lookup", tipe: "legal_entity" },
+  ],
+  [
+    [
+      "klasifikasi rekrutmen",
+      "klasifikasi rekruitmen",
+      "klasifikasi program rekrutmen",
+      "klasifikasi program rekruitmen",
+    ],
     { kind: "lookup", tipe: "klasifikasi_rekrutmen" },
   ],
-  [
-    ["teknik non teknik"],
-    { kind: "lookup", tipe: "teknik_non_teknik" },
-  ],
+  [["teknik non teknik"], { kind: "lookup", tipe: "teknik_non_teknik" }],
   [["bod range", "range bod"], { kind: "lookup", tipe: "bod_range" }],
   [["band jabatan", "band"], { kind: "lookup", tipe: "band_jabatan" }],
-  [
-    ["kategori penempatan"],
-    { kind: "lookup", tipe: "kategori_penempatan" },
-  ],
+  [["kategori penempatan"], { kind: "lookup", tipe: "kategori_penempatan" }],
   [["kategori fungsi"], { kind: "lookup", tipe: "kategori_fungsi" }],
 
   // --- free text straight from the sheet ----------------------------------
@@ -217,7 +219,12 @@ export const HEADER_TARGETS: ReadonlyArray<
 
   // --- dates --------------------------------------------------------------
   [
-    ["original start date", "tanggal masuk", "tmt masuk"],
+    [
+      "original start date",
+      "employment details original start date",
+      "tanggal masuk",
+      "tmt masuk",
+    ],
     { kind: "date", field: "original_start_date" },
   ],
   [
@@ -232,10 +239,7 @@ export const HEADER_TARGETS: ReadonlyArray<
     ["tanggal promosi jg", "tgl promosi jg", "tmt jg"],
     { kind: "date", field: "tanggal_promosi_jg" },
   ],
-  [
-    ["tanggal keluar", "tgl keluar"],
-    { kind: "date", field: "tanggal_keluar" },
-  ],
+  [["tanggal keluar", "tgl keluar"], { kind: "date", field: "tanggal_keluar" }],
 
   // --- Data Pribadi Sensitif -> employee_private (PRD #22) ----------------
   [
@@ -271,7 +275,7 @@ export const DUPLICATE_HEADER_GROUPS: ReadonlyArray<{
     slots: ["keterangan_rangkap_1", "keterangan_rangkap_2"],
   },
   {
-    headers: ["no surat", "nomor surat"],
+    headers: ["no surat", "nomor surat", "nomer surat"],
     slots: ["nomor_surat_pg", "nomor_surat_jg"],
   },
 ];
@@ -289,19 +293,18 @@ const HEADER_TARGETS_EXPLICIT: ReadonlyArray<
     { kind: "text", field: "keterangan_rangkap_2" },
   ],
   [
-    ["no surat pg", "nomor surat pg"],
+    ["no surat pg", "nomor surat pg", "nomer surat pg"],
     { kind: "text", field: "nomor_surat_pg" },
   ],
   [
-    ["no surat jg", "nomor surat jg"],
+    ["no surat jg", "nomor surat jg", "nomer surat jg"],
     { kind: "text", field: "nomor_surat_jg" },
   ],
 ];
 
 const TARGET_BY_HEADER: ReadonlyMap<string, ColumnTarget> = new Map(
-  [...HEADER_TARGETS, ...HEADER_TARGETS_EXPLICIT].flatMap(
-    ([headers, target]) =>
-      headers.map((header) => [header, target] as const),
+  [...HEADER_TARGETS, ...HEADER_TARGETS_EXPLICIT].flatMap(([headers, target]) =>
+    headers.map((header) => [header, target] as const),
   ),
 );
 
@@ -375,7 +378,8 @@ export function buildHeaderPlan(headerCells: readonly unknown[]): HeaderPlan {
   const claimed = new Map<string, string>();
 
   headerCells.forEach((cell, index) => {
-    const header = cell === null || cell === undefined ? "" : String(cell).trim();
+    const header =
+      cell === null || cell === undefined ? "" : String(cell).trim();
     const canonical = canonicalHeader(cell);
     if (canonical === "") return; // empty spacer column
 
@@ -425,7 +429,7 @@ export function buildHeaderPlan(headerCells: readonly unknown[]): HeaderPlan {
         level: "peringatan",
         kode: "kolom_tidak_dikenal",
         kolom: header,
-        pesan: `Kolom "${header}" tidak dikenal dan tidak disimpan. Tambahkan ejaannya di scripts/lib/excelMapping.ts kalau kolom ini memang perlu masuk.`,
+        pesan: `Kolom "${header}" tidak dikenal dan tidak disimpan. Tambahkan ejaannya di lib/seed/excelMapping.ts kalau kolom ini memang perlu masuk.`,
       });
       return;
     }
@@ -498,7 +502,10 @@ const EXCEL_ERROR_VALUES = new Set([
 ]);
 
 export function isExcelError(value: unknown): boolean {
-  return typeof value === "string" && EXCEL_ERROR_VALUES.has(value.trim().toUpperCase());
+  return (
+    typeof value === "string" &&
+    EXCEL_ERROR_VALUES.has(value.trim().toUpperCase())
+  );
 }
 
 /**
@@ -518,11 +525,12 @@ export function cellText(value: unknown): string | null {
     return Number.isInteger(value) ? value.toFixed(0) : String(value);
   }
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
-  if (value instanceof Date) return isoFromDateParts(
-    value.getUTCFullYear(),
-    value.getUTCMonth() + 1,
-    value.getUTCDate(),
-  );
+  if (value instanceof Date)
+    return isoFromDateParts(
+      value.getUTCFullYear(),
+      value.getUTCMonth() + 1,
+      value.getUTCDate(),
+    );
   const text = String(value).trim();
   if (text === "") return null;
   if (isExcelError(text)) return null;
@@ -566,7 +574,8 @@ export function excelSerialToIsoDate(
   }
   if (whole < 1) return null;
   if (whole === 60) return null; // 1900-02-29 — a date Excel invented
-  const offset = whole < 60 ? daysFromCivil(1899, 12, 31) : daysFromCivil(1899, 12, 30);
+  const offset =
+    whole < 60 ? daysFromCivil(1899, 12, 31) : daysFromCivil(1899, 12, 30);
   return isoFromEpochDays(whole + offset);
 }
 
@@ -585,7 +594,11 @@ function isoFromEpochDays(z0: number): string {
   const era = Math.floor(z / 146097);
   const doe = z - era * 146097;
   const yoe = Math.floor(
-    (doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365,
+    (doe -
+      Math.floor(doe / 1460) +
+      Math.floor(doe / 36524) -
+      Math.floor(doe / 146096)) /
+      365,
   );
   const y = yoe + era * 400;
   const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
@@ -627,7 +640,10 @@ const MIN_PLAUSIBLE_SERIAL = 10_000;
  * matches nothing returns `ok: false` and becomes an error — a date silently
  * turned into NULL is a fact about a person quietly deleted.
  */
-export function parseDateCell(value: unknown, date1904 = false): DateCellResult {
+export function parseDateCell(
+  value: unknown,
+  date1904 = false,
+): DateCellResult {
   if (value === null || value === undefined) return { ok: true, iso: null };
   if (typeof value === "number") {
     // Serial 0 is what Excel stores when a date column is a formula pointing at
@@ -635,12 +651,14 @@ export function parseDateCell(value: unknown, date1904 = false): DateCellResult 
     // the source workbook is full of formula columns — treating it as an error
     // would stop the whole Seed with a message the admin cannot act on.
     if (value === 0) return { ok: true, iso: null };
-    if (value > 0 && value < MIN_PLAUSIBLE_SERIAL) return { ok: false, raw: String(value) };
+    if (value > 0 && value < MIN_PLAUSIBLE_SERIAL)
+      return { ok: false, raw: String(value) };
     const iso = excelSerialToIsoDate(value, date1904);
     return iso ? { ok: true, iso } : { ok: false, raw: String(value) };
   }
   if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) return { ok: false, raw: "Invalid Date" };
+    if (Number.isNaN(value.getTime()))
+      return { ok: false, raw: "Invalid Date" };
     // SheetJS builds its `cellDates` values from the serial in UTC, so the UTC
     // parts are the calendar date the workbook meant.
     return {
@@ -654,13 +672,15 @@ export function parseDateCell(value: unknown, date1904 = false): DateCellResult 
   }
 
   const text = String(value).trim();
-  if (text === "" || text === "0" || isExcelError(text)) return { ok: true, iso: null };
+  if (text === "" || text === "0" || isExcelError(text))
+    return { ok: true, iso: null };
 
   const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (iso) return fromParts(+iso[1], +iso[2], +iso[3], text);
 
   const dayFirst = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (dayFirst) return fromParts(+dayFirst[3], +dayFirst[2], +dayFirst[1], text);
+  if (dayFirst)
+    return fromParts(+dayFirst[3], +dayFirst[2], +dayFirst[1], text);
 
   // A serial that arrived as text ("43678"), which happens after a CSV detour.
   if (/^\d+$/.test(text) && Number(text) >= MIN_PLAUSIBLE_SERIAL) {
@@ -887,9 +907,10 @@ export function planSeed(
     let anyValue = false;
     for (const column of headerPlan.columns) {
       const raw = row[column.index];
-      const text = column.target.kind === "date" || column.target.kind === "private_date"
-        ? rawForDate(raw)
-        : cellText(raw);
+      const text =
+        column.target.kind === "date" || column.target.kind === "private_date"
+          ? rawForDate(raw)
+          : cellText(raw);
       if (text !== null) anyValue = true;
       values.set(column, text);
     }
@@ -923,7 +944,9 @@ export function planSeed(
     const personnelNumber = textOf(
       (t) => t.kind === "text" && t.field === "personnel_number",
     );
-    const fullName = textOf((t) => t.kind === "text" && t.field === "full_name");
+    const fullName = textOf(
+      (t) => t.kind === "text" && t.field === "full_name",
+    );
 
     if (personnelNumber === null) {
       issues.push({
@@ -988,7 +1011,8 @@ export function planSeed(
       // (ARCHITECTURE.md §4E). Compared exactly, trimmed: a case variant is a
       // real Temuan for the Bereskan page (PRD #11), not something the Seed
       // quietly decides.
-      if (level === "sub_bagian" && levelValues.get("bagian") === nama) continue;
+      if (level === "sub_bagian" && levelValues.get("bagian") === nama)
+        continue;
 
       const key: string = `${parentKey ?? ""}\u0000${level}\u0000${nama}`;
       let unit = orgByKey.get(key);
@@ -1103,7 +1127,9 @@ export function planSeed(
       place_of_birth: textOf(
         (t) => t.kind === "private_text" && t.field === "place_of_birth",
       ),
-      religion: textOf((t) => t.kind === "private_text" && t.field === "religion"),
+      religion: textOf(
+        (t) => t.kind === "private_text" && t.field === "religion",
+      ),
       marital_status: textOf(
         (t) => t.kind === "private_text" && t.field === "marital_status",
       ),
@@ -1117,7 +1143,11 @@ export function planSeed(
     let status: "aktif" | "nonaktif" = "aktif";
     if (statusRaw !== null) {
       const folded = statusRaw.toLowerCase();
-      if (folded === "nonaktif" || folded === "non aktif" || folded === "non-aktif") {
+      if (
+        folded === "nonaktif" ||
+        folded === "non aktif" ||
+        folded === "non-aktif"
+      ) {
         status = "nonaktif";
       } else if (folded !== "aktif") {
         issues.push({
@@ -1179,7 +1209,8 @@ export function planSeed(
 function rawForDate(raw: unknown): string | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw === "number") return Number.isFinite(raw) ? String(raw) : null;
-  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw.toISOString();
+  if (raw instanceof Date)
+    return Number.isNaN(raw.getTime()) ? null : raw.toISOString();
   const text = String(raw).trim();
   if (text === "" || isExcelError(text)) return null;
   return text;
