@@ -47,6 +47,18 @@
        supaya `--radius` tidak pernah berbeda dari radius kartu. */
     --radius: var(--radius-kartu);
 
+    /*
+      Tinggi bar atas — 64 di HP, 72 mulai desktop (docs/DESIGN.md §Spasi).
+
+      Satu sumber, karena sejak bar itu `sticky` angkanya dipakai TIGA tempat
+      yang harus sama persis: tinggi bar itu sendiri, `top` sidebar yang
+      menempel di bawahnya, dan tinggi sidebar (`100vh` dikurangi ini). Kalau
+      ketiganya ditulis sendiri-sendiri, satu di antaranya akan tertinggal saat
+      tingginya berubah — dan gejalanya sidebar yang tergunting atau celah
+      terang di bawah bar, bukan error.
+    */
+    --tinggi-bar: 4rem;
+
     /* --- Kurva gerak --- */
     --kurva-keluar: cubic-bezier(0.16, 1, 0.3, 1);
     --kurva-standar: cubic-bezier(0.33, 1, 0.68, 1);
@@ -72,6 +84,14 @@
     --border: var(--garis);
     --input: var(--garis-kuat);
     --ring: var(--tinta);
+  }
+
+  /* Bar atas jadi 72 mulai desktop. Di luar blok warna karena ini ukuran, dan
+     karena ia satu-satunya token yang bergantung pada lebar layar, bukan tema. */
+  @media (min-width: 1024px) {
+    :root {
+      --tinggi-bar: 4.5rem;
+    }
   }
 
   /**

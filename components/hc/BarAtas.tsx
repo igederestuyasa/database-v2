@@ -13,6 +13,16 @@ import Logo from "./Logo";
  *
  * Bukan navigasi. Di HC Core, delapan tujuan tetap tinggal di sidebar — bar ini
  * hanya memberi tahu "app apa ini, dan saya masuk sebagai siapa".
+ *
+ * MENEMPEL DI ATAS. `sticky top-0`, jadi identitas app dan siapa yang sedang
+ * masuk tetap terbaca sepanjang halaman sepanjang Log Perubahan. Karena itu ia
+ * butuh `bg-background` sendiri — tanpa latar, isi halaman akan terlihat
+ * menembusnya saat digulir — dan `z-40`, di atas isi halaman tapi di bawah
+ * dialog dan popover (z-50 di `components/ui/*`), supaya bar tidak pernah
+ * menutupi hal yang sedang ditunggu jawabannya.
+ *
+ * Tingginya `--tinggi-bar`, satu sumber di `app/globals.css`: sidebar memakai
+ * angka yang sama untuk `top` dan tingginya sendiri.
  */
 export function BarAtas({
   nama = "HC Core",
@@ -29,8 +39,9 @@ export function BarAtas({
   return (
     <header
       className={cn(
-        "flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border px-5",
-        "lg:h-bar-desktop lg:px-10",
+        "sticky top-0 z-40 bg-background",
+        "flex h-[var(--tinggi-bar)] shrink-0 items-center justify-between gap-4",
+        "border-b border-border px-5 lg:px-10",
         className,
       )}
     >

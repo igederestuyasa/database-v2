@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import BarAtas, { LewatiKeKonten } from "@/components/hc/BarAtas";
 import KakiHalaman from "@/components/hc/KakiHalaman";
+import Sidebar from "@/components/hc/Sidebar";
 import { SidebarNav, type SidebarNavItem } from "@/components/SidebarNav";
-import { SignOutButton } from "@/components/SignOutButton";
 import { readSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/env";
 import { NAV_LABELS, ROLE_LABELS } from "@/lib/i18n/terms";
@@ -92,28 +92,17 @@ export default async function AppLayout({
       />
 
       <div className="flex">
-        <aside className="hidden w-64 shrink-0 border-r border-border lg:block">
-          {/* Sticky di bawah bar atas, jadi navigasi tetap terjangkau pada
-              halaman sepanjang Log Perubahan. */}
-          <div className="sticky top-0 flex max-h-screen flex-col gap-4 overflow-y-auto p-4">
-            <SidebarNav items={NAV_ITEMS} />
-
-            {akun ? (
-              <div className="mt-auto border-t border-border pt-4">
-                <p
-                  className="truncate text-pendukung font-medium text-foreground"
-                  title={akun.email}
-                >
-                  {akun.email}
-                </p>
-                <p className="text-mikro font-normal text-muted-foreground">
-                  {ROLE_LABELS[akun.role]}
-                </p>
-                <SignOutButton className="mt-3 w-full" />
-              </div>
-            ) : null}
-          </div>
-        </aside>
+        {/*
+          Navigasi, keadaan ciut, dan blok akun semuanya di dalam `Sidebar`.
+          Yang menyeberang ke sana cuma teks — daftar tujuan, email, dan label
+          role — bukan komponen: prop Client Component harus bisa
+          diserialisasi (lihat catatan `ikon` di NAV_ITEMS).
+        */}
+        <Sidebar
+          items={NAV_ITEMS}
+          email={akun?.email ?? null}
+          role={akun ? ROLE_LABELS[akun.role] : null}
+        />
 
         <div className="min-w-0 flex-1">
           {/* Di bawah 1024px kedelapan tujuan jadi strip yang bisa digeser. */}
