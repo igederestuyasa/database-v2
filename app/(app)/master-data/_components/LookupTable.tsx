@@ -405,7 +405,7 @@ export function LookupTable({
           <PembukaLayar
             salam="Data Referensi"
             judul={NAV_LABELS["master-data"]}
-            subjudul={`Daftar pilihan berkode yang dirujuk ${TERMS.karyawan} lewat ID. Kode tetap; label boleh berubah kapan saja.`}
+            info={`Daftar pilihan berkode yang dirujuk ${TERMS.karyawan} lewat ID. Kode tetap; label boleh berubah kapan saja.`}
           >
             <SearchField
               id="cari-lookup"

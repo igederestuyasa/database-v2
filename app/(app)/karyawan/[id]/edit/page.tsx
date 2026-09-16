@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Info from "@/components/hc/Info";
 import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeePrivate, getEmployeeRowById } from "@/lib/db/employees";
@@ -78,14 +79,17 @@ export default async function Page({ params }: PageProps) {
             &larr; {employee.full_name}
           </Link>
         </p>
-        <h1 className="text-balance text-judul-halaman text-foreground">
-          Ubah {TERMS.karyawan}
-        </h1>
-        <p className="max-w-subjudul text-subjudul text-muted-foreground">
-          {TERMS.personnelNumber} {employee.personnel_number}. Setiap
-          penyimpanan tercatat sebagai {TERMS.revisi} — siapa, kapan, dan kolom
-          apa yang bergerak — dan bisa dikembalikan lewat Log Perubahan.
-        </p>
+        <div className="flex items-center gap-2">
+          <h1 className="text-balance text-judul-halaman text-foreground">
+            Ubah {TERMS.karyawan}
+          </h1>
+          <Info label={`Keterangan Ubah ${TERMS.karyawan}`}>
+            {TERMS.personnelNumber} {employee.personnel_number}. Setiap
+            penyimpanan tercatat sebagai {TERMS.revisi} — siapa, kapan, dan
+            kolom apa yang bergerak — dan bisa dikembalikan lewat Log
+            Perubahan.
+          </Info>
+        </div>
       </header>
 
       <DaftarTerpotongAlert

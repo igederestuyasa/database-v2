@@ -114,7 +114,7 @@ export function KaryawanClient({
         <PembukaLayar
           salam="Database central HC"
           judul={TERMS.karyawan}
-          subjudul={`Cari berdasarkan nama, ${TERMS.nip}, atau ${TERMS.personnelNumber}, lalu persempit dengan filter. Filter tersimpan di alamat halaman.`}
+          info={`Cari berdasarkan nama, ${TERMS.nip}, atau ${TERMS.personnelNumber}, lalu persempit dengan filter. Filter tersimpan di alamat halaman.`}
         >
           <SearchField
             id="cari-karyawan"

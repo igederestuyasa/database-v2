@@ -248,7 +248,7 @@ export function StrukturClient({
         <PembukaLayar
           salam="Database central HC"
           judul={NAV_LABELS.struktur}
-          subjudul={`Hierarki ${TERMS.unitOrganisasi}: Direktorat → Divisi → Departemen → Bagian → Sub Bagian, plus Proyek di bawah Divisi.`}
+          info={`Hierarki ${TERMS.unitOrganisasi}: Direktorat → Divisi → Departemen → Bagian → Sub Bagian, plus Proyek di bawah Divisi.`}
         >
           <SearchField
             id="cari-unit"

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { formatWaktu } from "@/components/revisions/revisionDiff";
 import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
+import Info from "@/components/hc/Info";
 import DetailCard from "@/components/shared/DetailCard";
 import { requirePageSession } from "@/lib/auth/session";
 import { getEmployeeById, getEmployeePrivate } from "@/lib/db/employees";
@@ -16,7 +17,6 @@ import EmployeeHeader from "./_components/EmployeeHeader";
 import {
   buildEmployeeSections,
   buildPrivateFields,
-  semuaKosong,
 } from "./_components/employeeDetailFields";
 
 // Live data only — never prerendered at build time. See ADR-005.
@@ -118,8 +118,7 @@ export default async function Page({
 
           <p className="text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(karyawan.created_at)} · Terakhir diubah{" "}
-            {formatWaktu(karyawan.updated_at)}. Setiap perubahan tercatat di
-            Riwayat Revisi di samping.
+            {formatWaktu(karyawan.updated_at)}
           </p>
         </div>
 
@@ -132,21 +131,19 @@ export default async function Page({
               catatan={
                 pribadiGagal
                   ? "Data Pribadi Sensitif gagal dimuat, jadi kolom di atas kosong bukan karena belum diisi. Muat ulang halaman ini untuk mencoba lagi."
-                  : semuaKosong(fieldsPribadi)
-                    ? "Belum diisi. Kolom ini memang boleh kosong."
-                    : undefined
+                  : undefined
               }
             />
           ) : (
-            <div className="hc-permukaan rounded-kartu border border-dashed border-garis-putus p-4 text-pendukung">
-              <p className="text-label text-foreground">
-                {TERMS.dataPribadiSensitif}
+            <div className="hc-permukaan flex items-center gap-2 rounded-kartu border border-dashed border-garis-putus p-4">
+              <p className="text-label text-muted-foreground">
+                {TERMS.dataPribadiSensitif} — hanya admin
               </p>
-              <p className="mt-1 text-muted-foreground">
+              <Info label={`Keterangan ${TERMS.dataPribadiSensitif}`}>
                 Agama, tanggal &amp; tempat lahir, dan status pernikahan hanya
                 bisa dibaca admin. Halaman ini menampilkan selebihnya secara
                 lengkap.
-              </p>
+              </Info>
             </div>
           )}
 

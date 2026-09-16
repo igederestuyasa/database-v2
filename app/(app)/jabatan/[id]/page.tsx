@@ -6,6 +6,7 @@ import { formatWaktu } from "@/components/revisions/revisionDiff";
 import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
 import DetailCard from "@/components/shared/DetailCard";
+import Info from "@/components/hc/Info";
 import StatusLabel from "@/components/hc/StatusLabel";
 import { requirePageSession } from "@/lib/auth/session";
 import { countEmployeesByJabatan, getJabatanById } from "@/lib/db/jabatan";
@@ -103,7 +104,7 @@ export default async function Page({
           ← Kembali ke daftar {NAV_LABELS.jabatan}
         </Link>
 
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-balance text-judul-halaman text-foreground">
               {jabatan.nama}
@@ -144,15 +145,17 @@ export default async function Page({
             fields={fields}
           />
 
-          <p className="text-mikro font-normal text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(jabatan.created_at)} · Terakhir diubah{" "}
-            {formatWaktu(jabatan.updated_at)}. Setiap perubahan tercatat di
-            Riwayat Revisi di samping.
-            {isAdmin
-              ? ` Ubah, Gabungkan dan ${
-                  nonaktif ? "Aktifkan" : "Nonaktifkan"
-                } ada di halaman ${NAV_LABELS.jabatan}.`
-              : ""}
+            {formatWaktu(jabatan.updated_at)}
+            {isAdmin ? (
+              <Info label="Di mana mengubah data ini">
+                Ubah, Gabungkan dan{" "}
+                {nonaktif ? "Aktifkan" : "Nonaktifkan"} ada di halaman{" "}
+                {NAV_LABELS.jabatan}. Setiap perubahan tercatat di Riwayat Revisi di
+                samping.
+              </Info>
+            ) : null}
           </p>
         </div>
 

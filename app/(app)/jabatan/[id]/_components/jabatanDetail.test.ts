@@ -102,11 +102,14 @@ describe("fieldJumlahPemegang", () => {
     expect(row.href).toBeUndefined();
   });
 
-  it("says out loud that one Jabatan is not one seat", () => {
+  it("still says that one Jabatan is not one seat, now behind the info marker", () => {
     const row = fieldJumlahPemegang(JABATAN_ID.staf, { semua: 42, aktif: 40 });
     expect(row.value).toBe("42 Karyawan");
     expect(row.href).toBe(hrefKaryawanDenganJabatan(JABATAN_ID.staf));
-    expect(String(row.catatan)).toContain("bukan Formasi");
+    // Angkanya tetap terlihat; penjelasannya pindah ke penanda "i" supaya
+    // halaman detail tidak penuh kalimat yang dibaca sekali seumur hidup.
+    expect(String(row.catatan)).toContain("di antaranya aktif");
+    expect(String(row.info)).toContain("bukan Formasi");
   });
 
   it("says the count failed instead of showing a zero it did not measure", () => {

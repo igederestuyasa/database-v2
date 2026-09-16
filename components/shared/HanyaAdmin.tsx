@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import Info from "@/components/hc/Info";
 import Tombol from "@/components/hc/Tombol";
 import { TERMS, UI } from "@/lib/i18n/terms";
 
@@ -29,11 +30,13 @@ export default function HanyaAdmin({
 }) {
   return (
     <div className="mx-auto max-w-2xl space-y-4 py-12">
-      <h1 className="text-balance text-judul-halaman text-foreground">{judul}</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-balance text-judul-halaman text-foreground">{judul}</h1>
+        <Info label="Kenapa halaman ini tidak bisa dibuka">
+          Anda masuk sebagai {TERMS.viewer}. {alasan}
+        </Info>
+      </div>
       <p className="text-subjudul text-muted-foreground">{UI.hanyaAdmin}</p>
-      <p className="max-w-subjudul text-pendukung text-muted-foreground">
-        Anda masuk sebagai {TERMS.viewer}. {alasan}
-      </p>
       <Tombol asChild>
         <Link href={kembaliKe}>{labelKembali ?? `Kembali ke ${TERMS.karyawan}`}</Link>
       </Tombol>

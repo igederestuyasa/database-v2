@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import EmployeeForm from "@/components/forms/EmployeeForm";
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
+import Info from "@/components/hc/Info";
 import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { loadReferenceOptions } from "@/lib/db/referenceOptions";
@@ -37,16 +38,16 @@ export default async function Page() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3 pt-6">
+      <header className="flex items-center gap-2 pt-6">
         <h1 className="text-balance text-judul-halaman text-foreground">
           Tambah {TERMS.karyawan}
         </h1>
-        <p className="max-w-subjudul text-subjudul text-muted-foreground">
+        <Info label={`Keterangan Tambah ${TERMS.karyawan}`}>
           {TERMS.personnelNumber} wajib dan unik — itulah kunci bisnis yang
           dipakai {TERMS.konsumen} untuk merujuk seseorang. Kolom referensi
           dipilih dari daftar, tidak diketik bebas, dan {TERMS.karyawan}{" "}
           menunjuk {TERMS.unitOrganisasi} terendah tempatnya ditempatkan.
-        </p>
+        </Info>
       </header>
 
       <DaftarTerpotongAlert

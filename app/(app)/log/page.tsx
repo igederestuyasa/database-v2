@@ -168,7 +168,7 @@ export default async function Page({
       <PembukaLayar
         salam="Jejak perubahan"
         judul={NAV_LABELS.log}
-        subjudul="Setiap tindakan tercatat sebagai satu Batch berisi Revisi — sebelum, sesudah, siapa, dan kapan. Tidak ada yang dihapus dari log."
+        info="Setiap tindakan tercatat sebagai satu Batch berisi Revisi — sebelum, sesudah, siapa, dan kapan. Tidak ada yang dihapus dari log."
       >
         {/*
           Form GET biasa, bukan kolom cari ber-state.

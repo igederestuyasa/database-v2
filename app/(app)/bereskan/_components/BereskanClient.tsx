@@ -159,7 +159,7 @@ export function BereskanClient({
       <PembukaLayar
         salam="Pembersihan data"
         judul={NAV_LABELS.bereskan}
-        subjudul={`Daftar ${TERMS.temuan} data kotor yang dihitung ulang setiap kali halaman dibuka — tidak ada yang disimpan. Halaman ini selesai ketika kosong.`}
+        info={`Daftar ${TERMS.temuan} data kotor yang dihitung ulang setiap kali halaman dibuka — tidak ada yang disimpan. Halaman ini selesai ketika kosong.`}
       >
         <div className="space-y-3">
           {total > 0 ? (

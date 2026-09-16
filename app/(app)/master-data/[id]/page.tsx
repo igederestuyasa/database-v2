@@ -6,6 +6,7 @@ import { formatWaktu } from "@/components/revisions/revisionDiff";
 import { RIWAYAT_DITAMPILKAN } from "@/components/revisions/riwayat";
 import RevisionPanel from "@/components/revisions/RevisionPanel";
 import DetailCard from "@/components/shared/DetailCard";
+import Info from "@/components/hc/Info";
 import StatusLabel from "@/components/hc/StatusLabel";
 import { requirePageSession } from "@/lib/auth/session";
 import { countEmployeesByLookup, getLookupById } from "@/lib/db/lookups";
@@ -109,7 +110,7 @@ export default async function Page({
           ← Kembali ke {NAV_LABELS["master-data"]}: {tipeLabel}
         </Link>
 
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-balance text-judul-halaman text-foreground">
               {lookup.label}
@@ -148,15 +149,17 @@ export default async function Page({
             fields={fields}
           />
 
-          <p className="text-mikro font-normal text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-mikro font-normal text-muted-foreground">
             Ditambahkan {formatWaktu(lookup.created_at)} · Terakhir diubah{" "}
-            {formatWaktu(lookup.updated_at)}. Setiap perubahan tercatat di
-            Riwayat Revisi di samping.
-            {isAdmin
-              ? ` Ubah, Urutan, Gabungkan dan ${
-                  nonaktif ? "Aktifkan" : "Nonaktifkan"
-                } ada di halaman ${NAV_LABELS["master-data"]}.`
-              : ""}
+            {formatWaktu(lookup.updated_at)}
+            {isAdmin ? (
+              <Info label="Di mana mengubah data ini">
+                Ubah, Urutan, Gabungkan dan{" "}
+                {nonaktif ? "Aktifkan" : "Nonaktifkan"} ada di halaman{" "}
+                {NAV_LABELS["master-data"]}. Setiap perubahan tercatat di Riwayat Revisi di
+                samping.
+              </Info>
+            ) : null}
           </p>
         </div>
 

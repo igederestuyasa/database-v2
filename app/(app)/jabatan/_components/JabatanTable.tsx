@@ -380,7 +380,7 @@ export function JabatanTable({
           <PembukaLayar
             salam="Data Referensi"
             judul={NAV_LABELS.jabatan}
-            subjudul={`Nama pekerjaan yang bisa dipegang banyak ${TERMS.karyawan} sekaligus. ${TERMS.jabatan} bukan ${TERMS.formasi}: tidak ada kursi atau kuota di sini.`}
+            info={`Nama pekerjaan yang bisa dipegang banyak ${TERMS.karyawan} sekaligus. ${TERMS.jabatan} bukan ${TERMS.formasi}: tidak ada kursi atau kuota di sini.`}
           >
             <SearchField
               id="cari-jabatan"

@@ -283,7 +283,7 @@ export function ApiKeyTable({ rows, peringatan, catatan }: ApiKeyTableProps) {
           <PembukaLayar
             salam="Integrasi"
             judul={NAV_LABELS["api-keys"]}
-            subjudul={`Satu ${TERMS.apiKey} untuk satu ${TERMS.konsumen}. Tiap key membawa daftar kolom yang boleh diambilnya; ${TERMS.dataPribadiSensitif} tidak pernah ada di daftar mana pun.`}
+            info={`Satu ${TERMS.apiKey} untuk satu ${TERMS.konsumen}. Tiap key membawa daftar kolom yang boleh diambilnya; ${TERMS.dataPribadiSensitif} tidak pernah ada di daftar mana pun.`}
           >
             <SearchField
               id="cari-api-key"

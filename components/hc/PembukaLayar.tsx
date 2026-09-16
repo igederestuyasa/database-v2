@@ -1,29 +1,34 @@
 import * as React from "react";
 
+import Info from "./Info";
 import { cn } from "@/lib/utils";
 
 /**
  * Pembuka layar HC Panel — docs/DESIGN.md §Spasi, bentuk, tata letak.
  *
- * Empat elemen, tidak pernah lebih: salam, judul, subjudul, kontrol utama.
- * Batas itu yang membuat setiap layar terbaca dalam sekali pandang, jadi
- * keterangan tambahan masuk ke subjudul — bukan jadi paragraf kelima.
+ * Tiga elemen: salam, judul, kontrol utama.
  *
- * Tundanya 0, 60, 110, dan 170ms, naik 14px sambil muncul. Keempatnya mati
- * sendiri saat `prefers-reduced-motion: reduce`.
+ * KETERANGAN HALAMAN TIDAK LAGI JADI PARAGRAF. Kalimat yang dulu berdiri
+ * sebagai subjudul abu-abu di bawah judul kini tinggal di balik penanda "i" di
+ * samping judulnya: isinya sama, tapi hanya muncul kalau dicari. Kalimat
+ * seperti itu dibaca sekali di hari pertama dan sesudahnya cuma memakan tempat
+ * di layar yang dibuka setiap hari.
+ *
+ * Tundanya 0, 60, dan 110ms, naik 14px sambil muncul. Ketiganya mati sendiri
+ * saat `prefers-reduced-motion: reduce`.
  */
 export function PembukaLayar({
   salam,
   judul,
-  subjudul,
+  info,
   children,
   className,
 }: {
   /** Baris pembuka opsional, mis. "Database central HC". */
   salam?: React.ReactNode;
   judul: React.ReactNode;
-  /** Maksimal 20 kata; lebih dari itu tidak terbaca sebagai subjudul. */
-  subjudul?: React.ReactNode;
+  /** Keterangan halaman; tampil di balik penanda "i" di samping judul. */
+  info?: React.ReactNode;
   /** Kontrol utama layar — biasanya `<SearchField>`. */
   children?: React.ReactNode;
   className?: string;
@@ -39,27 +44,16 @@ export function PembukaLayar({
         </p>
       ) : null}
 
-      <h1
-        className={cn(
-          "animate-naik-muncul text-balance text-judul-halaman text-foreground",
-          salam ? "mt-2" : null,
-        )}
+      <div
+        className={cn("animate-naik-muncul flex items-center gap-2", salam ? "mt-2" : null)}
         style={{ animationDelay: "60ms" }}
       >
-        {judul}
-      </h1>
-
-      {subjudul ? (
-        <p
-          className="animate-naik-muncul mt-3 max-w-subjudul text-subjudul text-muted-foreground"
-          style={{ animationDelay: "110ms" }}
-        >
-          {subjudul}
-        </p>
-      ) : null}
+        <h1 className="text-balance text-judul-halaman text-foreground">{judul}</h1>
+        {info ? <Info label={`Keterangan ${typeof judul === "string" ? judul : "halaman"}`}>{info}</Info> : null}
+      </div>
 
       {children ? (
-        <div className="animate-naik-muncul mt-6" style={{ animationDelay: "170ms" }}>
+        <div className="animate-naik-muncul mt-6" style={{ animationDelay: "110ms" }}>
           {children}
         </div>
       ) : null}

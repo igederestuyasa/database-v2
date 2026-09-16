@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { formatWaktu } from "@/components/revisions/revisionDiff";
 import DaftarTerpotongAlert from "@/components/shared/DaftarTerpotongAlert";
+import Info from "@/components/hc/Info";
 import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { listApiKeys } from "@/lib/db/apiKeys";
@@ -98,22 +99,20 @@ export default async function Page() {
         />
       }
       catatan={
-        <p className="max-w-subjudul text-pendukung text-muted-foreground">
-          {terpotong
-            ? `${total} ${TERMS.apiKey}; dari ${rows.length} yang dimuat di halaman ini, ${jumlahAktif} aktif.`
-            : `${total} ${TERMS.apiKey}, ${jumlahAktif} di antaranya aktif.`}{" "}
-          {TERMS.konsumen} memakainya sebagai header{" "}
-          <code className="font-mono text-mikro font-normal">
-            Authorization: Bearer hck_…
-          </code>
-          . Key penuh hanya ditampilkan sekali saat dibuat dan tidak bisa
-          dilihat lagi — yang tersimpan hanya sidik SHA-256-nya. Setiap
-          perubahan di halaman ini tercatat sebagai {TERMS.revisi} dan bisa
-          dikembalikan lewat{" "}
-          <Link href="/log" className="underline underline-offset-4 hover:text-foreground">
-            {NAV_LABELS.log}
-          </Link>
-          .
+        <p className="flex flex-wrap items-center gap-2 text-pendukung text-muted-foreground">
+          {total} {TERMS.apiKey} · {jumlahAktif} aktif
+          {terpotong ? ` · ${rows.length} pertama ditampilkan` : ""}
+          <Info label={`Keterangan ${TERMS.apiKey}`}>
+            {TERMS.konsumen} memakainya sebagai header{" "}
+            <code className="font-mono">Authorization: Bearer hck_…</code>. Key
+            penuh hanya ditampilkan sekali saat dibuat dan tidak bisa dilihat
+            lagi — yang tersimpan hanya sidik SHA-256-nya. Setiap perubahan
+            tercatat sebagai {TERMS.revisi} dan bisa dikembalikan lewat{" "}
+            <Link href="/log" className="underline underline-offset-4">
+              {NAV_LABELS.log}
+            </Link>
+            .
+          </Info>
         </p>
       }
     />

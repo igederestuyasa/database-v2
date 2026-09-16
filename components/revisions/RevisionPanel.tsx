@@ -34,12 +34,12 @@
  */
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 
+import Info from "@/components/hc/Info";
 import StatusLabel from "@/components/hc/StatusLabel";
 import Tombol from "@/components/hc/Tombol";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -178,15 +178,15 @@ export function RevisionPanel(props: RevisionPanelProps): ReactElement {
   const catatanAkses = CATATAN_AKSES[table];
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-        <div className="space-y-1.5">
-          <CardTitle className="text-judul-bagian">{title ?? UI.riwayatRevisi}</CardTitle>
-          <CardDescription>
-            Perubahan terbaru di atas. Mengembalikan sebuah Revisi tidak menghapus
-            apa pun — ia dicatat sebagai Revisi baru.
-          </CardDescription>
-        </div>
+    <Card className="hc-permukaan rounded-kartu border-border shadow-none">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+        <CardTitle className="flex items-center gap-2 text-judul-bagian">
+          {title ?? UI.riwayatRevisi}
+          <Info label="Keterangan Riwayat Revisi">
+            Perubahan terbaru di atas. Mengembalikan sebuah Revisi tidak
+            menghapus apa pun — ia dicatat sebagai Revisi baru.
+          </Info>
+        </CardTitle>
         {items.length > 0 ? (
           <StatusLabel className="shrink-0">
             {/* "50+" when the read hit its ceiling: this row may well have more

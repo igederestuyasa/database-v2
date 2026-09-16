@@ -9,18 +9,22 @@
  * Shared by all four detail pages — Karyawan, Unit Organisasi, Jabatan and
  * Lookup — rather than copied per segment, because a field list that reads
  * differently on the Jabatan page than on the Karyawan page is exactly the
- * drift that makes a handover harder. It lives in `components/shared/`
- * alongside `DataTable` and `MergeDialog`, the other primitives more than one
- * page renders.
+ * drift that makes a handover harder.
+ *
+ * DUA JENIS KETERANGAN, DAN BEDANYA PENTING. `catatan` adalah DATA yang
+ * menempel pada sebuah nilai — kode di balik sebuah nama, nomor surat, berapa
+ * yang aktif — dan selalu terlihat. `info` adalah PENJELASAN tentang kolomnya,
+ * dan pindah ke balik penanda "i" supaya halaman tidak penuh kalimat yang cuma
+ * dibaca sekali seumur hidup. Jangan pernah menaruh data di `info`.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import Info from "@/components/hc/Info";
 import StatusLabel from "@/components/hc/StatusLabel";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -38,8 +42,10 @@ export type DetailField = {
    * that prints `parent_id: 3f2a…` has failed at the one job it has.
    */
   href?: string;
-  /** Small print under the value — the kode behind a nama, a nomor surat. */
+  /** DATA kecil di bawah nilai — kode di balik nama, nomor surat. Selalu tampil. */
   catatan?: ReactNode;
+  /** PENJELASAN kolomnya. Pindah ke balik penanda "i" di samping label. */
+  info?: ReactNode;
   /** PRD #6: computed, never stored, never editable. */
   turunan?: boolean;
   /** Free text that deserves the full width of the card. */
@@ -66,8 +72,9 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
           key={field.label}
           className={field.lebar ? "min-w-0 sm:col-span-2" : "min-w-0"}
         >
-          <dt className="flex flex-wrap items-center gap-2 text-pendukung text-muted-foreground">
+          <dt className="flex flex-wrap items-center gap-1.5 text-pendukung text-muted-foreground">
             {field.label}
+            {field.info ? <Info label={`Keterangan ${field.label}`}>{field.info}</Info> : null}
             {field.turunan ? <TandaTurunan /> : null}
           </dt>
           <dd className="mt-1 whitespace-pre-wrap break-words text-isi">
@@ -83,7 +90,7 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
             )}
           </dd>
           {field.catatan ? (
-            <dd className="mt-0.5 break-words text-pendukung text-muted-foreground">
+            <dd className="mt-0.5 break-words text-mikro font-normal text-muted-foreground">
               {field.catatan}
             </dd>
           ) : null}
@@ -95,6 +102,7 @@ export function FieldList({ fields }: { fields: readonly DetailField[] }) {
 
 export type DetailCardProps = {
   judul: string;
+  /** Penjelasan bagiannya; pindah ke balik penanda "i" di samping judul. */
   keterangan?: string;
   fields: readonly DetailField[];
   /** Rendered under the fields — an access note, an "belum diisi" line. */
@@ -109,11 +117,11 @@ export default function DetailCard({
 }: DetailCardProps) {
   return (
     <Card className="hc-permukaan rounded-kartu border-border shadow-none">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-judul-bagian">{judul}</CardTitle>
-        {keterangan ? (
-          <CardDescription className="text-pendukung">{keterangan}</CardDescription>
-        ) : null}
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-judul-bagian">
+          {judul}
+          {keterangan ? <Info label={`Keterangan ${judul}`}>{keterangan}</Info> : null}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <FieldList fields={fields} />

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import Info from "@/components/hc/Info";
 import HanyaAdmin from "@/components/shared/HanyaAdmin";
 import { requirePageSession } from "@/lib/auth/session";
 import { countAdmins, listProfiles } from "@/lib/db/profiles";
@@ -56,26 +57,27 @@ export default async function Page() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3 pt-6">
+      <header className="flex items-center gap-2 pt-6">
         <h1 className="text-balance text-judul-halaman text-foreground">
           {NAV_LABELS.pengguna}
         </h1>
-        <p className="max-w-subjudul text-subjudul text-muted-foreground">
+        <Info label={`Keterangan ${NAV_LABELS.pengguna}`}>
           {TERMS.admin} boleh mengubah apa pun dan melihat{" "}
           {TERMS.dataPribadiSensitif}; {TERMS.viewer} hanya membaca. Setiap
           perubahan role tercatat sebagai {TERMS.revisi} dan bisa dikembalikan
           lewat {NAV_LABELS.log}.
-        </p>
+        </Info>
       </header>
 
       <PenggunaTable rows={rows} currentUserId={user.id} />
 
-      <p className="max-w-subjudul text-pendukung text-muted-foreground">
-        {total} pengguna, {jumlahAdmin} di antaranya {TERMS.admin}. Akun baru
-        selalu mulai sebagai {TERMS.viewer}; naikkan di sini kalau perlu.
-        {terpotong
-          ? ` Tabel di atas menampilkan ${rows.length} yang pertama.`
-          : ""}
+      <p className="flex items-center gap-2 text-pendukung text-muted-foreground">
+        {total} pengguna · {jumlahAdmin} {TERMS.admin}
+        {terpotong ? ` · ${rows.length} pertama ditampilkan` : ""}
+        <Info label="Keterangan daftar pengguna">
+          Akun baru selalu mulai sebagai {TERMS.viewer}; naikkan di sini kalau
+          perlu.
+        </Info>
       </p>
     </div>
   );
