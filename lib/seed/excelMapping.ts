@@ -1069,7 +1069,22 @@ export function planSeed(
       lowestKey = key;
     }
 
-    if (lowestKey === null) {
+    /*
+      SEL KOSONG PADA ORANG YANG SUDAH ADA BUKAN "TIDAK PUNYA UNIT".
+
+      Peringatan ini ditulis untuk SEED: di sana baris tanpa Unit Organisasi
+      benar-benar menciptakan Karyawan yang menggantung, dan itu Temuan yang
+      harus dilihat. Untuk IMPOR sebuah sel kosong berarti "jangan sentuh" —
+      unitnya ada di database dan tidak akan berubah. Memperingatkannya
+      menyatakan sesuatu yang TIDAK BENAR tentang orang itu, dan pada file
+      yang cuma mengisi email ia muncul dua kali per baris: 84 peringatan
+      untuk 42 orang yang unit dan jabatannya baik-baik saja.
+
+      Kalau orangnya memang benar-benar tidak punya unit di database, halaman
+      Perlu Dibereskan tetap mendaftarnya — halaman itu membaca database, dan
+      justru ke sanalah kalimat peringatan ini menunjuk.
+    */
+    if (lowestKey === null && !sudahAda?.has(personnelNumber)) {
       issues.push({
         level: "peringatan",
         baris,
@@ -1092,7 +1107,8 @@ export function planSeed(
         jabatanByKey.set(jabatanKey, row2);
         jabatan.push(row2);
       }
-    } else {
+    } else if (!sudahAda?.has(personnelNumber)) {
+      // Alasan yang sama dengan Unit Organisasi di atas.
       issues.push({
         level: "peringatan",
         baris,
