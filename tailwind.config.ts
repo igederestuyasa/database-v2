@@ -148,6 +148,22 @@ const config: Config = {
         popover: "var(--bayangan-popover)",
       },
 
+      /**
+       * Ukuran komponen yang tidak ada di skala bawaan Tailwind. Sisanya
+       * sengaja memakai skala bawaan karena angkanya memang sudah sama:
+       * h-10 (40), h-11 (44), h-12 (48), h-16 (64), h-24 (96).
+       */
+      spacing: {
+        /** Tinggi kolom cari — kontrol utama layar. */
+        "kontrol-utama": "3.75rem",
+        /** Padding kiri kolom cari, memberi ruang ikon kaca pembesar. */
+        "kontrol-teks": "3.25rem",
+        /** Tinggi label status. */
+        status: "1.375rem",
+        /** Tinggi bar atas di desktop (di HP memakai h-16). */
+        "bar-desktop": "4.5rem",
+      },
+
       maxWidth: {
         /** Lebar maksimum wadah, termasuk tepi halaman. */
         wadah: "1240px",
