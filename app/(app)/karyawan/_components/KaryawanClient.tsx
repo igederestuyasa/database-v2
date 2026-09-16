@@ -1,29 +1,18 @@
 "use client";
 
-/**
- * Satu-satunya pemilik navigasi di halaman daftar Karyawan.
- *
- * Filter, urutan, dan penomoran halaman sama-sama menulis URL, dan ketiganya
- * harus memakai transisi yang sama: kalau masing-masing memegang
- * `useTransition()` sendiri, mengganti filter membuat tabel tetap terlihat
- * "selesai" sambil menampilkan baris hasil filter yang lama. Di sini satu
- * `pending` menutupi semuanya — tabel berkata sedang memuat, kontrol filter
- * terkunci, dan tidak ada yang tampak seperti jawaban yang sudah benar padahal
- * belum.
- *
- * Isi kotak pencarian juga tinggal di sini, karena setiap perpindahan harus
- * membawanya. Kalau teks yang sudah terketik dibiarkan menggantung di komponen
- * filter, mengganti urutan atau berpindah halaman akan menampilkan daftar yang
- * tidak pernah disaring namanya — sementara kotaknya masih berbunyi "budi".
- *
- * Komponen ini sengaja tipis: bentuk URL diputuskan `karyawanFilters.ts` (modul
- * biasa, dipakai juga oleh Server Component), tampilannya oleh dua komponen di
- * bawahnya.
- */
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import DetailPanel from "@/components/hc/DetailPanel";
+import FilterTabs from "@/components/hc/FilterTabs";
+import PembukaLayar from "@/components/hc/PembukaLayar";
+import SearchField from "@/components/hc/SearchField";
+import StatusLabel from "@/components/hc/StatusLabel";
+import TataLetakDaftarDetail from "@/components/hc/TataLetakDaftarDetail";
+import Tombol from "@/components/hc/Tombol";
+import useDaftarDetail from "@/components/hc/useDaftarDetail";
 import type { EntityOption } from "@/lib/entityOptions";
+import { STATUS_LABELS, TERMS, UI } from "@/lib/i18n/terms";
 import type { LookupType } from "@/lib/validation/lookupTypes";
 
 import KaryawanFilterBar from "./KaryawanFilterBar";
@@ -31,6 +20,9 @@ import KaryawanTable from "./KaryawanTable";
 import {
   bersihkanFilter,
   karyawanHref,
+  STATUS_FILTERS,
+  STATUS_FILTER_LABELS,
+  ubahFilter,
   type KaryawanFilters,
 } from "./karyawanFilters";
 import type { KaryawanRow } from "./karyawanRows";
@@ -42,12 +34,18 @@ export type KaryawanClientProps = {
   perPage: number;
   total: number;
   isAdmin: boolean;
-  /** Pesan pengganti saat tabel kosong karena sesuatu gagal, bukan karena nihil. */
   pesanKosong?: string;
   unitOptions: EntityOption[];
   jabatanOptions: EntityOption[];
   lookupOptions: Record<LookupType, EntityOption[]>;
+  /** Peringatan dari halaman — daftar terpotong, filter hierarki gagal. */
+  peringatan?: React.ReactNode;
 };
+
+/** Baris deskripsi di kartu dan panel: unit terendah lalu rantai induknya. */
+function tempat(row: KaryawanRow): string | null {
+  return [row.unitNama, row.unitInduk].filter(Boolean).join(" · ") || null;
+}
 
 export function KaryawanClient({
   rows,
@@ -60,15 +58,12 @@ export function KaryawanClient({
   unitOptions,
   jabatanOptions,
   lookupOptions,
+  peringatan,
 }: KaryawanClientProps) {
   const router = useRouter();
   const [pending, mulai] = React.useTransition();
-
-  // Kotak pencarian dikirim dengan Enter, tombol Cari, atau perubahan filter
-  // apa pun — bukan setiap ketukan tombol, yang berarti satu navigasi per huruf
-  // dan urutan jawaban yang bisa saling mendahului. Disamakan lagi dengan URL
-  // kalau URL-nya berubah dari luar (tombol Back, tautan dari halaman lain).
   const [teks, setTeks] = React.useState(filters.q ?? "");
+
   React.useEffect(() => {
     setTeks(filters.q ?? "");
   }, [filters.q]);
@@ -82,12 +77,9 @@ export function KaryawanClient({
     [router, teks],
   );
 
-  /** Bersihkan semua filter, termasuk teks yang belum sempat dikirim. */
   const bersihkan = React.useCallback(() => {
     setTeks("");
     mulai(() => {
-      // Urutan sengaja ikut terbawa, bukan ikut dibersihkan — lihat
-      // `bersihkanFilter()`.
       router.push(karyawanHref(bersihkanFilter(filters)));
     });
   }, [router, filters]);
@@ -101,33 +93,128 @@ export function KaryawanClient({
     [router],
   );
 
-  return (
-    <div className="space-y-4">
-      <KaryawanFilterBar
-        filters={filters}
-        unitOptions={unitOptions}
-        jabatanOptions={jabatanOptions}
-        lookupOptions={lookupOptions}
-        teks={teks}
-        setTeks={setTeks}
-        pindah={pindah}
-        bersihkan={bersihkan}
-        pending={pending}
-      />
+  /**
+   * Pola daftar-detail. `kunciPencarian` diisi kata kunci yang SUDAH dijalankan
+   * server (`filters.q`), bukan yang sedang diketik: daftar di layar masih
+   * milik kata kunci lama sampai halamannya kembali, dan memindahkan panel
+   * lebih dulu hanya menyorot baris yang sebentar lagi hilang.
+   */
+  const dd = useDaftarDetail({
+    items: rows,
+    idDari: (row) => row.id,
+    kunciPencarian: filters.q ?? "",
+  });
 
-      <KaryawanTable
-        rows={rows}
-        filters={filters}
-        page={page}
-        perPage={perPage}
-        total={total}
-        isAdmin={isAdmin}
-        pesanKosong={pesanKosong}
-        pindah={pindah}
-        bukaDetail={bukaDetail}
-        pending={pending}
-      />
-    </div>
+  const terpilih = dd.terpilih;
+
+  return (
+    <TataLetakDaftarDetail
+      panelTerlihat={dd.panelTerlihat}
+      pembuka={
+        <PembukaLayar
+          salam="Database central HC"
+          judul={TERMS.karyawan}
+          subjudul={`Cari berdasarkan nama, ${TERMS.nip}, atau ${TERMS.personnelNumber}, lalu persempit dengan filter. Filter tersimpan di alamat halaman.`}
+        >
+          <SearchField
+            id="cari-karyawan"
+            label={`${UI.cari} ${TERMS.karyawan}`}
+            nilai={teks}
+            onNilaiChange={setTeks}
+            placeholder={`Nama, ${TERMS.nip}, atau ${TERMS.personnelNumber}`}
+            disabled={pending}
+            /* Enter menjalankan PENCARIAN, bukan membuka hasil teratas seperti
+               di docs/DESIGN.md: daftar ini disaring di server, jadi hasil
+               teratas untuk kata yang baru diketik belum ada sampai
+               pencariannya jalan. Setelah hasilnya muncul, Panah bawah lalu
+               Enter membuka baris yang disorot. */
+            onSubmit={() => pindah(ubahFilter(filters, {}))}
+            onPanahBawah={dd.fokusItemPertama}
+          />
+        </PembukaLayar>
+      }
+      panel={
+        <DetailPanel
+          entitas={TERMS.karyawan}
+          nama={terpilih?.nama ?? null}
+          kategori={terpilih?.jabatanNama ?? null}
+          status={
+            terpilih ? (
+              <StatusLabel nada={terpilih.status === "aktif" ? "sukses" : "netral"}>
+                {STATUS_LABELS[terpilih.status]}
+              </StatusLabel>
+            ) : null
+          }
+          deskripsi={terpilih ? tempat(terpilih) : null}
+          baris={
+            terpilih
+              ? [
+                  { label: TERMS.personnelNumber, nilai: terpilih.personnelNumber },
+                  { label: TERMS.nip, nilai: terpilih.nip },
+                  { label: TERMS.unitOrganisasi, nilai: terpilih.unitNama },
+                  { label: TERMS.jabatan, nilai: terpilih.jabatanNama },
+                  { label: "Person Grade", nilai: terpilih.personGrade },
+                  { label: "Job Grade", nilai: terpilih.jobGrade },
+                ]
+              : undefined
+          }
+          pesanKosong={`Tidak ada ${TERMS.karyawan} yang cocok dengan filter ini.`}
+          aksi={
+            terpilih ? (
+              <Tombol
+                ukuran="panel"
+                onClick={() => bukaDetail(terpilih.id)}
+                disabled={pending}
+              >
+                Buka detail {TERMS.karyawan}
+              </Tombol>
+            ) : null
+          }
+        />
+      }
+    >
+      <div className="space-y-6">
+        {peringatan}
+
+        <FilterTabs
+          label={`${UI.filter} status ${TERMS.karyawan}`}
+          aktif={filters.status}
+          items={STATUS_FILTERS.map((nilai) => ({
+            nilai,
+            label: STATUS_FILTER_LABELS[nilai],
+          }))}
+          onPilih={(nilai) =>
+            pindah(
+              ubahFilter(filters, { status: nilai as KaryawanFilters["status"] }),
+            )
+          }
+        />
+
+        <KaryawanFilterBar
+          filters={filters}
+          unitOptions={unitOptions}
+          jabatanOptions={jabatanOptions}
+          lookupOptions={lookupOptions}
+          pindah={pindah}
+          bersihkan={bersihkan}
+          pending={pending}
+        />
+
+        <KaryawanTable
+          rows={rows}
+          filters={filters}
+          page={page}
+          perPage={perPage}
+          total={total}
+          isAdmin={isAdmin}
+          pesanKosong={pesanKosong}
+          pindah={pindah}
+          bukaDetail={bukaDetail}
+          pending={pending}
+          daftarDetail={dd}
+        />
+      </div>
+    </TataLetakDaftarDetail>
   );
 }
 

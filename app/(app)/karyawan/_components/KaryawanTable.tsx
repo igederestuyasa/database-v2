@@ -25,9 +25,10 @@ import * as React from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import StatusLabel from "@/components/hc/StatusLabel";
+import Tombol from "@/components/hc/Tombol";
+import type { DaftarDetail } from "@/components/hc/useDaftarDetail";
 import { DataTable } from "@/components/shared/DataTable";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -66,6 +67,8 @@ export type KaryawanTableProps = {
   /** Buka halaman detail satu Karyawan (unit B2). */
   bukaDetail: (id: string) => void;
   pending: boolean;
+  /** Pola daftar-detail: sorot baris, panah antarbaris, penanda terpilih. */
+  daftarDetail: DaftarDetail<KaryawanRow>;
 };
 
 /** Sel kosong selalu tampil sebagai tanda yang sama (`lib/derived`). */
@@ -84,15 +87,30 @@ export function KaryawanTable({
   pindah,
   bukaDetail,
   pending,
+  daftarDetail,
 }: KaryawanTableProps) {
-  const columns = React.useMemo<ColumnDef<KaryawanRow>[]>(
-    () => [
+  /**
+   * Delapan kolom tidak muat berdampingan dengan panel detail, dan tabel yang
+   * terpotong diam-diam lebih buruk daripada tabel yang lebih ringkas: kolom
+   * yang hilang di balik tepi kartu tidak memberi tanda apa pun bahwa ia ada.
+   *
+   * Jadi saat panel terlihat, tabel menyisakan kolom yang dipakai untuk MEMILIH
+   * baris — Personnel Number, Nama, Unit Organisasi, Status — dan kolom yang
+   * dipakai untuk MEMBACA satu orang pindah ke panel di sebelahnya, tempat
+   * keempatnya memang sudah ditampilkan. Di bawah 1280px panelnya tidak ada,
+   * dan kedelapan kolom kembali utuh.
+   */
+  const panelTerlihat = daftarDetail.panelTerlihat;
+
+  const columns = React.useMemo<ColumnDef<KaryawanRow>[]>(() => {
+    const semua: ColumnDef<KaryawanRow>[] = [
       {
         accessorKey: "personnelNumber",
         header: TERMS.personnelNumber,
         enableSorting: false,
+        meta: { angka: true },
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.personnelNumber}</span>
+          <span className="tabular-nums">{row.original.personnelNumber}</span>
         ),
       },
       {
@@ -106,6 +124,10 @@ export function KaryawanTable({
             // menjalankan dua navigasi ke alamat yang sama.
             onClick={(event) => event.stopPropagation()}
             className="font-medium underline-offset-2 hover:underline"
+            /* Barisnya sendiri sudah bisa difokus dan dibuka lewat Enter;
+               tautan ini tidak perlu jadi perhentian Tab kedua untuk tujuan
+               yang sama. */
+            tabIndex={-1}
           >
             {row.original.nama}
           </Link>
@@ -113,10 +135,13 @@ export function KaryawanTable({
       },
       {
         accessorKey: "nip",
+        // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
+        id: "sekunder-" + 'nip',
         header: TERMS.nip,
         enableSorting: false,
+        meta: { angka: true },
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{teks(row.original.nip)}</span>
+          <span className="tabular-nums">{teks(row.original.nip)}</span>
         ),
       },
       {
@@ -127,7 +152,7 @@ export function KaryawanTable({
           <div className="min-w-[10rem]">
             <span className="block">{teks(row.original.unitNama)}</span>
             {row.original.unitInduk ? (
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-mikro font-normal text-muted-foreground">
                 {row.original.unitInduk}
               </span>
             ) : null}
@@ -136,12 +161,16 @@ export function KaryawanTable({
       },
       {
         accessorKey: "jabatanNama",
+        // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
+        id: "sekunder-" + 'jabatanNama',
         header: TERMS.jabatan,
         enableSorting: false,
         cell: ({ row }) => teks(row.original.jabatanNama),
       },
       {
         accessorKey: "personGrade",
+        // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
+        id: "sekunder-" + 'personGrade',
         header: "Person Grade",
         enableSorting: false,
         cell: ({ row }) => (
@@ -150,6 +179,8 @@ export function KaryawanTable({
       },
       {
         accessorKey: "jobGrade",
+        // Pindah ke panel detail saat panel terlihat — lihat catatan di atas.
+        id: "sekunder-" + 'jobGrade',
         header: "Job Grade",
         enableSorting: false,
         cell: ({ row }) => (
@@ -161,16 +192,17 @@ export function KaryawanTable({
         header: "Status",
         enableSorting: false,
         cell: ({ row }) => (
-          <Badge
-            variant={row.original.status === "aktif" ? "secondary" : "outline"}
-          >
+          <StatusLabel nada={row.original.status === "aktif" ? "sukses" : "netral"}>
             {STATUS_LABELS[row.original.status]}
-          </Badge>
+          </StatusLabel>
         ),
       },
-    ],
-    [],
-  );
+    ];
+
+    return semua.filter(
+      (kolom) => !(panelTerlihat && kolom.id?.startsWith("sekunder-")),
+    );
+  }, [panelTerlihat]);
 
   return (
     <DataTable
@@ -182,6 +214,19 @@ export function KaryawanTable({
         pesanKosong ?? `Tidak ada ${TERMS.karyawan} yang cocok dengan filter ini.`
       }
       onRowClick={(row) => bukaDetail(row.id)}
+      propsDaftar={daftarDetail.propsDaftar()}
+      /* Baris jadi perhentian Tab dan bisa dibuka dengan Enter, supaya aksi
+         utama item terjangkau tanpa tetikus. Panah antarbaris ditangani
+         `propsDaftar` di atas. */
+      propsBaris={(row) => ({
+        ...daftarDetail.propsItem(row),
+        tabIndex: 0,
+        onKeyDown: (event: React.KeyboardEvent) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          bukaDetail(row.id);
+        },
+      })}
       pagination={{
         page,
         perPage,
@@ -197,7 +242,7 @@ export function KaryawanTable({
             }
             disabled={pending}
           >
-            <SelectTrigger className="h-9 w-[210px]" aria-label="Urutkan daftar">
+            <SelectTrigger className="h-11 w-[210px] text-isi" aria-label="Urutkan daftar">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -210,13 +255,13 @@ export function KaryawanTable({
           </Select>
 
           {isAdmin ? (
-            <Button asChild className="ml-auto">
+            <Tombol asChild className="ml-auto">
               <Link href="/karyawan/baru">
                 {UI.tambah} {TERMS.karyawan}
               </Link>
-            </Button>
+            </Tombol>
           ) : (
-            <span className="ml-auto text-xs text-muted-foreground">
+            <span className="ml-auto text-mikro font-normal text-muted-foreground">
               {UI.hanyaAdmin}
             </span>
           )}

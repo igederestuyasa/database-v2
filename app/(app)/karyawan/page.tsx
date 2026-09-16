@@ -78,82 +78,57 @@ export default async function Page({ searchParams }: PageProps) {
   const { daftar, galatHierarki } = hasil;
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {NAV_LABELS.karyawan}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Cari {TERMS.karyawan} berdasarkan nama, {TERMS.nip}, atau{" "}
-          {TERMS.personnelNumber}, lalu persempit dengan{" "}
-          {TERMS.unitOrganisasi}, {TERMS.jabatan}, status, dan {TERMS.lookup}{" "}
-          apa pun. Filter tersimpan di alamat halaman, jadi daftar yang sudah
-          disaring bisa dibagikan apa adanya.
-        </p>
-      </header>
+    <KaryawanClient
+      rows={toKaryawanRows(daftar?.rows ?? [])}
+      pesanKosong={
+        galatHierarki
+          ? `Daftar ${TERMS.karyawan} tidak dimuat karena filter di atas gagal diterapkan.`
+          : undefined
+      }
+      filters={filters}
+      page={daftar?.page ?? filters.page}
+      perPage={daftar?.perPage ?? KARYAWAN_PER_PAGE}
+      total={daftar?.total ?? 0}
+      isAdmin={user.role === "admin"}
+      unitOptions={options.orgUnit}
+      jabatanOptions={options.jabatan}
+      lookupOptions={options.lookup}
+      /*
+        Peringatan dirakit di sini, bukan di dalam KaryawanClient: keduanya
+        lahir dari hasil baca di server, dan menyalurkannya sebagai ReactNode
+        membuat halaman ini tetap satu-satunya yang tahu soal PostgREST dan
+        IncompleteReadError. Yang diterima KaryawanClient cuma "ada yang perlu
+        ditampilkan di atas daftar".
+      */
+      peringatan={
+        <>
+          <DaftarTerpotongAlert
+            daftar={options.terpotong}
+            judul="Pilihan filter belum lengkap."
+            keterangan={`Ada pilihan yang tidak muncul di daftar filter — dan ${TERMS.karyawan} yang seharusnya ketemu lewat pilihan itu ikut tidak terlihat. Pakai kotak pencarian dulu, dan laporkan ini supaya batasnya dinaikkan.`}
+          />
 
-      <DaftarTerpotongAlert
-        daftar={options.terpotong}
-        judul="Pilihan filter belum lengkap."
-        keterangan={`Ada pilihan yang tidak muncul di daftar filter — dan ${TERMS.karyawan} yang seharusnya ketemu lewat pilihan itu ikut tidak terlihat. Pakai kotak pencarian dulu, dan laporkan ini supaya batasnya dinaikkan.`}
-      />
-
-      {galatHierarki ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
-        >
-          <p className="font-medium">
-            Filter {TERMS.unitOrganisasi} tidak bisa diterapkan.
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            {galatHierarki} Hilangkan centang &laquo;Termasuk{" "}
-            {TERMS.unitOrganisasi} di bawahnya&raquo; untuk menyaring satu unit
-            saja, atau bersihkan filternya.
-          </p>
-        </div>
-      ) : null}
-
-      <KaryawanClient
-        rows={toKaryawanRows(daftar?.rows ?? [])}
-        // Tanpa ini tabelnya berkata "tidak ada yang cocok" untuk sebuah query
-        // yang tidak pernah dijalankan — persis kebalikan dari yang diceritakan
-        // peringatan di atasnya.
-        pesanKosong={
-          galatHierarki
-            ? `Daftar ${TERMS.karyawan} tidak dimuat karena filter di atas gagal diterapkan.`
-            : undefined
-        }
-        filters={filters}
-        page={daftar?.page ?? filters.page}
-        perPage={daftar?.perPage ?? KARYAWAN_PER_PAGE}
-        total={daftar?.total ?? 0}
-        isAdmin={user.role === "admin"}
-        unitOptions={options.orgUnit}
-        jabatanOptions={options.jabatan}
-        lookupOptions={options.lookup}
-      />
-    </div>
+          {galatHierarki ? (
+            <div
+              role="alert"
+              className="hc-permukaan rounded-kartu border border-destructive/40 bg-destructive/5 p-4 text-pendukung"
+            >
+              <p className="text-label text-foreground">
+                Filter {TERMS.unitOrganisasi} tidak bisa diterapkan.
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {galatHierarki} Hilangkan centang &laquo;Termasuk{" "}
+                {TERMS.unitOrganisasi} di bawahnya&raquo; untuk menyaring satu
+                unit saja, atau bersihkan filternya.
+              </p>
+            </div>
+          ) : null}
+        </>
+      }
+    />
   );
 }
 
-/**
- * One page of Karyawan, with the two ways a page number can be wrong handled.
- *
- * A filtered URL is meant to be shared and bookmarked (that is the whole point
- * of keeping filters in the URL), so `?page=12` outlives the result set that
- * made twelve pages. PostgREST answers an offset past the end either with an
- * empty page or with `PGRST103`; neither is something to show a person. Both
- * land on the last page that exists instead, and at most one extra query.
- *
- * `IncompleteReadError` is the other failure and a different kind: filtering by
- * a Unit Organisasi *including its children* reads the hierarchy first, and
- * `getOrgUnitDescendantIds()` throws rather than hand back half of it — half a
- * subtree is not a smaller company, it is a wrong one. That is the right call
- * there and the wrong page to die on: the filter bar still works and changing
- * the filter is the way out, so the message is returned and rendered above the
- * table rather than thrown at `error.tsx`.
- */
 async function ambilKaryawan(
   client: DbClient,
   filters: KaryawanFilters,
