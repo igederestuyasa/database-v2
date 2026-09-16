@@ -81,8 +81,9 @@ export function requireServiceRoleKey(): string {
 }
 
 /**
- * The office email domain. Must match `app.allowed_email_domain` on the
- * database — the `handle_new_user()` trigger is the real gate, this only
+ * The office email domain. Must match what `handle_new_user()` enforces on the
+ * database (`app.allowed_email_domain` when set, else its literal fallback —
+ * on Supabase always the latter) — that trigger is the real gate, this only
  * decides what the UI says (PRD #21). Never `NEXT_PUBLIC_`: the login page
  * reads it here and passes it to the form as a prop.
  */

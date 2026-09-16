@@ -259,15 +259,21 @@ yang dipakai — semuanya lewat layar web keduanya.
    jalan atau belum. Harus lewat SQL Editor, bukan dari aplikasi: file pertama
    memasang penjaga di tabel pengguna Supabase, dan hanya SQL Editor yang punya
    izin untuk itu.
-3. Masih di SQL Editor, jalankan satu baris ini supaya database tahu domain
-   email kantor:
+3. Domain email kantor **sudah tertanam** di file pertama: fungsi
+   `handle_new_user` di `0001_init.sql` memakai `hutamakarya.com` kalau tidak
+   ada pengaturan lain. **Tidak ada yang perlu dijalankan** di langkah ini.
+   Versi lama panduan ini menyuruh menjalankan
+   `alter database postgres set app.allowed_email_domain = …`; di Supabase
+   perintah itu ditolak dengan `42501: permission denied to set parameter`,
+   karena akun `postgres` di sana bukan superuser. Aplikasi tidak
+   membutuhkannya — kalau pesan itu muncul, abaikan dan lanjut ke langkah 4.
 
-   ```sql
-   alter database postgres set app.allowed_email_domain = 'hutamakarya.com';
-   ```
-
-   Nilainya harus **sama persis** dengan `ALLOWED_EMAIL_DOMAIN` di langkah
-   Vercel. Kalau lupa, database memakai `hutamakarya.com` sebagai bawaan.
+   Kalau domain kantornya **bukan** `hutamakarya.com`, ganti di tiga tempat
+   dan pastikan ketiganya **sama persis**: kata `hutamakarya.com` di dalam
+   fungsi `handle_new_user` pada `0001_init.sql` (lalu tempel ulang file itu;
+   aman dijalankan ulang), `DEFAULT_ALLOWED_EMAIL_DOMAIN` di
+   `lib/auth/domain.ts` (`npm test` menolak kalau keduanya berbeda), dan
+   `ALLOWED_EMAIL_DOMAIN` di langkah 6.
 4. Buka **Authentication**:
    - **URL Configuration → Site URL**: alamat aplikasi di Vercel, misalnya
      `https://hc-core.vercel.app`.
