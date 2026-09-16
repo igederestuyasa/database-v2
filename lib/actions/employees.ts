@@ -43,6 +43,7 @@ import {
   getEmployeeRowById,
   isNipTaken,
   isPersonnelNumberTaken,
+  listEmployees,
 } from "@/lib/db/employees";
 import { DbError, type DbClient } from "@/lib/db/shared";
 import type { Employee, EmployeePrivate } from "@/lib/types/db";
@@ -60,10 +61,19 @@ import {
 } from "@/lib/validation/employee";
 
 import {
+  MAKS_SARAN,
+  MIN_HURUF_SARAN,
+  type SaranKaryawan,
+} from "@/lib/karyawan/saran";
+import { logError } from "@/lib/log";
+
+import {
+  actionFail,
   actionInvalid,
   actionOk,
   ActionError,
   requireAdmin,
+  requireUser,
   toActionFailure,
   type ActionResult,
 } from "./_guard";
@@ -100,7 +110,8 @@ const KARYAWAN_DB: DbErrorContext = {
     {
       cocok: "nip",
       field: "nip",
-      message: "NIP itu baru saja dipakai Karyawan lain. Muat ulang halaman, lalu pakai NIP lain.",
+      message:
+        "NIP itu baru saja dipakai Karyawan lain. Muat ulang halaman, lalu pakai NIP lain.",
       fieldMessage: "NIP ini sudah dipakai.",
     },
   ],
@@ -669,7 +680,8 @@ export async function updateEmployeePrivate(
           .select(RETURNING_PRIVATE)
           .single();
 
-    if (error) throw new DbError("Gagal menyimpan Data Pribadi Sensitif", error);
+    if (error)
+      throw new DbError("Gagal menyimpan Data Pribadi Sensitif", error);
 
     revalidateEmployeePages(id);
     return actionOk(ringkasPrivate(data));
@@ -699,7 +711,9 @@ async function guardKunciBisnis(
 ): Promise<void> {
   const [personnelTaken, nipTaken] = await Promise.all([
     isPersonnelNumberTaken(client, personnelNumber, exceptId ?? undefined),
-    nip ? isNipTaken(client, nip, exceptId ?? undefined) : Promise.resolve(false),
+    nip
+      ? isNipTaken(client, nip, exceptId ?? undefined)
+      : Promise.resolve(false),
   ]);
 
   if (personnelTaken) {
@@ -716,5 +730,79 @@ async function guardKunciBisnis(
       `NIP "${nip}" sudah dipakai Karyawan lain.`,
       { nip: "NIP ini sudah dipakai." },
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Baca: saran pencarian
+// ---------------------------------------------------------------------------
+
+const saranSchema = z.object({
+  q: z
+    .string({ error: "Kata kunci harus berupa teks." })
+    .trim()
+    .max(120, { error: "Kata kunci terlalu panjang." }),
+});
+
+/**
+ * Nama-nama yang cocok dengan yang sedang diketik (PRD #2).
+ *
+ * Kenapa ini ada: pencarian Karyawan disaring di SERVER, jadi sampai Enter
+ * ditekan layar masih memperlihatkan hasil kata kunci sebelumnya. Orang yang
+ * cuma ingat "apri" tidak punya cara tahu apakah yang dicarinya Aprilia,
+ * Apriliani, atau Aprianto tanpa menjalankan pencarian dan membaca tabelnya.
+ * Action ini yang menjawab itu sambil ia mengetik.
+ *
+ * `requireUser()`, bukan `requireAdmin()`: daftar Karyawan memang boleh dibaca
+ * viewer (PRD #2, #21), dan RLS yang memutuskan barisnya — action ini tidak
+ * melonggarkan apa pun yang tidak sudah boleh dibaca lewat tabelnya.
+ *
+ * Status `"semua"`, bukan `"aktif"`: orang yang sudah keluar tetap dicari
+ * (justru sering), dan menyembunyikannya di sini membuat saran berbohong
+ * tentang apa yang ada di database. Yang nonaktif dibawa statusnya supaya
+ * bisa ditandai di layar.
+ *
+ * Kata kunci yang lebih pendek dari `MIN_HURUF_SARAN` dijawab daftar kosong,
+ * bukan error: itu keadaan normal saat orang baru mulai mengetik.
+ */
+export async function cariSaranKaryawan(input: {
+  q: string;
+}): Promise<ActionResult<{ saran: SaranKaryawan[]; total: number }>> {
+  const parsed = saranSchema.safeParse(input);
+  if (!parsed.success) return actionInvalid(parsed.error);
+
+  const q = parsed.data.q;
+  if (q.length < MIN_HURUF_SARAN) return actionOk({ saran: [], total: 0 });
+
+  try {
+    const { client } = await requireUser();
+    const { rows, total } = await listEmployees(client, {
+      search: q,
+      status: "semua",
+      perPage: MAKS_SARAN,
+    });
+
+    return actionOk({
+      saran: rows.map((row) => ({
+        id: row.id,
+        nama: row.full_name,
+        personnelNumber: row.personnel_number,
+        keterangan:
+          [row.org_unit_nama, row.jabatan_nama]
+            .filter(
+              (bagian): bagian is string =>
+                typeof bagian === "string" && bagian !== "",
+            )
+            .join(" · ") || null,
+        status: row.status === "nonaktif" ? "nonaktif" : "aktif",
+      })),
+      total,
+    });
+  } catch (error) {
+    if (error instanceof DbError) {
+      logError("karyawan", error, { aksi: "cariSaranKaryawan" });
+      return actionFail("GAGAL", "Saran nama gagal dimuat.");
+    }
+    return toActionFailure(error);
   }
 }

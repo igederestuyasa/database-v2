@@ -31,10 +31,10 @@ app/(auth)/login · app/(app)/{karyawan,struktur,jabatan,master-data,bereskan,lo
 app/(app)/{karyawan,struktur,jabatan,master-data}/[id] — halaman detail + Riwayat Revisi (PRD #14)
 app/(app)/_lib — helper sisi server lintas halaman (jangan di-import Client Component)
 app/api/v1/{employees,org-units,jabatan,lookups}
-lib/{supabase,db,actions,revisions,cleaning,api,derived,validation,seed}
+lib/{supabase,db,actions,revisions,cleaning,api,derived,validation,seed,karyawan}
 components/ · scripts/seed-from-excel.ts · supabase/migrations/ · docs/adr/
 ```
-Satu konvensi untuk `app/`: folder route hanya berisi file konvensi Next (`page`, `layout`, `loading`, `error`, `route`). Komponen dan helper murni yang dipakai satu route saja → `_components/` di route itu; helper sisi server satu route (yang mengimpor `lib/db`) → `_lib/` di route itu; yang dipakai dua route atau lebih → `components/` atau `lib/`. **Semua** Server Action di `lib/actions/`, termasuk login (`auth.ts`). `lib/` tidak pernah mengimpor dari `components/` atau `app/`; pemetaan baris → opsi picker ada di `lib/entityOptions.ts`, pilihan Data Referensi untuk picker di `lib/db/referenceOptions.ts`. `lib/db/**` boleh ditambah fungsi baca baru; tiga aturannya di `lib/db/shared.ts` tetap.
+Satu konvensi untuk `app/`: folder route hanya berisi file konvensi Next (`page`, `layout`, `loading`, `error`, `route`). Komponen dan helper murni yang dipakai satu route saja → `_components/` di route itu; helper sisi server satu route (yang mengimpor `lib/db`) → `_lib/` di route itu; yang dipakai dua route atau lebih → `components/` atau `lib/`. **Semua** Server Action di `lib/actions/`, termasuk login (`auth.ts`). `lib/` tidak pernah mengimpor dari `components/` atau `app/`; pemetaan baris → opsi picker ada di `lib/entityOptions.ts`, pilihan Data Referensi untuk picker di `lib/db/referenceOptions.ts`. `lib/db/**` boleh ditambah fungsi baca baru; tiga aturannya di `lib/db/shared.ts` tetap. Berkas ber-`"use server"` **hanya boleh mengekspor fungsi async** — sebuah `export const` di sana menggagalkan `npm run build` dengan "Only async functions are allowed to be exported", dan lint, typecheck, serta `npm test` semuanya tetap hijau. Konstanta dan tipe yang dipakai bersama Server Action dan Client Component-nya tinggal di modul murni `lib/` (contohnya `lib/karyawan/saran.ts`).
 
 ## Aturan
 - UI: semua perubahan tampilan mengikuti docs/DESIGN.md (sistem HC Panel).
