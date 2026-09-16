@@ -208,6 +208,41 @@ describe("pemetaan header → kolom", () => {
     expect(targetOf("Tanggal Lahir")).toEqual({ kind: "private_date" });
   });
 
+  it("Nama kosong: salah untuk orang baru, sah untuk yang sudah ada", () => {
+    // Bentuk file yang dikirim admin untuk mengisi email seluruh perusahaan:
+    // Personnel Number + Email, kolom Nama dibiarkan kosong (PRD #24).
+    const berkas = sheet(
+      ["Personnel Number", "Nama", "Email Kantor"],
+      ["90000001", null, "sudah.ada@contoh.test"],
+      ["90000002", null, "orang.baru@contoh.test"],
+    );
+
+    // Tanpa daftar yang sudah ada — perilaku Seed — keduanya ditolak, dan
+    // karena tidak ada baris yang tersisa, berkasnya jadi tidak memuat
+    // Karyawan sama sekali.
+    const seed = planSeed(berkas);
+    expect(errorsOf(seed).map((i) => i.kode)).toEqual([
+      "nama_kosong",
+      "nama_kosong",
+      "tidak_ada_karyawan",
+    ]);
+
+    // Dengan daftarnya, yang sudah terdaftar lolos dan namanya dibiarkan null
+    // ("jangan sentuh"); yang belum terdaftar tetap ditolak.
+    const impor = planSeed(berkas, {
+      personnelNumberSudahAda: new Set(["90000001"]),
+    });
+    const galat = errorsOf(impor);
+    expect(galat).toHaveLength(1);
+    expect(galat[0].kode).toBe("nama_kosong");
+    expect(galat[0].pesan).toContain("90000002");
+
+    expect(impor.employees).toHaveLength(1);
+    expect(impor.employees[0].personnel_number).toBe("90000001");
+    expect(impor.employees[0].full_name).toBeNull();
+    expect(impor.employees[0].text.email_kantor).toBe("sudah.ada@contoh.test");
+  });
+
   it("Email dalam ejaan apa pun mendarat di email_kantor", () => {
     // Workbook HC sumber tidak punya kolom email sama sekali — kolomnya lahir
     // belakangan — jadi yang akan diunggah adalah template ini atau export

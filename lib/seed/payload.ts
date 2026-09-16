@@ -95,7 +95,7 @@ export type SeedPayloadPrivate = {
 export type SeedPayloadEmployee = {
   personnel_number: string;
   nip: string | null;
-  full_name: string;
+  full_name: string | null;
   status: "aktif" | "nonaktif";
   /** Index into `org_units`, or null (Temuan "karyawan tanpa unit"). */
   org: number | null;
@@ -303,7 +303,10 @@ const lkSchema = z.object(
 const employeeSchema = z.object({
   personnel_number: teks("Personnel Number"),
   nip: teksOpsional("NIP"),
-  full_name: teks("Nama"),
+  // Boleh null: baris yang memperbarui Karyawan yang sudah ada tidak perlu
+  // mengetik ulang namanya (PRD #24). `import_from_payload()` mengisinya dari
+  // baris lama, dan menolak baris BARU yang namanya kosong.
+  full_name: teksOpsional("Nama"),
   status: z.enum(["aktif", "nonaktif"], { error: "Status harus aktif atau nonaktif." }),
   org: indeks("Unit Organisasi").nullable(),
   jab: indeks("Jabatan").nullable(),

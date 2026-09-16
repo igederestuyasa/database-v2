@@ -115,7 +115,11 @@ export function buildTemplateRows(): unknown[][] {
         // tentu dibuka orang yang sedang mengisi kolomnya.
         "Email Kantor boleh dikosongkan, tapi satu alamat hanya boleh milik satu orang: " +
         "kalau ada alamat kembar, seluruh impor dibatalkan dan tidak ada yang tertulis. " +
-        "Isi email KANTOR, bukan email pribadi — kolom ini terbaca aplikasi lain lewat API.",
+        "Isi email KANTOR, bukan email pribadi — kolom ini terbaca aplikasi lain lewat API. " +
+        // Aturan yang paling sering salah dikira: untuk MEMPERBARUI orang yang
+        // sudah ada, file cukup memuat Personnel Number dan kolom yang berubah.
+        "Untuk MEMPERBARUI orang yang sudah ada, isi Personnel Number dan kolom yang ingin diubah saja — " +
+        "kolom Nama pun boleh dikosongkan. Nama hanya wajib untuk Personnel Number yang BELUM ada di database.",
     ],
   ];
   // Persis `HEADER_ROW - 1` baris judul: `buildTemplateRows` menaruh header di

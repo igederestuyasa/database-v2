@@ -1344,6 +1344,23 @@ begin
       using errcode = '22023';
   end if;
 
+  -- Karyawan BARU wajib punya Nama. Yang SUDAH ADA tidak: file yang cuma
+  -- berisi Personnel Number dan Email Kantor adalah pemakaian yang paling
+  -- wajar dari "sel kosong tidak menghapus apa pun" (PRD #24), dan namanya
+  -- sudah ada di database. Dicek di sini supaya pesannya menyebut sebabnya,
+  -- bukan jatuh ke NOT NULL constraint yang cuma menyebut nama kolom.
+  select count(*) into v_n
+    from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+   where nullif(btrim(e.elem ->> 'full_name'), '') is null
+     and not exists (
+       select 1 from public.employees emp
+        where emp.personnel_number = e.elem ->> 'personnel_number'
+     );
+  if v_n > 0 then
+    raise exception 'Ada % baris tanpa Nama yang Personnel Number-nya belum ada di database. Karyawan baru wajib punya Nama; kolom Nama hanya boleh dikosongkan untuk memperbarui orang yang sudah ada.', v_n
+      using errcode = '22023';
+  end if;
+
   -- 2. Satu impor pada satu waktu. Dua admin yang meng-upload bersamaan akan
   --    saling menunggu, bukan saling menimpa.
   perform pg_advisory_xact_lock(hashtext('public.import_from_payload'));
@@ -1435,7 +1452,12 @@ begin
     select
       e.elem ->> 'personnel_number' as personnel_number,
       e.elem ->> 'nip'              as nip,
-      e.elem ->> 'full_name'        as full_name,
+      -- Nama kosong TIDAK boleh sampai ke tuple INSERT: `employees.full_name`
+      -- NOT NULL, dan Postgres memeriksa constraint itu saat tuple dibentuk —
+      -- sebelum `on conflict` sempat mengalihkan barisnya ke DO UPDATE. Jadi
+      -- baris yang memperbarui orang yang sudah ada mengambil nama lamanya di
+      -- sini, dan `coalesce` di DO UPDATE membuatnya tetap tidak berubah.
+      coalesce(nullif(btrim(e.elem ->> 'full_name'), ''), lama.full_name) as full_name,
       -- Email disimpan huruf kecil. Index uniknya `lower(email_kantor)`, jadi
       -- "Budi.S@…" dan "budi.s@…" sudah dianggap satu; menyimpan apa adanya
       -- cuma membuat dua baris terlihat berbeda padahal database menolaknya
@@ -1469,6 +1491,8 @@ begin
       (e.elem -> 'dates' ->> 'tanggal_keluar')::date      as tanggal_keluar,
       e.ord as ord
     from jsonb_array_elements(p_payload -> 'employees') with ordinality as e(elem, ord)
+    left join public.employees lama
+      on lama.personnel_number = e.elem ->> 'personnel_number'
   )
   insert into public.employees (
     personnel_number, nip, full_name, email_kantor, status,

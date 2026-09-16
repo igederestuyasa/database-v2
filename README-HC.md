@@ -384,6 +384,12 @@ ada karyawan baru atau perubahan massal.
   File berisi tiga kolom tidak akan mengosongkan kolom-kolom lain. Untuk
   benar-benar mengosongkan sebuah kolom, pakai tombol **Ubah** di halaman
   Karyawan orang itu.
+- **Memperbarui orang yang sudah ada? Isi Personnel Number dan kolom yang
+  berubah saja — kolom Nama pun boleh dikosongkan.** Namanya sudah ada di
+  database dan tidak akan tersentuh. Nama hanya **wajib** untuk Personnel
+  Number yang belum ada di database, karena Karyawan baru harus punya nama.
+  Jadi untuk mengisi email seluruh perusahaan, cukup dua kolom: Personnel
+  Number dan Email Kantor.
 - **Nama kolom yang menentukan, bukan urutannya.** Kolom boleh digeser,
   dibuang, atau ditambah. Yang tidak boleh salah adalah nama di baris header.
 - **Email Kantor boleh ikut diimpor.** Template punya kolomnya, dan judul

@@ -427,6 +427,81 @@ describe.skipIf(client === null)("import_from_payload() terhadap Postgres lokal"
     }
   });
 
+  it("baris tanpa Nama memperbarui Karyawan yang sudah ada tanpa menyentuh namanya", async () => {
+    const db = client as Client;
+    const payload = payloadDummy(10);
+    const pn = payload.employees[0].personnel_number;
+
+    await db.query("begin");
+    try {
+      await impor(db, payload);
+      const {
+        rows: [awal],
+      } = await db.query<{ full_name: string }>(
+        "select full_name from public.employees where personnel_number = $1",
+        [pn],
+      );
+
+      // Persis bentuk file yang dikirim admin untuk mengisi email seluruh
+      // perusahaan: Personnel Number + Email Kantor, kolom Nama dikosongkan.
+      const susulan: SeedPayload = {
+        ...payload,
+        employees: [
+          {
+            ...payload.employees[0],
+            full_name: null,
+            text: { email_kantor: "menyusul@contoh.test" },
+          },
+        ],
+      };
+      const res = await impor(db, susulan);
+
+      expect(res.karyawan_baru).toBe(0);
+      expect(res.karyawan_diperbarui).toBe(1);
+
+      const {
+        rows: [sesudah],
+      } = await db.query<{ full_name: string; email_kantor: string | null }>(
+        "select full_name, email_kantor from public.employees where personnel_number = $1",
+        [pn],
+      );
+      expect(sesudah.full_name).toBe(awal.full_name);
+      expect(sesudah.email_kantor).toBe("menyusul@contoh.test");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
+  it("baris tanpa Nama yang Personnel Number-nya BARU ditolak (22023)", async () => {
+    const db = client as Client;
+    const payload = payloadDummy(10);
+
+    await db.query("begin");
+    try {
+      await impor(db, payload);
+
+      // NOT NULL pada employees.full_name akan menolak ini juga, tapi dengan
+      // pesan yang cuma menyebut nama kolom. Yang dipatok di sini justru
+      // pra-ceknya: 22023, sebelum Batch dibuka.
+      const kode = await kodeGagal(db, () =>
+        impor(db, {
+          ...payload,
+          employees: [
+            {
+              ...payload.employees[0],
+              personnel_number: "90888777",
+              nip: null,
+              full_name: null,
+            },
+          ],
+        }),
+      );
+      expect(kode).toBe("22023");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
   it("viewer ditolak (42501) — assert_admin, bukan RLS saja", async () => {
     const db = client as Client;
     const payload = payloadDummy(5);
