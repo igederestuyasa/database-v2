@@ -801,7 +801,11 @@ export type PlannedEmployee = {
   baris: number;
   personnel_number: string;
   nip: string | null;
-  full_name: string;
+  /**
+   * `null` hanya boleh untuk Karyawan yang sudah ada — artinya "jangan sentuh
+   * namanya". Untuk orang baru `planSeed()` menolak barisnya lebih dulu.
+   */
+  full_name: string | null;
   status: "aktif" | "nonaktif";
   /** Lowest Unit Organisasi in this row's chain (ARCHITECTURE.md §3). */
   orgUnitKey: string | null;
@@ -840,6 +844,20 @@ export type PlanSeedOptions = {
   headerRowNumber?: number;
   /** `wb.Workbook?.WBProps?.date1904`. */
   date1904?: boolean;
+  /**
+   * Personnel Number yang SUDAH ADA di database.
+   *
+   * Dipakai untuk satu hal saja: memutuskan apakah sebuah baris tanpa Nama
+   * adalah kesalahan. Untuk orang BARU ia memang kesalahan — `employees`
+   * menolak nama kosong, dan orang tanpa nama tidak bisa dikenali siapa pun.
+   * Untuk orang yang SUDAH ADA, namanya ada di database dan file ini sedang
+   * memperbarui kolom lain; menuntutnya diketik ulang memaksa admin menyalin
+   * 1.475 nama hanya untuk mengisi satu kolom email.
+   *
+   * Kosong (default) berarti "anggap semua baris baru", yaitu perilaku Seed:
+   * skrip CLI tidak menyetel ini dan tetap mewajibkan Nama.
+   */
+  personnelNumberSudahAda?: ReadonlySet<string>;
 };
 
 const ORG_LEVEL_ORDER: readonly OrgLevel[] = [
@@ -871,6 +889,7 @@ export function planSeed(
 ): SeedPlan {
   const headerRowNumber = options.headerRowNumber ?? HEADER_ROW;
   const date1904 = options.date1904 ?? false;
+  const sudahAda = options.personnelNumberSudahAda;
 
   const headerCells = rows[headerRowNumber - 1] ?? [];
   const headerPlan = buildHeaderPlan(headerCells);
@@ -966,12 +985,24 @@ export function planSeed(
       });
       return;
     }
-    if (fullName === null) {
+    /*
+      NAMA KOSONG HANYA SALAH UNTUK ORANG BARU.
+
+      Impor boleh diulang di atas data yang sudah ada (PRD #24), dan janji
+      utamanya adalah "sel yang dikosongkan tidak menghapus apa pun". Sebuah
+      file yang cuma berisi Personnel Number dan Email Kantor adalah pemakaian
+      yang paling wajar dari janji itu — dan dulu ia ditolak dengan satu error
+      per baris, menyuruh admin menyalin ulang 1.475 nama yang tidak ia ubah.
+
+      Untuk orang BARU nama tetap wajib: `employees.full_name` NOT NULL, dan
+      baris tanpa nama tidak bisa dikenali siapa pun sesudahnya.
+    */
+    if (fullName === null && !sudahAda?.has(personnelNumber)) {
       issues.push({
         level: "error",
         baris,
         kode: "nama_kosong",
-        pesan: `Baris ${baris} (Personnel Number ${personnelNumber}) tidak punya Nama.`,
+        pesan: `Baris ${baris} (Personnel Number ${personnelNumber}) tidak punya Nama, dan nomor ini belum ada di database — Karyawan baru wajib punya Nama. Untuk memperbarui orang yang sudah ada, kolom Nama boleh dibiarkan kosong.`,
       });
       return;
     }

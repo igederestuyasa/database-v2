@@ -71,6 +71,8 @@ type Bacaan = {
 async function bacaRencana(
   workbook: WorkBook,
   sheetName: string,
+  /** Personnel Number yang sudah ada — lihat `PlanSeedOptions`. */
+  sudahAda: ReadonlySet<string>,
 ): Promise<SeedPlan> {
   const XLSX = await import("xlsx");
   const sheet = workbook.Sheets[sheetName];
@@ -83,6 +85,9 @@ async function bacaRencana(
   return planSeed(rows, {
     headerRowNumber: HEADER_ROW,
     date1904: workbook.Workbook?.WBProps?.date1904 === true,
+    // Tanpa ini setiap baris dianggap Karyawan baru, dan file yang cuma
+    // memperbarui email ditolak karena kolom Nama-nya kosong (PRD #24).
+    personnelNumberSudahAda: sudahAda,
   });
 }
 
@@ -124,7 +129,7 @@ export default function ImporWizard({
 
   const terapkanSheet = React.useCallback(
     async (workbook: WorkBook, sheetName: string, namaFile: string) => {
-      const rencana = await bacaRencana(workbook, sheetName);
+      const rencana = await bacaRencana(workbook, sheetName, sudahAda);
       setPlan(rencana);
       setRingkasan(ringkasSeedPlan(rencana));
       setKeterangan(keteranganDefault(namaFile));
@@ -132,7 +137,7 @@ export default function ImporWizard({
       setKegagalan(null);
       setStep("pratinjau");
     },
-    [],
+    [sudahAda],
   );
 
   const onFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,7 +306,7 @@ export default function ImporWizard({
               GAGAL — {ringkasan.error.length} masalah yang harus dibereskan di
               Excel dulu. Tidak ada yang akan ditulis.
             </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 font-mono text-mikro font-normal">
+            <ul className="mt-2 max-h-80 list-disc space-y-1 overflow-y-auto pl-5 font-mono text-mikro font-normal">
               {ringkasan.error.map((issue, i) => (
                 <li key={`${issue.kode}-${issue.baris ?? "berkas"}-${i}`}>
                   {baristIssue(issue)}

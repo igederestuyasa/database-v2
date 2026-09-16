@@ -142,9 +142,9 @@ jobs:
           # berkas memakai `describe.skipIf(client === null)`, jadi tanpa
           # database yang bisa dihubungi mereka MELEWATI diri sendiri dan
           # vitest tetap melaporkan "3 passed". Angka inilah yang membedakan
-          # "14 test berjalan" dari "14 test dilewati diam-diam".
+          # "16 test berjalan" dari "16 test dilewati diam-diam".
           #
           # Menambah test ber-database berarti menaikkan angka ini. Kalau job
           # ini merah padahal daftar test di atasnya hijau semua, itu yang
           # terjadi — cocokkan angkanya, jangan longgarkan polanya.
-          grep -qE "Tests.*14 passed.*\(14\)" sql-test.log
+          grep -qE "Tests.*16 passed.*\(16\)" sql-test.log

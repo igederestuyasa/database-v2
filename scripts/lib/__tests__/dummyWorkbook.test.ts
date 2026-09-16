@@ -77,7 +77,12 @@ describe("workbook dummy", () => {
   it("tidak memuat data Karyawan sungguhan — semua nama karangan", () => {
     const belakang = ["Contoh", "Misal", "Percobaan", "Sampel", "Uji", "Tiruan", "Fiktif", "Dummy"];
     for (const employee of PLAN.employees) {
-      expect(belakang.some((akhiran) => employee.full_name.endsWith(akhiran))).toBe(true);
+      // Sekalian mematok arah sebaliknya: `full_name` boleh null hanya untuk
+      // baris yang memperbarui Karyawan yang sudah ada (PRD #24), dan jalur
+      // Seed — yang tidak menyetel `personnelNumberSudahAda` — tidak pernah
+      // menghasilkannya.
+      expect(employee.full_name).not.toBeNull();
+      expect(belakang.some((akhiran) => employee.full_name?.endsWith(akhiran))).toBe(true);
       expect(Number(employee.personnel_number)).toBeGreaterThanOrEqual(90_000_000);
     }
   });
