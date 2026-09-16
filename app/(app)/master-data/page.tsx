@@ -9,12 +9,10 @@ import type { Lookup } from "@/lib/types/db";
 import {
   isLookupType,
   LOOKUP_TYPES,
-  LOOKUP_TYPE_LABELS,
   type LookupType,
 } from "@/lib/validation/lookupTypes";
 
 import LookupTable, { type MasterDataRow } from "./_components/LookupTable";
-import LookupTypeTabs from "./_components/LookupTypeTabs";
 
 // Live data only — never prerendered at build time. See ADR-005.
 export const dynamic = "force-dynamic";
@@ -57,42 +55,21 @@ export default async function Page({
   const rows = toRows(grouped.byType[tipe]);
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {NAV_LABELS["master-data"]}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Daftar pilihan berkode yang dirujuk {TERMS.karyawan} lewat ID: setiap{" "}
-          {TERMS.lookup} punya kode yang tetap dan label yang boleh berubah.
-          Mengganti label di sini langsung terbaca di seluruh aplikasi — tidak
-          ada data {TERMS.karyawan} yang ikut diubah.
-        </p>
-      </header>
-
-      <DaftarTerpotongAlert
-        daftar={terpotongDari(TERMS.lookup, grouped)}
-        keterangan={`Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan memakainya untuk memutuskan ${TERMS.merge}.`}
-      />
-
-      <LookupTypeTabs active={tipe} counts={counts} />
-
-      <section aria-label={`Daftar ${LOOKUP_TYPE_LABELS[tipe]}`} className="space-y-3">
-        <h2 className="text-lg font-medium">{LOOKUP_TYPE_LABELS[tipe]}</h2>
-        <LookupTable tipe={tipe} rows={rows} isAdmin={user.role === "admin"} />
-      </section>
-    </div>
+    <LookupTable
+      tipe={tipe}
+      rows={rows}
+      isAdmin={user.role === "admin"}
+      jumlahPerTipe={counts}
+      peringatan={
+        <DaftarTerpotongAlert
+          daftar={terpotongDari(TERMS.lookup, grouped)}
+          keterangan={`Jumlah di setiap tab dan isi tabel di bawah ikut belum lengkap — jangan memakainya untuk memutuskan ${TERMS.merge}.`}
+        />
+      }
+    />
   );
 }
 
-/**
- * `lookups` rows → what the table renders.
- *
- * The one piece of work here is resolving `merged_into_id` to a label: a
- * nonaktif row that says "Digabungkan ke «Pratama III - 13»" explains itself,
- * where a bare uuid explains nothing. Both halves of a Merge share a tipe, so
- * the target is always in the same list.
- */
 function toRows(rows: readonly Lookup[]): MasterDataRow[] {
   const labelById = new Map(rows.map((row) => [row.id, row.label]));
 
