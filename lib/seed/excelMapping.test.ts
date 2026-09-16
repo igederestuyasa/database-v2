@@ -243,6 +243,43 @@ describe("pemetaan header → kolom", () => {
     expect(impor.employees[0].text.email_kantor).toBe("sudah.ada@contoh.test");
   });
 
+  it("Unit & Jabatan kosong tidak diperingatkan untuk Karyawan yang sudah ada", () => {
+    // File yang cuma mengisi email meninggalkan Unit dan Jabatan kosong. Untuk
+    // Seed itu Temuan sungguhan; untuk Impor sel kosong berarti "jangan
+    // sentuh", dan memperingatkannya menyatakan sesuatu yang TIDAK BENAR —
+    // dua peringatan per baris, 84 untuk 42 orang yang datanya baik-baik saja.
+    const berkas = sheet(
+      ["Personnel Number", "Nama", "Email Kantor"],
+      ["00000617", "Budi Contoh", "a@contoh.test"],
+      ["00002242", "Siti Contoh", "b@contoh.test"],
+    );
+
+    // Jalur Seed tidak berubah: dua baris, dua peringatan masing-masing.
+    expect(warningsOf(planSeed(berkas)).map((i) => i.kode)).toEqual([
+      "karyawan_tanpa_unit",
+      "karyawan_tanpa_jabatan",
+      "karyawan_tanpa_unit",
+      "karyawan_tanpa_jabatan",
+    ]);
+
+    // Keduanya sudah terdaftar → tidak ada yang perlu dikatakan.
+    expect(
+      warningsOf(
+        planSeed(berkas, {
+          personnelNumberSudahAda: new Set(["00000617", "00002242"]),
+        }),
+      ),
+    ).toEqual([]);
+
+    // Yang BELUM terdaftar tetap diperingatkan — di sana Karyawan memang
+    // dibuat tanpa unit, dan itu Temuan yang harus terlihat.
+    expect(
+      warningsOf(
+        planSeed(berkas, { personnelNumberSudahAda: new Set(["00000617"]) }),
+      ).map((i) => i.kode),
+    ).toEqual(["karyawan_tanpa_unit", "karyawan_tanpa_jabatan"]);
+  });
+
   it("Email dalam ejaan apa pun mendarat di email_kantor", () => {
     // Workbook HC sumber tidak punya kolom email sama sekali — kolomnya lahir
     // belakangan — jadi yang akan diunggah adalah template ini atau export
