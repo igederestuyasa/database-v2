@@ -99,6 +99,7 @@ export type EmployeeFormValues = {
   personnel_number: string;
   nip: string;
   full_name: string;
+  email_kantor: string;
   org_unit_id: string | null;
   jabatan_id: string | null;
   gender_id: string | null;
@@ -137,6 +138,7 @@ export const EMPLOYEE_FORM_FIELDS = [
   "personnel_number",
   "nip",
   "full_name",
+  "email_kantor",
   "org_unit_id",
   "jabatan_id",
   "gender_id",
@@ -190,6 +192,7 @@ export function nilaiAwalEmployeeForm(employee?: Employee): EmployeeFormValues {
     personnel_number: teks(employee?.personnel_number),
     nip: teks(employee?.nip),
     full_name: teks(employee?.full_name),
+    email_kantor: teks(employee?.email_kantor),
     org_unit_id: employee?.org_unit_id ?? null,
     jabatan_id: employee?.jabatan_id ?? null,
     gender_id: employee?.gender_id ?? null,
@@ -416,7 +419,9 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
             <CardDescription>
               {TERMS.personnelNumber} adalah kunci bisnis {TERMS.karyawan} —
               kode inilah yang dipakai {TERMS.konsumen} untuk merujuk seseorang.{" "}
-              {TERMS.nip} adalah kode kedua yang berbeda, dan boleh kosong.
+              {TERMS.nip} adalah kode kedua yang berbeda, dan boleh kosong. Email
+              kantor juga keluar lewat API, dan dipakai aplikasi lain untuk
+              mencocokkan orang ini dengan akunnya di sistem mereka.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2">
@@ -481,6 +486,33 @@ export function EmployeeForm({ mode, employee, options }: EmployeeFormProps) {
                       placeholder="mis. Budi Santoso"
                     />
                   </FormControl>
+                  <BidangPesan />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={control}
+              name="email_kantor"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <BidangLabel>Email Kantor</BidangLabel>
+                  <FormControl>
+                    <Input className={KELAS_ISIAN}
+                      {...field}
+                      type="email"
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="mis. budi.santoso@hutamakarya.com"
+                    />
+                  </FormControl>
+                  <BidangBantuan>
+                    Alamat email <strong>kantor</strong>, bukan email pribadi —
+                    kolom ini terbaca {TERMS.konsumen} lewat API, dan biasanya
+                    inilah yang dipakai aplikasi lain untuk mencocokkan orang
+                    ini dengan akun Microsoft-nya. Boleh kosong, tapi kalau
+                    diisi tidak boleh sama dengan milik {TERMS.karyawan} lain.
+                  </BidangBantuan>
                   <BidangPesan />
                 </FormItem>
               )}

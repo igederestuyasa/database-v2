@@ -8,6 +8,8 @@
  *   * `personnel_number` NOT NULL UNIQUE — the business key (CONTEXT.md).
  *   * `nip` UNIQUE but **nullable** — a second, different code; optional here.
  *   * `full_name` NOT NULL.
+ *   * `email_kantor` nullable, unique on `lower(…)` — the office address, and
+ *     the key other HC apps match a person by.
  *   * every `*_id` is a nullable uuid FK; the matching `lookups.tipe` is
  *     enforced by the `employees_validate_lookups` trigger, so a wrong-tipe id
  *     fails in the database even if it is a valid uuid.
@@ -23,6 +25,7 @@ import { z } from "zod";
 import {
   dateField,
   optionalDateField,
+  optionalEmailField,
   optionalText,
   optionalUuidField,
   requiredText,
@@ -35,6 +38,9 @@ export const employeeFieldsSchema = z.object({
   personnel_number: requiredText("Personnel Number", 64),
   nip: optionalText("NIP", 64),
   full_name: requiredText("Nama", 255),
+  // Email KANTOR. Bukan akun login HC Core (itu `profiles.email`), dan bukan
+  // email pribadi — yang itu Data Pribadi Sensitif dan tidak punya kolom.
+  email_kantor: optionalEmailField("Email Kantor", 255),
 
   org_unit_id: optionalUuidField("Unit Organisasi"),
   jabatan_id: optionalUuidField("Jabatan"),

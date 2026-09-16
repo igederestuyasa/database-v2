@@ -1327,6 +1327,23 @@ begin
       using errcode = '22023';
   end if;
 
+  -- Email kantor yang kembar DI DALAM file, dicek di sini dan bukan dibiarkan
+  -- jatuh ke index unik: `employees_email_kantor_lower_key` akan menolaknya
+  -- dengan pesan yang menyebut nama index, bukan alamat mana yang kembar.
+  -- Perbandingannya huruf kecil, sama dengan index-nya.
+  select count(*) into v_n
+    from (
+      select lower(btrim(e.elem -> 'text' ->> 'email_kantor')) as em
+        from jsonb_array_elements(p_payload -> 'employees') as e(elem)
+       where nullif(btrim(e.elem -> 'text' ->> 'email_kantor'), '') is not null
+       group by 1
+      having count(*) > 1
+    ) d;
+  if v_n > 0 then
+    raise exception 'Ada % alamat Email Kantor yang dipakai lebih dari satu orang di file ini. Satu alamat hanya boleh milik satu Karyawan.', v_n
+      using errcode = '22023';
+  end if;
+
   -- 2. Satu impor pada satu waktu. Dua admin yang meng-upload bersamaan akan
   --    saling menunggu, bukan saling menimpa.
   perform pg_advisory_xact_lock(hashtext('public.import_from_payload'));
@@ -1419,6 +1436,11 @@ begin
       e.elem ->> 'personnel_number' as personnel_number,
       e.elem ->> 'nip'              as nip,
       e.elem ->> 'full_name'        as full_name,
+      -- Email disimpan huruf kecil. Index uniknya `lower(email_kantor)`, jadi
+      -- "Budi.S@…" dan "budi.s@…" sudah dianggap satu; menyimpan apa adanya
+      -- cuma membuat dua baris terlihat berbeda padahal database menolaknya
+      -- sebagai kembar. Form Ubah Karyawan menormalkan dengan cara yang sama.
+      lower(nullif(btrim(e.elem -> 'text' ->> 'email_kantor'), '')) as email_kantor,
       coalesce(e.elem ->> 'status', 'aktif') as status,
       case when e.elem ->> 'org' is null then null else v_org_ids[(e.elem ->> 'org')::integer + 1] end as org_unit_id,
       case when e.elem ->> 'jab' is null then null else v_jab_ids[(e.elem ->> 'jab')::integer + 1] end as jabatan_id,
@@ -1449,7 +1471,7 @@ begin
     from jsonb_array_elements(p_payload -> 'employees') with ordinality as e(elem, ord)
   )
   insert into public.employees (
-    personnel_number, nip, full_name, status,
+    personnel_number, nip, full_name, email_kantor, status,
     org_unit_id, jabatan_id,
     gender_id, work_contract_id, person_grade_id, job_grade_id, legal_entity_id,
     klasifikasi_rekrutmen_id, teknik_non_teknik_id, bod_range_id, band_jabatan_id,
@@ -1459,7 +1481,7 @@ begin
     original_start_date, tanggal_diangkat, tanggal_promosi_pg, tanggal_promosi_jg, tanggal_keluar
   )
   select
-    m.personnel_number, m.nip, m.full_name, m.status,
+    m.personnel_number, m.nip, m.full_name, m.email_kantor, m.status,
     m.org_unit_id, m.jabatan_id,
     m.gender_id, m.work_contract_id, m.person_grade_id, m.job_grade_id, m.legal_entity_id,
     m.klasifikasi_rekrutmen_id, m.teknik_non_teknik_id, m.bod_range_id, m.band_jabatan_id,
@@ -1472,6 +1494,7 @@ begin
   on conflict (personnel_number) do update
      set nip                      = coalesce(excluded.nip,                      public.employees.nip),
          full_name                = coalesce(excluded.full_name,                public.employees.full_name),
+         email_kantor             = coalesce(excluded.email_kantor,             public.employees.email_kantor),
          status                   = coalesce(excluded.status,                   public.employees.status),
          org_unit_id              = coalesce(excluded.org_unit_id,              public.employees.org_unit_id),
          jabatan_id               = coalesce(excluded.jabatan_id,               public.employees.jabatan_id),
@@ -1499,7 +1522,8 @@ begin
          tanggal_promosi_jg       = coalesce(excluded.tanggal_promosi_jg,       public.employees.tanggal_promosi_jg),
          tanggal_keluar           = coalesce(excluded.tanggal_keluar,           public.employees.tanggal_keluar)
    where (
-           public.employees.nip, public.employees.full_name, public.employees.status,
+           public.employees.nip, public.employees.full_name,
+           public.employees.email_kantor, public.employees.status,
            public.employees.org_unit_id, public.employees.jabatan_id,
            public.employees.gender_id, public.employees.work_contract_id,
            public.employees.person_grade_id, public.employees.job_grade_id,
@@ -1518,6 +1542,7 @@ begin
          is distinct from (
            coalesce(excluded.nip,                      public.employees.nip),
            coalesce(excluded.full_name,                public.employees.full_name),
+           coalesce(excluded.email_kantor,             public.employees.email_kantor),
            coalesce(excluded.status,                   public.employees.status),
            coalesce(excluded.org_unit_id,              public.employees.org_unit_id),
            coalesce(excluded.jabatan_id,               public.employees.jabatan_id),

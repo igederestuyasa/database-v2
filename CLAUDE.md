@@ -68,6 +68,7 @@ Satu konvensi untuk `app/`: folder route hanya berisi file konvensi Next (`page`
 
 ## Konteks Penting
 - Business key karyawan = `personnel_number` (bukan `nip`); FK internal tetap `id` uuid.
+- **Dua email, dua hal berbeda.** `employees.email_kantor` (PRD #25) = alamat kerja Karyawan, unik atas `lower(...)`, ikut keluar lewat `v_employees_api` sebagai kunci pencocokan dengan sistem lain. `profiles.email` = akun login HC Core, dimiliki segelintir staf HC, dicerminkan dari `auth.users`. Email **pribadi** tidak punya kolom di mana pun — itu Data Pribadi Sensitif; jangan menambahkannya ke `employees`.
 - `org_units` satu tabel berhierarki; **proyek** adalah tipe unit di bawah divisi. Karyawan menunjuk unit **terendah**; direktorat/divisi/bagian diturunkan lewat view.
 - **Jabatan ≠ formasi/kursi.** Banyak orang boleh punya jabatan yang sama. Formasi sengaja ditunda (ADR-002).
 - Data seed sengaja masuk **kotor** (varian nama, typo). Pembersihan lewat halaman Bereskan + Merge, bukan lewat script.

@@ -25,7 +25,7 @@ API ini hanya untuk **Konsumen** (aplikasi HC lain). UI internal tidak memakai e
 
 ## Kolom `v_employees_api` yang bisa diminta
 
-Identitas: `id`, `personnel_number`, `nip`, `full_name`, `status`, `tanggal_keluar`
+Identitas: `id`, `personnel_number`, `nip`, `full_name`, `email_kantor`, `status`, `tanggal_keluar`
 Posisi: `org_unit_id`, `org_unit_kode`, `org_unit_nama`, `org_unit_tipe`, `direktorat_nama`, `divisi_nama`, `departemen_nama`, `bagian_nama`, `sub_bagian_nama`, `proyek_nama`, `jabatan_id`, `jabatan_kode`, `jabatan_nama`, `keterangan_pj_plt`, `keterangan_rangkap_1`, `keterangan_rangkap_2`
 Lookup (tiap satu `*_kode` dan `*_label`): `gender`, `work_contract`, `person_grade`, `job_grade`, `legal_entity`, `klasifikasi_rekrutmen`, `teknik_non_teknik`, `bod_range`, `band_jabatan`, `kategori_penempatan`, `kategori_fungsi`
 Tanggal & surat: `original_start_date`, `tanggal_diangkat`, `tanggal_promosi_pg`, `nomor_surat_pg`, `tanggal_promosi_jg`, `nomor_surat_jg`

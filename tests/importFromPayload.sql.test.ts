@@ -319,6 +319,114 @@ describe.skipIf(client === null)("import_from_payload() terhadap Postgres lokal"
     }
   });
 
+  it("Email Kantor ikut masuk, disimpan huruf kecil, dan sel kosong tidak menghapusnya", async () => {
+    const db = client as Client;
+    const payload = payloadDummy(10);
+    const pn = payload.employees[0].personnel_number;
+
+    // Ejaan campur, seperti yang datang dari export IT: index uniknya
+    // `lower(email_kantor)`, jadi menyimpan apa adanya membuat dua baris
+    // terlihat berbeda padahal database menganggapnya satu.
+    const dengan: SeedPayload = {
+      ...payload,
+      employees: payload.employees.map((e, i) =>
+        i === 0
+          ? { ...e, text: { ...e.text, email_kantor: "  Budi.Contoh@Contoh.TEST  " } }
+          : e,
+      ),
+    };
+
+    await db.query("begin");
+    try {
+      await impor(db, dengan);
+
+      const bacaEmail = async () => {
+        const {
+          rows: [row],
+        } = await db.query<{ email_kantor: string | null }>(
+          "select email_kantor from public.employees where personnel_number = $1",
+          [pn],
+        );
+        return row.email_kantor;
+      };
+
+      expect(await bacaEmail()).toBe("budi.contoh@contoh.test");
+
+      // Impor ulang TANPA kolom email sama sekali — janji nomor 1 di kepala
+      // fungsi: sel kosong tidak pernah mengosongkan yang sudah terisi. Satu
+      // kolom lain diubah supaya barisnya memang di-UPDATE, bukan dilewati
+      // klausa `where`-nya.
+      const kedua: SeedPayload = {
+        ...payload,
+        employees: payload.employees.map((e, i) =>
+          i === 0 ? { ...e, full_name: `${e.full_name} (ralat)` } : e,
+        ),
+      };
+      const res = await impor(db, kedua);
+
+      expect(res.karyawan_diperbarui).toBe(1);
+      expect(await bacaEmail()).toBe("budi.contoh@contoh.test");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
+  it("Email Kantor kembar di dalam satu file ditolak (22023), bukan dilempar ke index unik", async () => {
+    const db = client as Client;
+    const payload = payloadDummy(10);
+    const kembar: SeedPayload = {
+      ...payload,
+      employees: payload.employees.map((e, i) =>
+        i === 0 || i === 1
+          ? {
+              ...e,
+              // Beda ejaan, satu kotak surat — persis bentuk yang lolos kalau
+              // perbandingannya peka huruf besar-kecil.
+              text: { ...e.text, email_kantor: i === 0 ? "sama@contoh.test" : "SAMA@contoh.test" },
+            }
+          : e,
+      ),
+    };
+
+    await db.query("begin");
+    try {
+      const kode = await kodeGagal(db, () => impor(db, kembar));
+      expect(kode).toBe("22023");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
+  it("Email Kantor yang sudah dipakai orang lain di database ditolak (23505)", async () => {
+    const db = client as Client;
+    const payload = payloadDummy(10);
+
+    await db.query("begin");
+    try {
+      await impor(db, {
+        ...payload,
+        employees: payload.employees.map((e, i) =>
+          i === 0 ? { ...e, text: { ...e.text, email_kantor: "dipakai@contoh.test" } } : e,
+        ),
+      });
+
+      // Orang KEDUA, alamat yang sama. Personnel Number-nya tidak bentrok —
+      // itu kuncinya — jadi yang menolak adalah index unik email, dan itu
+      // memang yang harus terjadi: satu alamat tidak boleh menjawab dua orang.
+      const kode = await kodeGagal(db, () =>
+        impor(db, {
+          ...payload,
+          employees: payload.employees.map((e, i) =>
+            i === 1 ? { ...e, text: { ...e.text, email_kantor: "DIPAKAI@contoh.test" } } : e,
+          ),
+        }),
+      );
+      expect(kode).toBe("23505");
+    } finally {
+      await db.query("rollback");
+    }
+  });
+
   it("viewer ditolak (42501) — assert_admin, bukan RLS saja", async () => {
     const db = client as Client;
     const payload = payloadDummy(5);

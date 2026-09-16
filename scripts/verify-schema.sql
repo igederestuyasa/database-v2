@@ -588,13 +588,13 @@ begin
   select count(*) into v_n
   from information_schema.columns
   where table_schema = 'public' and table_name = 'v_employees_api';
-  if v_n <> 57 then
+  if v_n <> 58 then
     raise exception
-      'GAGAL: v_employees_api punya % kolom, bukan 57. Kalau perubahan ini memang disengaja, perbarui API-CONTRACT.md, lalu angka 57 di scripts/verify-schema.sql §15.',
+      'GAGAL: v_employees_api punya % kolom, bukan 58. Kalau perubahan ini memang disengaja, perbarui API-CONTRACT.md, lalu angka 58 di scripts/verify-schema.sql §15.',
       v_n;
   end if;
 
-  raise notice 'OK   v_employees_api = 57 kolom, tanpa Data Pribadi Sensitif';
+  raise notice 'OK   v_employees_api = 58 kolom, tanpa Data Pribadi Sensitif';
 end
 $$;
 

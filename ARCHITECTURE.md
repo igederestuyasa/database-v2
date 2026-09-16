@@ -74,6 +74,7 @@ Semua tabel di schema `public`. Semua primary key `uuid default gen_random_uuid(
 | personnel_number | text UNIQUE NOT NULL | **business key**, dipakai konsumen di API |
 | nip | text UNIQUE | |
 | full_name | text NOT NULL | |
+| email_kantor | text, UNIQUE atas `lower(email_kantor)` | email **kantor**; kunci kedua yang dipakai konsumen untuk mencocokkan orang dengan akun di sistemnya. Bukan `profiles.email` (itu akun login), bukan email pribadi (itu data sensitif dan tidak disimpan) |
 | org_unit_id | uuid FK → org_units | unit **terendah** tempat ditempatkan; direktorat/divisi/bagian diturunkan dari hierarki |
 | jabatan_id | uuid FK → jabatan | |
 | gender_id, work_contract_id, person_grade_id, job_grade_id, legal_entity_id, klasifikasi_rekrutmen_id, teknik_non_teknik_id, bod_range_id, band_jabatan_id, kategori_penempatan_id, kategori_fungsi_id | uuid FK → lookups | tiap kolom dibatasi CHECK ke `lookups.tipe` yang sesuai lewat trigger validasi |
@@ -82,7 +83,7 @@ Semua tabel di schema `public`. Semua primary key `uuid default gen_random_uuid(
 | nomor_surat_pg, nomor_surat_jg | text | |
 | status | text CHECK IN ('aktif','nonaktif') default 'aktif' | |
 
-Index: `(status)`, `(org_unit_id)`, `(jabatan_id)`, `lower(full_name)` (trigram opsional), `personnel_number`, `nip`.
+Index: `(status)`, `(org_unit_id)`, `(jabatan_id)`, `lower(full_name)` (trigram opsional), `personnel_number`, `nip`, `lower(email_kantor)` UNIQUE.
 
 ### `employee_private` — data sensitif (PRD #22)
 | Kolom | Tipe |

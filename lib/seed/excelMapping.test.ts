@@ -208,6 +208,24 @@ describe("pemetaan header → kolom", () => {
     expect(targetOf("Tanggal Lahir")).toEqual({ kind: "private_date" });
   });
 
+  it("Email dalam ejaan apa pun mendarat di email_kantor", () => {
+    // Workbook HC sumber tidak punya kolom email sama sekali — kolomnya lahir
+    // belakangan — jadi yang akan diunggah adalah template ini atau export
+    // dari IT, dan keduanya menulis judulnya semau sendiri. `email` polos ikut
+    // dikenali justru karena itulah ejaan yang paling mungkin datang.
+    for (const ejaan of [
+      "Email Kantor",
+      "Email",
+      "E-Mail",
+      "EMAIL PERUSAHAAN",
+      "Work Email",
+      "Office Email",
+      "Email Address",
+    ]) {
+      expect(targetOf(ejaan)).toEqual({ kind: "text", field: "email_kantor" });
+    }
+  });
+
   it("Jabatan punya tujuannya sendiri", () => {
     expect(targetOf("Jabatan")).toEqual({ kind: "jabatan" });
   });

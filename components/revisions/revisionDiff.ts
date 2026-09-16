@@ -232,6 +232,7 @@ const COLUMN_LABELS: Record<LoggedTable, Readonly<Record<string, string>>> = {
     nomor_surat_pg: "Nomor Surat PG",
     nomor_surat_jg: "Nomor Surat JG",
     status: "Status Karyawan",
+    email_kantor: "Email Kantor",
   },
   employee_private: {
     date_of_birth: "Tanggal Lahir",

@@ -105,4 +105,13 @@ jobs:
         run: |
           npx vitest run lib/derived/sql.test.ts tests/seedFromPayload.sql.test.ts tests/importFromPayload.sql.test.ts 2>&1 | tee sql-test.log
           grep -qE "Test Files.*3 passed.*\(3\)" sql-test.log
-          grep -qE "Tests.*11 passed.*\(11\)" sql-test.log
+          # Jumlahnya DIPATOK, bukan sekadar "tidak ada yang gagal": ketiga
+          # berkas memakai `describe.skipIf(client === null)`, jadi tanpa
+          # database yang bisa dihubungi mereka MELEWATI diri sendiri dan
+          # vitest tetap melaporkan "3 passed". Angka inilah yang membedakan
+          # "14 test berjalan" dari "14 test dilewati diam-diam".
+          #
+          # Menambah test ber-database berarti menaikkan angka ini. Kalau job
+          # ini merah padahal daftar test di atasnya hijau semua, itu yang
+          # terjadi — cocokkan angkanya, jangan longgarkan polanya.
+          grep -qE "Tests.*14 passed.*\(14\)" sql-test.log

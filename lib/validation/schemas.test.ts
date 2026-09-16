@@ -44,6 +44,35 @@ describe("employeeCreateSchema", () => {
     );
   });
 
+  it("email_kantor OPSIONAL, dan yang kosong menjadi null", () => {
+    expect(employeeCreateSchema.parse(minimal).email_kantor).toBeNull();
+    expect(
+      employeeCreateSchema.parse({ ...minimal, email_kantor: "   " }).email_kantor,
+    ).toBeNull();
+  });
+
+  it("email_kantor disimpan huruf kecil — index uniknya lower(email_kantor)", () => {
+    // Bukan kerapian. Kolomnya dijaga unique index atas `lower(email_kantor)`,
+    // jadi "Budi.S@…" dan "budi.s@…" sudah satu alamat bagi database. Kalau
+    // form menyimpan apa adanya, kolomnya memuat dua ejaan untuk sesuatu yang
+    // database anggap kembar — dan `import_from_payload()` menormalkan dengan
+    // cara yang sama, jadi kedua jalur tulis tidak boleh berbeda.
+    expect(
+      employeeCreateSchema.parse({
+        ...minimal,
+        email_kantor: "  Budi.Contoh@Contoh.TEST  ",
+      }).email_kantor,
+    ).toBe("budi.contoh@contoh.test");
+  });
+
+  it("email_kantor menolak yang bukan alamat email", () => {
+    for (const salah of ["budi", "budi@", "@contoh.test", "budi contoh@contoh.test"]) {
+      expect(
+        employeeCreateSchema.safeParse({ ...minimal, email_kantor: salah }).success,
+      ).toBe(false);
+    }
+  });
+
   it("menolak personnel_number kosong atau hanya spasi", () => {
     expect(employeeCreateSchema.safeParse({ ...minimal, personnel_number: "" }).success)
       .toBe(false);

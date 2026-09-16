@@ -68,6 +68,30 @@ export function optionalText(label: string, max = 255) {
 }
 
 /**
+ * An optional email column. Trimmed, **lowercased**, `""` becomes `null`.
+ *
+ * The lowercasing is not cosmetic. `employees.email_kantor` is guarded by a
+ * unique index on `lower(email_kantor)`, so "Budi.S@…" and "budi.s@…" are
+ * already one address as far as the database is concerned. Normalising here
+ * means the column never holds two spellings the database considers equal —
+ * and it matches what `import_from_payload()` writes, so the form and the
+ * Impor cannot disagree about the same person.
+ */
+export function optionalEmailField(label: string, max = 255) {
+  return z.preprocess(
+    (value) => {
+      const cleaned = emptyToNull(trimIfString(value));
+      return typeof cleaned === "string" ? cleaned.toLowerCase() : cleaned;
+    },
+    z
+      .email({ error: `${label} harus berupa alamat email yang benar.` })
+      .max(max, { error: `${label} maksimal ${max} karakter.` })
+      .nullable()
+      .default(null),
+  );
+}
+
+/**
  * A `date` column: `YYYY-MM-DD` (API-CONTRACT.md §Konvensi).
  *
  * `z.iso.date()` also rejects impossible calendar dates such as `2025-02-30`,

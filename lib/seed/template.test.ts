@@ -94,6 +94,34 @@ describe("template Impor", () => {
     expect(rows[HEADER_ROW]).toHaveLength(HEADERS.length);
   });
 
+  /**
+   * Baris judul adalah satu-satunya tempat aturan berkas ini terbaca oleh
+   * orang yang sedang mengisinya. Aturan Email Kantor masuk ke situ karena ia
+   * satu-satunya yang bisa MEMBATALKAN seluruh unggahan — sebuah alamat kembar
+   * menggagalkan 1.475 baris sekaligus, dan orang yang mengetiknya tidak
+   * sedang membuka README.
+   */
+  it("baris judulnya menyebut aturan yang bisa membatalkan seluruh impor", () => {
+    const judul = buildTemplateRows()
+      .slice(0, HEADER_ROW - 1)
+      .flat()
+      .join(" ");
+
+    expect(judul).toMatch(/Personnel Number/);
+    expect(judul).toMatch(/Email Kantor/);
+    expect(judul).toMatch(/satu alamat hanya boleh milik satu orang/i);
+    // Sel kosong yang tidak menghapus adalah janji nomor 1 impor berulang.
+    expect(judul).toMatch(/TIDAK menghapus/);
+  });
+
+  it("judulnya tidak pernah menggeser baris header", () => {
+    // Baris judul keempat akan mendorong header keluar dari HEADER_ROW, dan
+    // template itu tidak akan terbaca oleh jalur baca yang sama.
+    const rows = buildTemplateRows();
+    expect(rows.slice(0, HEADER_ROW - 1)).toHaveLength(HEADER_ROW - 1);
+    expect(rows[HEADER_ROW - 1][0]).toBe(TEMPLATE_KOLOM[0].header);
+  });
+
   it("tidak ada header yang kembar setelah dinormalkan", () => {
     const canonical = HEADERS.map(canonicalHeader);
     expect(new Set(canonical).size).toBe(canonical.length);

@@ -202,6 +202,11 @@ export function buildEmployeeSections(
           info: "Business key — kode yang dipakai Konsumen lewat API.",
         },
         { label: labelKolom("nip"), value: teks(employee.nip) },
+        {
+          label: labelKolom("email_kantor"),
+          value: teks(employee.email_kantor),
+          info: "Alamat kantor, bukan akun login HC Core. Ikut keluar lewat API — aplikasi lain memakainya untuk mencocokkan orang ini dengan akunnya di sistem mereka.",
+        },
         lookupField(employee, "gender"),
         { label: labelKolom("status"), value: labelStatus(employee.status) },
       ],
