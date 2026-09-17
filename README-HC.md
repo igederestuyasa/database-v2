@@ -254,15 +254,15 @@ Saat membuat key-nya (nama Konsumen misalnya "Drafting Surat"), centang
 **persis** kolom berikut — kalau ada yang kurang, sinkronisasinya gagal dengan
 pesan yang menyebut kolom mana yang belum dicentang:
 
-- Identitas: `personnel_number`, `nip`, `full_name`
+- Identitas: `personnel_number`, `full_name`
 - Posisi: `jabatan_nama`, `org_unit_kode`
 
 Dua hal yang perlu diketahui admin HC Core:
 
-- Kunci yang dipakai Drafting Surat adalah **NIP**, karena NIP-lah yang
-  tercetak di surat. Karyawan yang NIP-nya kosong di sini **tidak muncul** di
-  kotak cari surat sampai NIP-nya diisi; Drafting Surat melaporkan jumlahnya
-  setiap kali menyinkronkan.
+- Acuan yang dipakai Drafting Surat adalah **Personnel Number**: itulah yang
+  menjadi kunci pencocokan dan yang tercetak sebagai nomor pegawai di surat.
+  Kolom NIP tidak diminta, jadi mengisi atau mengosongkannya tidak berpengaruh
+  ke surat.
 - Unit Organisasi diambil semuanya (aktif dan nonaktif) supaya induk unit bisa
   diterjemahkan; yang dipakai di surat hanya yang aktif.
 
